@@ -41,7 +41,7 @@
             } catch (e) { console.log('Theme detection failed', e); }
 
             // Your Version Logic
-            const staticversion = "prototype_" + "23-12-25_" + "99";    
+            const staticversion = "" + "23-12-25_" + "public-" + "12";
             //const staticversion = Math.round(Math.random()*1000000);
             const queryString = self.location.search;
             const params = new URLSearchParams(queryString);
@@ -244,13 +244,13 @@
 
         <input type="file" id="file-input" accept=".json,.fdx" class="hidden">
 
-        <button id="theme-toggle-btn" class="btn-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-        </button>
-        
         <button id="page-view-btn" class="btn-icon" title="Page View">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 4.5a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 1 .5-.5zm2 .5a.5.5 0 0 0-1 0v3a.5.5 0 0 0 1 0v-3zM2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2zm10-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1z"/></svg>
         </button>
+
+        <button id="theme-toggle-btn" class="btn-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </button>        
 
     </header>
 
@@ -520,6 +520,7 @@
                 <ul class="shortcut-list">
                     <li><strong>Enter:</strong> Creates a new line. Context-aware (e.g., Slug -> Action).</li>
                     <li><strong>Tab:</strong> Changes element type (e.g., Action -> Character).</li>
+                    <li><strong>Ctrl+Shift:</strong> Toggle element type (Cycle S-A-C-P-D-T).</li>
                     <li><strong>Ctrl+S:</strong> Force save (Auto-save is always on).</li>
                     <li><strong>Ctrl+Z / Ctrl+Y:</strong> Undo / Redo.</li>
                 </ul>

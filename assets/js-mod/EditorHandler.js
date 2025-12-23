@@ -24,6 +24,7 @@ export class EditorHandler {
     }
     
     handlePaste(e) {
+        this.app.resetCycleState();
         e.preventDefault();
         const text = (e.clipboardData || window.clipboardData).getData('text');
         const lines = text.split('\n');
@@ -102,6 +103,12 @@ export class EditorHandler {
     }
 
     handleKeydown(e) {
+        if (this.app.checkShortcut(e, 'cycleType')) {
+            e.preventDefault();
+            this.app.cycleType();
+            return;
+        }
+
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
             e.preventDefault();
             if (e.shiftKey) this.app.redo();
@@ -310,6 +317,7 @@ export class EditorHandler {
     }
 
     handleInput(e) {
+        this.app.resetCycleState();
         // Trigger autocomplete for suffixes if user types '(' in Character
         if (e.data === '(') {
             const block = this.getCurrentBlock();

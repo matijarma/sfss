@@ -72,7 +72,7 @@ export class MobileApp {
         this.bindEventListeners();
         
         // Initialize Theme
-        const storedTheme = localStorage.getItem('draftzero_theme');
+        const storedTheme = localStorage.getItem('sfss_theme');
         if (storedTheme === 'dark' || (!storedTheme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
             document.documentElement.classList.add('dark-mode');
         }
@@ -127,7 +127,7 @@ export class MobileApp {
         // Toolbar Theme Toggle
         document.getElementById('theme-toggle-btn').addEventListener('click', () => {
             document.documentElement.classList.toggle('dark-mode');
-            localStorage.setItem('draftzero_theme', document.documentElement.classList.contains('dark-mode') ? 'dark' : 'light');
+            localStorage.setItem('sfss_theme', document.documentElement.classList.contains('dark-mode') ? 'dark' : 'light');
         });
 
         // Mobile Sidebar Actions

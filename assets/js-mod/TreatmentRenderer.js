@@ -15,10 +15,7 @@ export class TreatmentRenderer {
         this.container.innerHTML = '';
         this.currentBlocks = blocks; 
         
-        // Mobile Meta Header
-        if (document.body.classList.contains('mobile-view')) {
-            this.renderMobileMeta(container);
-        }
+        this.renderScriptMetainTreatment(container);
         
         let currentSceneBlock = null;
         const scenes = [];
@@ -80,7 +77,7 @@ export class TreatmentRenderer {
         });
     }
 
-    renderMobileMeta(container) {
+    renderScriptMetainTreatment(container) {
         const metaWrapper = document.createElement('div');
         metaWrapper.className = 'treatment-mobile-meta';
         
@@ -89,7 +86,7 @@ export class TreatmentRenderer {
         toggleBtn.className = 'treatment-meta-toggle';
         
         // Load state
-        const isCollapsedInitially = localStorage.getItem('draftzero_treatment_meta_collapsed') === 'true';
+        const isCollapsedInitially = localStorage.getItem('sfss_treatment_meta_collapsed') === 'true';
         if (isCollapsedInitially) {
             metaWrapper.classList.add('collapsed');
             toggleBtn.innerHTML = '<i class="fas fa-eye-slash"></i>';
@@ -100,14 +97,14 @@ export class TreatmentRenderer {
         toggleBtn.onclick = (e) => {
             e.stopPropagation();
             const isCollapsed = metaWrapper.classList.toggle('collapsed');
-            localStorage.setItem('draftzero_treatment_meta_collapsed', isCollapsed);
+            localStorage.setItem('sfss_treatment_meta_collapsed', isCollapsed);
             toggleBtn.innerHTML = isCollapsed ? '<i class="fas fa-eye-slash"></i>' : '<i class="fas fa-eye"></i>';
         };
         
         metaWrapper.addEventListener('click', () => {
              if (metaWrapper.classList.contains('collapsed')) {
                  metaWrapper.classList.remove('collapsed');
-                 localStorage.setItem('draftzero_treatment_meta_collapsed', 'false');
+                 localStorage.setItem('sfss_treatment_meta_collapsed', 'false');
                  toggleBtn.innerHTML = '<i class="fas fa-eye"></i>';
              }
         });

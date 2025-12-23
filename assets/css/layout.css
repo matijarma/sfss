@@ -132,8 +132,8 @@ html, body {
 .sidebar-header-buttons {
     display: flex;
     align-items: center;
+    gap: 0.3rem;
 }
-
 #show-sidebar-btn {
     position: absolute;
     left: 8px;
@@ -222,6 +222,12 @@ html, body {
 }
 
 .page-view-active #type-selector-container {
+    opacity: 0.3;
+    pointer-events: none;
+    filter: grayscale(100%);
+}
+
+.treatment-mode-active #type-selector-container {
     opacity: 0.3;
     pointer-events: none;
     filter: grayscale(100%);

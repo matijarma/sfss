@@ -40,6 +40,11 @@ export class SFSS {
         };
         this.sceneMeta = {};
         
+        // Shortcuts
+        const storedShortcuts = localStorage.getItem('sfss_shortcuts');
+        this.shortcuts = storedShortcuts ? JSON.parse(storedShortcuts) : { cycleType: 'Ctrl+Shift' };
+        this.canExit = false;
+        
         // Keymap
         this.keymap = {
             [constants.ELEMENT_TYPES.SLUG]: { enter: constants.ELEMENT_TYPES.ACTION, tab: constants.ELEMENT_TYPES.CHARACTER },
@@ -140,7 +145,7 @@ export class SFSS {
         this.measureLineHeight();
         this.pageRenderer = new PageRenderer(this.lineHeight);
 
-        const storedTheme = localStorage.getItem('draftzero_theme');
+        const storedTheme = localStorage.getItem('sfss_theme');
         if (storedTheme === 'dark' || (!storedTheme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
             document.documentElement.classList.add('dark-mode');
         }
@@ -199,14 +204,14 @@ export class SFSS {
         status.innerHTML ="V. "+window.cacheverzija;
         document.body.appendChild(status);
         
-        const dateBtn = document.getElementById('toolbar-date');
-        if (dateBtn) {
-            dateBtn.disabled = !this.pageViewActive;
-            dateBtn.style.opacity = this.pageViewActive ? '1' : '0.5';
-        }
+        this.updateToolbarButtons();
 
         if (window.deferredInstallPrompt) {
             window.showPwaInstallButton();
+        }
+
+        if (document.body.classList.contains('mobile-view')) {
+            history.pushState({ pwa: true }, '', window.location.href);
         }
 
         this.toggleLoader(false);
@@ -218,7 +223,7 @@ export class SFSS {
             return;
         }
 
-        const showWelcome = localStorage.getItem('draftzero_show_welcome');
+        const showWelcome = localStorage.getItem('sfss_show_welcome');
         // Default to true if null, or if strictly 'true'
         const shouldShow = showWelcome === null || showWelcome === 'true';
         
@@ -322,7 +327,7 @@ export class SFSS {
         document.getElementById('download-text-btn').addEventListener('click', () => this.downloadText());
         document.getElementById('print-btn').addEventListener('click', () => this.printScript());
         document.getElementById('reports-menu-btn').addEventListener('click', () => this.reportsManager.open());
-        document.getElementById('settings-btn').addEventListener('click', () => this.openSettings());
+        document.getElementById('settings-btn').addEventListener('click', (e) => { e.preventDefault(); this.openSettings(); });
         document.getElementById('undo-btn').addEventListener('click', () => this.undo());
         document.getElementById('redo-btn').addEventListener('click', () => this.redo());
         
@@ -359,7 +364,7 @@ export class SFSS {
             }
         });
 
-        const savedView = localStorage.getItem('draftzero_selector_view');
+        const savedView = localStorage.getItem('sfss_selector_view');
         if (savedView === 'horizontal') {
             document.getElementById('dropdown-selector-wrapper').classList.add('hidden');
             document.getElementById('horizontal-type-selector').classList.remove('hidden');
@@ -428,7 +433,7 @@ export class SFSS {
             document.getElementById('file-input').click();
         });
         document.getElementById('welcome-startup-toggle').addEventListener('change', (e) => {
-            localStorage.setItem('draftzero_show_welcome', e.target.checked);
+            localStorage.setItem('sfss_show_welcome', e.target.checked);
             const sidebarToggle = document.getElementById('sidebar-welcome-toggle');
             if (sidebarToggle) sidebarToggle.checked = e.target.checked;
         });
@@ -436,7 +441,7 @@ export class SFSS {
         const sidebarWelcomeToggle = document.getElementById('sidebar-welcome-toggle');
         if (sidebarWelcomeToggle) {
              sidebarWelcomeToggle.addEventListener('change', (e) => {
-                localStorage.setItem('draftzero_show_welcome', e.target.checked);
+                localStorage.setItem('sfss_show_welcome', e.target.checked);
                 const modalToggle = document.getElementById('welcome-startup-toggle');
                 if (modalToggle) modalToggle.checked = e.target.checked;
              });
@@ -518,13 +523,35 @@ export class SFSS {
             handled = true;
         }
 
-        if (handled && !isPopState && document.body.classList.contains('mobile-view')) {
-            // If we handled it via ESC/Logic and we are on mobile, 
-            // we might want to pop the history state if we pushed one.
-            // For simplicity, we just rely on the UI action.
-            // If we want robust history support:
-            // When opening sidebar -> pushState({modal:'sidebar'})
-            // When closing -> back()
+        if (handled) {
+            if (isPopState && document.body.classList.contains('mobile-view')) {
+                history.pushState(null, null, location.href); // Restore state if we consumed the back action for UI
+            }
+            return;
+        }
+
+        // Double Back to Exit (Mobile PWA)
+        if (isPopState && document.body.classList.contains('mobile-view')) {
+            if (this.canExit) {
+                // Allow exit
+                return;
+            } else {
+                this.canExit = true;
+                const status = document.getElementById('save-status'); // Reuse save status or create toast
+                const originalText = status.innerHTML;
+                const originalOpacity = status.style.opacity;
+                
+                status.textContent = 'Press back again to exit';
+                status.style.opacity = '1';
+                
+                history.pushState(null, null, location.href); // Push state back to trap
+                
+                setTimeout(() => {
+                    this.canExit = false;
+                    status.style.opacity = originalOpacity;
+                    setTimeout(() => status.innerHTML = originalText, 300);
+                }, 2000);
+            }
         }
     }
 
@@ -539,6 +566,10 @@ export class SFSS {
         this.pushHistoryState('help');
     }
 
+    resetCycleState() {
+        this.cycleState = null;
+    }
+
     toggleSelectorView() {
         const dropdown = document.getElementById('dropdown-selector-wrapper');
         const horizontal = document.getElementById('horizontal-type-selector');
@@ -546,22 +577,65 @@ export class SFSS {
         if (dropdown.classList.contains('hidden')) {
             dropdown.classList.remove('hidden');
             horizontal.classList.add('hidden');
-            localStorage.setItem('draftzero_selector_view', 'dropdown');
+            localStorage.setItem('sfss_selector_view', 'dropdown');
         } else {
             dropdown.classList.add('hidden');
             horizontal.classList.remove('hidden');
-            localStorage.setItem('draftzero_selector_view', 'horizontal');
+            localStorage.setItem('sfss_selector_view', 'horizontal');
         }
     }
 
     cycleType() {
-        const types = Object.values(constants.ELEMENT_TYPES);
+        // S-A-C-P-D-T
+        const cycleOrder = [
+            constants.ELEMENT_TYPES.SLUG,
+            constants.ELEMENT_TYPES.ACTION,
+            constants.ELEMENT_TYPES.CHARACTER,
+            constants.ELEMENT_TYPES.PARENTHETICAL,
+            constants.ELEMENT_TYPES.DIALOGUE,
+            constants.ELEMENT_TYPES.TRANSITION
+        ];
+
         const currentBlock = this.editorHandler.getCurrentBlock();
         if (!currentBlock) return;
+        
         const currentType = this.editorHandler.getBlockType(currentBlock);
-        const idx = types.indexOf(currentType);
-        const nextType = types[(idx + 1) % types.length];
+        
+        // Handle Text Preservation
+        if (!this.cycleState || this.cycleState.blockId !== currentBlock.dataset.lineId) {
+            this.cycleState = {
+                blockId: currentBlock.dataset.lineId,
+                originalText: currentBlock.textContent
+            };
+        }
+
+        const idx = cycleOrder.indexOf(currentType);
+        // If current type not in cycle list (shouldn't happen), default to Action (index 1) -> next is C
+        const nextIndex = idx === -1 ? 1 : (idx + 1) % cycleOrder.length;
+        const nextType = cycleOrder[nextIndex];
+        
         this.editorHandler.manualTypeChangeZD(nextType);
+        
+        // Restore/Force Case
+        const isUppercaseType = [constants.ELEMENT_TYPES.SLUG, constants.ELEMENT_TYPES.CHARACTER, constants.ELEMENT_TYPES.TRANSITION].includes(nextType);
+        
+        if (isUppercaseType) {
+            currentBlock.textContent = currentBlock.textContent.toUpperCase();
+        } else {
+            // Restore original text if available
+            if (this.cycleState && this.cycleState.originalText) {
+                // Check if current uppercase text matches original text uppercased.
+                // If yes, user hasn't edited it, so safe to restore.
+                // If no (user edited while in upper mode?), we should probably keep it?
+                // But logic says "retype everything to normal caps".
+                // If I cycle A->S (auto upper) -> A. Restoring original is good.
+                // If I cycle A->S -> Edit -> A.
+                // We need to know if edited.
+                // `resetCycleState` will be called on input. So if edited, `cycleState` is null.
+                // So here `cycleState` is NOT null only if no edits happened.
+                currentBlock.textContent = this.cycleState.originalText;
+            }
+        }
     }
 
     checkAutoHideSidebar() {
@@ -690,6 +764,7 @@ export class SFSS {
         
         if (this.treatmentModeActive) {
             // Enter Treatment Mode
+            document.getElementById('app-container').classList.add('treatment-mode-active');
             document.getElementById('app-container').classList.remove('page-view-active');
             document.getElementById('page-view-btn').classList.toggle("hidden");
 
@@ -702,6 +777,7 @@ export class SFSS {
             
         } else {
             // Exit Treatment Mode
+            document.getElementById('app-container').classList.remove('treatment-mode-active');
             this.editor.contentEditable = !document.body.classList.contains('mobile-view');
             this.editor.innerHTML = ''; 
             this.editor.style.display = '';
@@ -722,6 +798,8 @@ export class SFSS {
         if (topElementId) {
             setTimeout(() => this.scrollToScene(topElementId), 50);
         }
+        
+        this.updateToolbarButtons();
 
         setTimeout(() => document.body.classList.remove('mode-switching'), 350);
     }
@@ -976,6 +1054,7 @@ export class SFSS {
                     this.toggleTreatmentMode();
                 } else {
                     this.refreshTreatmentView();
+                    this.updateToolbarButtons();
                 }
 
             }
@@ -989,6 +1068,7 @@ export class SFSS {
             if (wasMobile) {
                 // Switching FROM mobile
                 this.refreshTreatmentView();
+                this.updateToolbarButtons();
             }
         }
     }
@@ -1032,20 +1112,47 @@ export class SFSS {
     }
 
     openSettings() {
-        if (document.body.classList.contains('mobile-view')) return;
-        this.closePopups();
+        // Manually close other popups to avoid closing settings itself via closePopups()
+        this.editorHandler.closePopups();
+        this.sidebarManager.closeSceneSettings();
+        this.sidebarManager.closeScriptMetaPopup();
+        document.getElementById('help-modal').classList.add('hidden');
+        document.getElementById('reports-modal').classList.add('hidden');
+
         this.generateKeymapSettings();
         document.getElementById('settings-modal').classList.remove('hidden');
         this.pushHistoryState('settings');
     }
 
     closeSettings() {
-        document.getElementById('settings-modal').classList.add('hidden');
+        document.getElementById('settings-modal').classList.toggle('hidden');
     }
     
     async saveSettingsFromModal() {
-        localStorage.setItem('draftzero_keymap', JSON.stringify(this.keymap));
+        localStorage.setItem('sfss_keymap', JSON.stringify(this.keymap));
+        localStorage.setItem('sfss_shortcuts', JSON.stringify(this.shortcuts));
         await this.persistSettings();
+    }
+
+    checkShortcut(e, action) {
+        if (!this.shortcuts[action]) return false;
+        const keys = this.shortcuts[action].toLowerCase().split('+');
+        const pressedKey = e.key.toLowerCase();
+        
+        const ctrl = keys.includes('ctrl') || keys.includes('control') || keys.includes('meta') || keys.includes('cmd');
+        const shift = keys.includes('shift');
+        const alt = keys.includes('alt');
+        
+        if (ctrl !== (e.ctrlKey || e.metaKey)) return false;
+        if (shift !== e.shiftKey) return false;
+        if (alt !== e.altKey) return false;
+
+        const mainKey = keys.find(k => !['ctrl', 'control', 'meta', 'cmd', 'shift', 'alt'].includes(k));
+        if (mainKey) {
+            return mainKey === pressedKey;
+        } else {
+            return true; 
+        }
     }
 
     getCurrentScrollElement() {
@@ -1090,7 +1197,7 @@ export class SFSS {
         const currentTopId = this.getCurrentScrollElement();
         
         this.applySettings();
-        localStorage.setItem('draftzero_meta', JSON.stringify(this.meta));
+        localStorage.setItem('sfss_meta', JSON.stringify(this.meta));
         this.saveState(true);
         await this.save();
         
@@ -1132,6 +1239,72 @@ export class SFSS {
     generateKeymapSettings() {
         const container = document.getElementById('keymap-settings');
         container.innerHTML = '';
+        
+        // --- Global Shortcuts Section ---
+        const globalHeader = document.createElement('h3');
+        globalHeader.textContent = 'Global Shortcuts';
+        globalHeader.style.marginBottom = '0.5rem';
+        container.appendChild(globalHeader);
+
+        const globalTable = document.createElement('table');
+        globalTable.className = 'keymap-table';
+        globalTable.style.marginBottom = '1.5rem';
+        
+        const row = document.createElement('tr');
+        const labelCell = document.createElement('td');
+        labelCell.textContent = 'Toggle Element Type';
+        
+        const inputCell = document.createElement('td');
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'settings-input';
+        input.value = this.shortcuts.cycleType || '';
+        input.readOnly = true;
+        input.placeholder = 'Click to record...';
+        input.style.cursor = 'pointer';
+        input.style.textAlign = 'center';
+        
+        input.addEventListener('keydown', (e) => {
+            e.preventDefault();
+            if (e.key === 'Escape') {
+                input.blur();
+                return;
+            }
+            if (e.key === 'Backspace') {
+                this.shortcuts.cycleType = '';
+                input.value = '';
+                return;
+            }
+            
+            const keys = [];
+            if (e.ctrlKey || e.metaKey) keys.push('Ctrl');
+            if (e.altKey) keys.push('Alt');
+            if (e.shiftKey) keys.push('Shift');
+            
+            if (!['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
+                keys.push(e.key.toUpperCase());
+            }
+            
+            // Allow just modifiers (e.g. Ctrl+Shift)
+            if (keys.length > 0) {
+                const shortcut = keys.join('+');
+                this.shortcuts.cycleType = shortcut;
+                input.value = shortcut;
+            }
+        });
+        
+        inputCell.appendChild(input);
+        row.appendChild(labelCell);
+        row.appendChild(inputCell);
+        globalTable.appendChild(row);
+        container.appendChild(globalTable);
+
+        // --- Element Transitions Section ---
+        const transHeader = document.createElement('h3');
+        transHeader.textContent = 'Element Transitions';
+        transHeader.style.marginBottom = '0.5rem';
+        container.appendChild(transHeader);
+
         const keyOrder = ['tab', 'enter'];
 
         const table = document.createElement('table');
@@ -1255,7 +1428,7 @@ export class SFSS {
 
     toggleTheme() {
         document.documentElement.classList.toggle('dark-mode');
-        localStorage.setItem('draftzero_theme', document.documentElement.classList.contains('dark-mode') ? 'dark' : 'light');
+        localStorage.setItem('sfss_theme', document.documentElement.classList.contains('dark-mode') ? 'dark' : 'light');
     }
 
     promptInstall() {
@@ -1279,6 +1452,25 @@ export class SFSS {
         });
     }
 
+    updateToolbarButtons() {
+        const sceneNumBtn = document.getElementById('toolbar-scene-numbers');
+        const dateBtn = document.getElementById('toolbar-date');
+
+        if (this.treatmentModeActive) {
+            if (sceneNumBtn) sceneNumBtn.style.display = 'none';
+            if (dateBtn) dateBtn.style.display = 'none';
+        } else {
+            if (sceneNumBtn) sceneNumBtn.style.display = ''; // Visible in Writing Mode (and Page View)
+            
+            if (dateBtn) {
+                // Only visible in Page View of Writing Mode
+                dateBtn.style.display = this.pageViewActive ? '' : 'none';
+                dateBtn.disabled = false; // Reset disabled state just in case
+                dateBtn.style.opacity = '1';
+            }
+        }
+    }
+
     togglePageView() {
         const topElementId = this.getCurrentScrollElement();
         
@@ -1291,11 +1483,7 @@ export class SFSS {
         document.getElementById('app-container').classList.toggle('page-view-active', this.pageViewActive);
         document.getElementById('page-view-btn').classList.toggle('active', this.pageViewActive);
         
-        const dateBtn = document.getElementById('toolbar-date');
-        if (dateBtn) {
-            dateBtn.disabled = !this.pageViewActive;
-            dateBtn.style.opacity = this.pageViewActive ? '1' : '0.5';
-        }
+        this.updateToolbarButtons();
 
         if (this.treatmentModeActive) return; 
 

@@ -529,7 +529,7 @@ export class SidebarManager {
             track 
         };
 
-        localStorage.setItem('draftzero_scene_meta', JSON.stringify(this.app.sceneMeta));
+        localStorage.setItem('sfss_scene_meta', JSON.stringify(this.app.sceneMeta));
         this.app.isDirty = true;
         if (updateList) {
             this.updateSceneList();
@@ -584,7 +584,7 @@ export class SidebarManager {
         await this.app.save();
 
         this.app.applySettings();
-        localStorage.setItem('draftzero_meta', JSON.stringify(this.app.meta));
+        localStorage.setItem('sfss_meta', JSON.stringify(this.app.meta));
         this.app.saveState(true);
         await this.app.populateOpenMenu();
         this.closeScriptMetaPopup();
@@ -797,7 +797,7 @@ export class SidebarManager {
              this.app.sceneMeta[sceneId].color = colorClass;
         }
 
-        localStorage.setItem('draftzero_scene_meta', JSON.stringify(this.app.sceneMeta));
+        localStorage.setItem('sfss_scene_meta', JSON.stringify(this.app.sceneMeta));
         this.app.isDirty = true;
         this.updateSceneList();
         if (this.app.treatmentModeActive) {
@@ -812,7 +812,7 @@ export class SidebarManager {
     saveSceneIcon(sceneId, iconClass) {
         if (!this.app.sceneMeta[sceneId]) this.app.sceneMeta[sceneId] = {};
         this.app.sceneMeta[sceneId].icon = iconClass;
-        localStorage.setItem('draftzero_scene_meta', JSON.stringify(this.app.sceneMeta));
+        localStorage.setItem('sfss_scene_meta', JSON.stringify(this.app.sceneMeta));
         this.app.isDirty = true;
         this.updateSceneList();
         if (this.app.treatmentModeActive) {
