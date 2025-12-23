@@ -4,18 +4,6 @@
 
 > **"A Final Draft clone for the modern web."**
 
-## 🎬 Project Context
-
-**SFSS** is a flagship digital initiative by **Matija Radeljak** and **Aning Film**, a Zagreb-based production company committed to the concept of the "Double Bottom Line": creating projects that are both financially sustainable and socially impactful.
-
-### Aning Film
-Aning Film operates at the intersection of traditional cinema and modern innovation. Beyond producing feature films and documentaries, the company is deeply invested in professional training, digital storytelling, and building infrastructure for the next generation of filmmakers. Their mission is transparency, equality, and efficiency—values directly reflected in the open and accessible nature of SFSS.
-
-### Dogma 23
-This project is part of the **Dogma 23** initiative, a "Gallery of Film" and creative incubator in Zagreb. Reimagining the spirit of the Dogma 95 movement for the 21st century, Dogma 23 serves as a physical and digital hub where filmmakers, financiers, and audiences connect. SFSS serves as the digital toolset for this movement: a free, professional-grade instrument that removes barriers to entry for screenwriters everywhere.
-
-*   **Developer:** Matija Radeljak
-
 ## ✨ Key Features
 
 *   **Industry Standard Formatting:** Custom formatting engine ensuring 12pt Courier, correct margins, and standard element spacing.
