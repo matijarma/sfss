@@ -1,0 +1,155 @@
+/* CSS VARIABLES */
+:root {
+    --bg-body: hsl(210 20% 88% / 1);
+    --bg-paper: hsl(0 0% 100% / 1);
+    --text-main: hsl(220 15% 18% / 1);
+    --text-meta: hsl(220 10% 38% / 1);
+    --accent: hsl(215 80% 48% / 1);
+    --scene-hover: hsl(210 20% 96% / 1);
+    --popup-bg: hsl(0 0% 100% / 1);
+    --popup-border: hsl(220 15% 82% / 1);
+    --border-color: hsl(220 15% 70% / 0.25);
+    --scene-color-1-light: hsl(178, 75%, 46%); /* blue */
+    --scene-color-2-light: hsl(155 55% 42% / 1); /* green */
+    --scene-color-3-light: hsl(38 80% 48% / 1);  /* amber */
+    --scene-color-4-light: hsl(355 65% 52% / 1); /* red */
+    --scene-color-5-light: hsl(255 55% 55% / 1); /* violet */
+    --scene-color-1-dark: hsl(178, 75%, 60%);
+    --scene-color-2-dark: hsl(155 55% 58% / 1);
+    --scene-color-3-dark: hsl(38 80% 60% / 1);
+    --scene-color-4-dark: hsl(355 65% 65% / 1);
+    --scene-color-5-dark: hsl(255 55% 68% / 1);
+    --scene-color-1: var(--scene-color-1-light);
+    --scene-color-2: var(--scene-color-2-light);
+    --scene-color-3: var(--scene-color-3-light);
+    --scene-color-4: var(--scene-color-4-light);
+    --scene-color-5: var(--scene-color-5-light);
+}
+
+.dark-mode {
+    --bg-body: hsl(220 18% 12% / 1);
+    --bg-paper: hsl(220 18% 16% / 1);
+    --text-main: hsl(220 15% 90% / 1);
+    --text-meta: hsl(220 10% 65% / 1);
+    --accent: hsl(215 85% 65% / 1);
+    --scene-hover: hsl(220 18% 20% / 1);
+    --popup-bg: hsl(220 18% 18% / 1);
+    --popup-border: hsl(220 15% 30% / 1);
+    --scene-color-1: var(--scene-color-1-dark);
+    --scene-color-2: var(--scene-color-2-dark);
+    --scene-color-3: var(--scene-color-3-dark);
+    --scene-color-4: var(--scene-color-4-dark);
+    --scene-color-5: var(--scene-color-5-dark);
+}
+
+/* RESETS & BASE */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    background-color: var(--bg-body);
+    color: var(--text-main);
+    font-family: 'Inter', sans-serif;
+    margin: 0;
+    height: 100vh;
+    overflow: hidden;
+    transition: background 0.3s, color 0.3s;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* LOADING OVERLAY */
+.loader-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: var(--bg-body);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.5s ease-out, visibility 0.5s, background-color 0.3s;
+}
+
+.loader-overlay.fade-out {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.loader-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border-color);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+}
+
+.loader-text {
+    font-family: 'Courier Prime', monospace;
+    font-weight: bold;
+    font-size: 1.2rem;
+    letter-spacing: 0.1em;
+    color: var(--text-main);
+    opacity: 0.8;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* CUSTOM SCROLLBARS */
+#scroll-area::-webkit-scrollbar,
+.modal-body::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+#scroll-area::-webkit-scrollbar-track,
+.modal-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#scroll-area::-webkit-scrollbar-thumb,
+.modal-body::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 20px;
+    border: 3px solid var(--bg-body);
+    transition: background-color 0.3s ease-in-out;
+}
+
+#scroll-area:hover::-webkit-scrollbar-thumb,
+.modal-body:hover::-webkit-scrollbar-thumb,
+#scroll-area.scrolling::-webkit-scrollbar-thumb,
+.modal-body.scrolling::-webkit-scrollbar-thumb {
+    background-color: var(--text-meta);
+}
+
+#scroll-area::-webkit-scrollbar-thumb:hover,
+.modal-body::-webkit-scrollbar-thumb:hover {
+    background-color: var(--accent);
+}
+
+#scene-list::-webkit-scrollbar {
+    width: 10px;
+}
+
+#scene-list::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 5px;
+    transition: background-color 0.3s ease-in-out;
+}
+
+#scene-list:hover::-webkit-scrollbar-thumb,
+#scene-list.scrolling::-webkit-scrollbar-thumb {
+    background-color: var(--text-meta);
+}
+
+#scene-list::-webkit-scrollbar-thumb:hover {
+    background-color: var(--accent);
+}

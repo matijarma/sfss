@@ -1,0 +1,300 @@
+/* REPORT DASHBOARD STYLES */
+.report-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.report-dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+}
+
+.kpi-card {
+    background: var(--bg-body);
+    border: 1px solid var(--border-color);
+    padding: 1.25rem 1rem;
+    border-radius: 0.5rem;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.kpi-value {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--accent);
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+
+.kpi-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-meta);
+    font-weight: 600;
+    margin-top: 0.5rem;
+    letter-spacing: 0.05em;
+}
+
+.report-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 2rem;
+}
+
+/* STATS LIST & BARS */
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--text-meta);
+    margin-bottom: 0.5rem;
+}
+
+.progress-bar-container {
+    height: 8px;
+    background-color: var(--scene-hover);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    transition: width 0.5s ease-out;
+}
+
+.stat-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px dashed var(--border-color);
+    padding-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+.stat-item:last-child {
+    border-bottom: none;
+}
+
+/* TABLES & LISTS */
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.report-table th {
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    color: var(--text-meta);
+    padding: 0.5rem;
+    border-bottom: 2px solid var(--border-color);
+    background-color: transparent;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+.report-table td {
+    padding: 0.75rem 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.9rem;
+}
+
+.report-table tr:last-child td {
+    border-bottom: none;
+}
+
+.text-right { text-align: right; }
+.text-center { text-align: center; }
+.text-faded { color: var(--text-meta); opacity: 0.8; }
+.font-mono { font-family: 'Courier Prime', monospace; }
+.font-bold { font-weight: 700; }
+.text-sm { font-size: 0.8rem; }
+.truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; display: block; }
+
+/* BADGES */
+.badge {
+    padding: 3px 8px;
+    border-radius: 9999px;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    display: inline-block;
+}
+
+.badge.speaking {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #059669;
+}
+
+.badge.non-speaking {
+    background-color: var(--scene-hover);
+    color: var(--text-meta);
+}
+
+.dark-mode .badge.speaking {
+    background-color: rgba(16, 185, 129, 0.25);
+    color: #34d399;
+}
+
+/* OTHER */
+.char-legend-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+
+.scroll-list {
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    background-color: var(--bg-body);
+}
+
+.report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+}
+
+.report-header h2 {
+    margin: 0;
+    font-size: 1.75rem;
+    color: var(--text-main);
+    font-weight: 800;
+    letter-spacing: -0.025em;
+}
+
+/* REPORTS SECTIONS */
+.report-section {
+    margin-bottom: 2rem;
+}
+
+.report-section h3 {
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    color: var(--text-main);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* PRINT MEDIA QUERY FOR REPORTS */
+@media print {
+    .report-dashboard { grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+    .kpi-card { border: 1px solid #ddd; box-shadow: none; }
+    .report-grid-2 { grid-template-columns: 1fr 1fr; }
+    .report-container { gap: 1rem; }
+    .scroll-list { border: 1px solid #ddd; max-height: none !important; overflow: visible !important; }
+}
+
+/* UTILITY CLASSES (Refactored from JS inline styles) */
+.chart-legend-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+}
+
+.chart-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.chart-container-flex {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.chart-legend-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.report-table-sticky-thead {
+    position: sticky;
+    top: 0;
+    background: var(--bg-paper);
+    z-index: 1;
+}
+
+.flex-wrap-gap-4 {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.monologue-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.flex-justify-between-full {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.text-italic-faded {
+    font-size: 0.75rem;
+    font-style: italic;
+    line-height: 1.4;
+    color: var(--text-meta);
+}
+
+.flex-gap-05 {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.report-subtitle-centered {
+    font-size: 0.8rem;
+    margin-bottom: 0.5rem;
+    text-align: center;
+}
+
+.report-table-scroll-container {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.badge-custom {
+    background-color: var(--badge-color);
+    color: white;
+    border: 1px solid var(--badge-color);
+}
+
+.badge-custom-outline {
+    background-color: transparent;
+    color: var(--badge-color);
+    border: 1px solid var(--badge-color);
+    font-weight: normal;
+}
+

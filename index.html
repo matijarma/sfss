@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <style>
+        /* Loader styles with immediate theme support */
+        :root {
+            --loader-bg: #dfe4e8; /* matches --bg-body light */
+            --loader-spinner: #ccc;
+            --loader-accent: #0f62fe;
+            --loader-text: #2f3542;
+        }
+        html.dark-mode {
+            --loader-bg: #191c24; /* matches --bg-body dark */
+            --loader-spinner: #2c3038;
+            --loader-accent: #6fa0ff;
+            --loader-text: #a0aab8;
+        }
+        .loader-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--loader-bg); z-index: 9999; display: flex; 
+            justify-content: center; align-items: center; flex-direction: column;
+            color: var(--loader-text);
+        }
+        .loader-spinner {
+            width: 50px; height: 50px; border: 5px solid var(--loader-spinner); 
+            border-top-color: var(--loader-accent); border-radius: 50%; 
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loader-text { margin-top: 15px; font-family: sans-serif; font-weight: bold; opacity: 0.8; }
+    </style>
+    <script>
+        (function() {
+            // 0. Immediate Theme Application to prevent flash
+            try {
+                var storedTheme = localStorage.getItem('draftzero_theme');
+                var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                if (storedTheme === 'dark' || (!storedTheme && prefersDark)) {
+                    document.documentElement.classList.add('dark-mode');
+                }
+            } catch (e) { console.log('Theme detection failed', e); }
+
+            // Your Version Logic
+            const staticversion = "prototype_" + "23-12-25_" + "11";    
+            //const staticversion = Math.round(Math.random()*1000000);
+            const queryString = self.location.search;
+            const params = new URLSearchParams(queryString);
+            window.cacheverzija = params.get('v') ? params.get('v') : staticversion; 
+            var v = window.cacheverzija;
+
+            // Assets to load
+            var cssFiles = [
+                "assets/fontawesome/css/all.css",
+                "assets/googlefonts.css",
+                "assets/css/base.css",
+                "assets/css/layout.css",
+                "assets/css/components.css",
+                "assets/css/editor.css",
+                "assets/css/print.css",
+                "assets/css/reports.css",
+                "assets/css/treatment.css"
+            ];
+            
+            var jsFiles = [
+                "assets/script.js"
+            ];
+
+            // 1. Handle Manifest (Optional, but you had it in your HTML)
+            var manifest = document.createElement('link');
+            manifest.rel = 'manifest';
+            manifest.href = 'manifest.json?v=' + v;
+            document.head.appendChild(manifest);
+
+            // 2. Inject CSS
+            cssFiles.forEach(function(src) {
+                var link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = src + '?v=' + v;
+                document.head.appendChild(link);
+            });
+
+            // 3. Inject JS
+            // We defer this slightly to ensure CSS starts downloading first
+            jsFiles.forEach(function(src) {
+                var script = document.createElement('script');
+                script.src = src + '?v=' + v;
+                script.defer = true; // Important: behaves like putting script at end of body
+                document.head.appendChild(script);
+            });
+
+        })();
+    </script>
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-64.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Free Screenplay Software</title>
+    <meta name="theme-color" content="#0f62fe">
+    <meta name="mobile-web-app-capable" content="yes">    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Simple Free Screenplay Software">
+    <link rel="apple-touch-icon" href="assets/icons/icon-512.png">
+    <meta name="description" content="SFSS - The Simple and free Screenwriting Software, a client-side PWA">
+</head>
+<body class="bg-body">
+    <div id="printingdiv"></div>
+    <div id="app-loader" class="loader-overlay">
+        <div class="loader-spinner"></div>
+        <div class="loader-text">SFSS</div>
+    </div>
+
+<div id="app-container">
+
+    <header id="toolbar">
+        <button id="mobile-menu-btn" class="btn-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+        
+        <h1>
+            <img src="assets/icons/icon-64.png" alt="Logo">
+                    <span>ZERO<span style="color:var(--accent)">DRAFT</span></span>
+        </h1>
+        
+        <div class="toolbar-group desktop-only">
+            <div id="file-menu-container" class="dropdown-container">
+                <button id="file-menu-btn" class="btn-text">File</button>
+                <div id="file-menu-dropdown" class="dropdown-menu hidden">
+                    <a href="#" id="new-screenplay-btn" class="dropdown-item">New Screenplay</a>
+                    
+                    <div class="nested-dropdown-group">
+                        <a href="#" class="dropdown-item">Open</a>
+                        <div id="open-menu-nested-dropdown" class="nested-dropdown hidden">
+                            <a href="#" id="file-open-btn" class="dropdown-item">From file...</a>
+                            
+                            <div id="saved-scripts-list"></div>
+                            
+                            <div class="meta-text-small-padded">
+                                SFSS is a client-side app. All data is stored in your browser.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="nested-dropdown-group">
+                        <a href="#" class="dropdown-item">Backup <span id="backup-warning" class="hidden" style="font-size:0.7rem; color:var(--scene-color-3-light);"></span></a>
+                        <div class="nested-dropdown hidden">
+                            <a href="#" id="download-json-btn" class="dropdown-item">JSON (.json)</a>
+                            <a href="#" id="download-fdx-btn" class="dropdown-item">Final Draft (.fdx)</a>
+                            <a href="#" id="download-fountain-btn" class="dropdown-item">Fountain (.fountain)</a>
+                            <a href="#" id="download-text-btn" class="dropdown-item">Plain Text (.txt)</a>
+                        </div>
+                    </div>
+                    <a href="#" id="print-btn" class="dropdown-item">Print</a>
+                    <a href="#" id="install-pwa-btn" class="dropdown-item hidden">Install App</a>
+                    <a href="#" id="settings-btn" class="dropdown-item">Keyboard Shortcuts</a>
+                    <a href="#" id="reports-menu-btn" class="dropdown-item">Reports</a>
+                    <a href="#" id="help-btn" class="dropdown-item">Help & Info</a>
+                </div>
+            </div>
+
+            <button id="undo-btn" title="Undo" class="btn-text">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/></svg>
+            </button>
+            <button id="redo-btn" title="Redo" class="btn-text">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966a.25.25 0 0 1 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
+            </button>     
+
+            <div class="toolbar-divider"></div>
+
+            <div class="toggle-switch-wrapper" title="Treatment Mode">
+                <span class="toggle-label">Write</span>
+                <label class="switch">
+                  <input type="checkbox" id="treatment-mode-switch">
+                  <span class="slider round"></span>
+                </label>
+                <span class="toggle-label">Plan</span>
+            </div>
+        </div>
+        
+        <div class="toolbar-divider"></div>
+
+        <div class="flex-grow"></div>
+
+        <div id="type-selector-container" class="desktop-only">
+            <!-- Dropdown View -->
+            <div id="dropdown-selector-wrapper" class="selector-wrapper">
+                <select id="top-type-selector" class="type-selector">
+                    <option value="sc-slug">Scene Heading</option>
+                    <option value="sc-action">Action</option>
+                    <option value="sc-character">Character</option>
+                    <option value="sc-parenthetical">Parenthetical</option>
+                    <option value="sc-dialogue">Dialogue</option>
+                    <option value="sc-transition">Transition</option>
+                </select>
+                <div class="selector-arrow">
+                    <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                </div>
+            </div>
+
+            <!-- Horizontal Toggle View -->
+            <div id="horizontal-type-selector" class="horizontal-selector hidden">
+                <div class="hz-track"></div>
+                <div class="hz-pointer"></div>
+                <!-- Note: The pointer logic will be handled by CSS/JS. I'll add the nodes -->
+                <div class="hz-node" data-value="sc-slug" title="Scene Heading (S)">S</div>
+                <div class="hz-node" data-value="sc-action" title="Action (A)">A</div>
+                <div class="hz-node" data-value="sc-character" title="Character (C)">C</div>
+                <div class="hz-node" data-value="sc-parenthetical" title="Parenthetical (P)">P</div>
+                <div class="hz-node" data-value="sc-dialogue" title="Dialogue (D)">D</div>
+                <div class="hz-node" data-value="sc-transition" title="Transition (T)">T</div>
+            </div>
+
+            <button id="toggle-selector-view-btn" class="btn-icon" title="Switch Selector View">
+                <i class="fas fa-exchange-alt"></i>
+            </button>
+        </div>
+
+        <div class="toolbar-divider desktop-only"></div>
+
+        <div class="toolbar-group desktop-only">
+            <button id="toolbar-scene-numbers" class="btn-icon" title="Toggle Scene Numbers">
+                <i class="fas fa-list-ol"></i>
+            </button>
+            <button id="toolbar-date" class="btn-icon" title="Toggle Date in Header">
+                <i class="far fa-calendar-alt"></i>
+            </button>
+        </div>
+        
+        <div id="writing-setting"></div>
+
+        <div id="music-player" class="toolbar-group hidden">
+            <div>
+                 <button id="player-prev" class="btn-icon" title="Previous Track"><i class="fas fa-backward"></i></button>
+                 <button id="player-play" class="btn-icon" title="Play/Pause"><i class="fas fa-play"></i></button>
+                 <button id="player-next" class="btn-icon" title="Next Track"><i class="fas fa-forward"></i></button>
+            </div>
+            <div id="player-scene-indicator"></div>
+        </div>
+
+        <input type="file" id="file-input" accept=".json,.fdx" class="hidden">
+
+        <button id="theme-toggle-btn" class="btn-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </button>
+        
+        <button id="page-view-btn" class="btn-icon" title="Page View">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 4.5a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 1 .5-.5zm2 .5a.5.5 0 0 0-1 0v3a.5.5 0 0 0 1 0v-3zM2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2zm10-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1z"/></svg>
+        </button>
+
+    </header>
+
+    <div id="main-area">
+        <span id="save-status"><i class="far fa-save"></i></span>
+        <button id="show-sidebar-btn" class="btn-icon" title="Show Sidebar"><i class="fas fa-chevron-right"></i></button>
+        <aside id="sidebar">
+            <div id="mobile-menu-actions" class="mobile-only">
+                <button id="mobile-app-menu-toggle" class="dropdown-item flex-justify-between-center font-bold border-bottom-light">
+                    <span>App Menu</span>
+                    <i class="fas fa-up fa-chevron-down"></i>
+                </button>
+                <div id="mobile-app-menu-content" class="hidden border-bottom-light pb-1">
+                    <a href="#" data-action="new-screenplay" class="dropdown-item">New Screenplay</a>
+                    
+                    <div id="mobile-open-menu-container">
+                        <a href="#" id="mobile-open-menu-toggle" class="dropdown-item">
+                            Open
+                            <i class="fas fa-chevron-down menu-icon-small"></i>
+                        </a>
+                        <div id="mobile-open-menu" class="hidden menu-padding-left">
+                            <a href="#" data-action="open-from-file" class="dropdown-item">From file...</a>
+                            
+                            <div id="mobile-saved-scripts-list"></div>
+                            
+                            <div class="meta-text-small-padded">
+                                All data is stored in your browser.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="mobile-backup-menu-container">
+                        <a href="#" id="mobile-backup-menu-toggle" class="dropdown-item">
+                            Backup <span id="mobile-backup-warning" class="hidden text-warning font-small">!</span>
+                            <i class="fas fa-chevron-down menu-icon-small"></i>
+                        </a>
+                        <div id="mobile-backup-menu" class="hidden menu-padding-left">
+                            <a href="#" data-action="download-json" class="dropdown-item">JSON (.json)</a>
+                            <a href="#" data-action="download-fdx" class="dropdown-item">Final Draft (.fdx)</a>
+                            <a href="#" data-action="download-fountain" class="dropdown-item">Fountain (.fountain)</a>
+                            <a href="#" data-action="download-text" class="dropdown-item">Plain Text (.txt)</a>
+                        </div>
+                    </div>
+                    
+                    <a href="#" data-action="theme" class="dropdown-item">Toggle Theme</a>
+                    <a href="#" id="mobile-reading-mode-btn" class="dropdown-item">
+                        <i class="fas fa-book-open mr-1"></i> Switch to Reading Mode
+                    </a>
+                    <a href="#" data-action="help" class="dropdown-item">Help & Info</a>
+                    <a href="#" data-action="install-pwa" class="dropdown-item hidden">Install App</a>
+                </div>
+            </div>
+            
+            
+
+            <div id="sidebar-header">
+                <span id="script-title-header" class="truncate"></span>
+                <div class="sidebar-header-buttons">
+                    <button id="mobile-sidebar-close-btn" class="btn-icon mobile-only" title="Close Sidebar">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <button id="script-meta-btn" class="btn-icon desktop-only" title="Script Settings">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <button id="hide-sidebar-btn" class="btn-icon desktop-only" title="Hide Sidebar">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="scene-list"></div>
+            <div class="sidebar-stats">
+                <div id="stats-pages">Pages: 1</div>
+                <div id="stats-words">Words: 0</div>
+            </div>
+        </aside>
+
+        <main id="scroll-area">
+            <div id="editor-wrapper">
+                
+                <div id="print-title-page">
+                    <div id="tp-title" class="text-4xl font-bold uppercase underline decoration-2"></div>
+                    <div>written by</div>
+                    <div id="tp-author" class="text-xl"></div>
+                    <div id="tp-contact"></div>
+                </div>
+
+                <div id="editor-container" contenteditable="true" spellcheck="false"></div>
+                <div id="page-view-container" class="hidden"></div>
+                
+                <div id="autocomplete-menu" class="floating-menu"></div>
+                <div id="type-selector-menu" class="floating-menu"></div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<div id="settings-modal" class="modal-overlay hidden">
+    <div class="modal-window">
+        <div class="modal-header">
+            <span>Keyboard Shortcuts</span>
+            <button id="settings-close-btn" class="btn-text">✕</button>
+        </div>
+        <div class="modal-body">
+                <div id="keymap-settings"></div>
+        </div>
+        <div class="modal-footer">
+            <button id="settings-save-btn" class="modal-btn-primary">Save & Close</button>
+        </div>
+    </div>
+</div>
+
+<div id="script-meta-popup" class="modal-overlay hidden">
+    <div class="modal-window popup-max-width-md">
+        <div class="modal-header">
+            <span>Script Metadata</span>
+            <button id="script-meta-close-btn" class="btn-text">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="popup-flex-column-gap">
+                <div>
+                    <label class="settings-label">Title</label>
+                    <input id="meta-title-popup" type="text" class="settings-input">
+                </div>
+                <div>
+                    <label class="settings-label">Author / Written By</label>
+                    <input id="meta-author-popup" type="text" class="settings-input">
+                </div>
+                <div>
+                    <label class="settings-label">Contact Info / Production</label>
+                    <textarea id="meta-contact-popup" rows="3" class="settings-input"></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="script-meta-save-btn" class="modal-btn-primary">Save & Close</button>
+        </div>
+    </div>
+</div>
+
+<div id="scene-settings-popup" class="draggable-popup hidden">
+    <div id="scene-settings-popup-header" class="draggable-popup-header">
+        <span id="scene-settings-popup-header-title">Scene Settings</span>
+        <button id="scene-settings-close-btn" class="btn-text">✕</button>
+    </div>
+    <div id="scene-settings-popup-body" class="draggable-popup-body">
+        <!-- Content will be generated here -->
+    </div>
+</div>
+
+<div id="icon-picker-menu" class="floating-menu icon-picker-grid"></div>
+
+<div id="reports-modal" class="modal-overlay hidden">
+    <div class="modal-window popup-max-width-lg">
+        <div class="modal-header">
+            <span>Reports</span>
+            <button id="reports-close-btn" class="btn-text">✕</button>
+        </div>
+        <div class="modal-body popup-body-flex">
+            <div id="report-settings" class="settings-header-bg">
+                <div class="settings-controls-centered">
+                    <div class="toggle-group">
+                        <button class="toggle-btn active" data-value="script">Script</button>
+                        <button class="toggle-btn" data-value="character">Character</button>
+                    </div>
+                </div>
+                <div id="report-char-select-container" class="hidden char-select-container">
+                    <select id="report-char-select" class="type-selector char-select-input"></select>
+                </div>
+            </div>
+            
+            <div id="report-output" class="report-output-area">
+                <div class="report-placeholder placeholder-container">
+                    <i class="fas fa-file-alt placeholder-icon"></i>
+                    <button id="reports-generate-btn" class="modal-btn-primary">Generate Report</button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer popup-footer-flex">
+             <div>
+                <button id="report-download-txt-btn" class="btn-text hidden"><i class="fas fa-file-alt"></i> Download .txt</button>
+                <button id="report-download-pdf-btn" class="btn-text hidden"><i class="fas fa-file-pdf"></i> Print / PDF</button>
+             </div>
+             <button onclick="document.getElementById('reports-close-btn').click()" class="btn-text">Close</button>
+        </div>
+    </div>
+</div>
+
+<div id="mobile-welcome-modal" class="modal-overlay hidden modal-z-2000">
+    <div class="modal-window popup-max-width-sm text-center p-2">
+        <h2 class="mb-1">Welcome to SFSS</h2>
+        <p class="mb-2 opacity-80">The simple, free, offline-capable screenwriting app.</p>
+        
+        <div class="flex-col gap-1 mb-2">
+            <button id="welcome-new-btn" class="modal-btn-primary flex-justify-center p-1">
+                <i class="fas fa-plus-circle mr-1"></i> Start New Screenplay
+            </button>
+            <button id="welcome-open-btn" class="btn-text btn-border p-1">
+                <i class="fas fa-folder-open mr-1"></i> Open from File
+            </button>
+        </div>
+
+        <div class="text-left mb-2">
+            <div class="text-xs font-bold text-meta mb-1 uppercase">Recent Scripts</div>
+            <div id="welcome-scripts-list" class="max-h-150 overflow-y-auto border-light rounded">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+
+        <div class="text-left mt-2 border-top-light pt-1">
+            <label class="flex-align-center text-xs pointer">
+                <input type="checkbox" id="welcome-startup-toggle" checked class="mr-1">
+                Show this on startup
+            </label>
+        </div>
+    </div>
+</div>
+
+<div id="help-modal" class="modal-overlay hidden modal-z-1500">
+    <div class="modal-window popup-max-width-lg height-90vh flex-col">
+        <div class="modal-header">
+            <span>Help & Info</span>
+            <button id="help-close-btn" class="btn-text">✕</button>
+        </div>
+        <div class="modal-body flex-1 overflow-y-auto p-2">
+            <!-- Tabs Header -->
+            <div class="flex-row border-bottom-light mb-2">
+                <button class="tab-btn active" data-tab="help-about">About</button>
+                <button class="tab-btn" data-tab="help-shortcuts">Shortcuts</button>
+                <button class="tab-btn" data-tab="help-changelog">Changelog</button>
+            </div>
+
+            <!-- Tab Content: About -->
+            <div id="help-about" class="tab-content active">
+                <h3>Getting Started</h3>
+                <p><strong>SFSS (Simple Free Screenplay Software)</strong> is designed to get out of your way and let you write. It runs entirely in your browser and works offline.</p>
+                
+                <h3>Modes</h3>
+                <ul>
+                    <li><strong>Writing Mode:</strong> The standard continuous flow editor.</li>
+                    <li><strong>Page View:</strong> See exactly how your script looks on the page (Letter/A4).</li>
+                    <li><strong>Treatment Mode (Plan):</strong> A card-based view to organize scenes, add notes, images, and tracks.</li>
+                </ul>
+
+                <h3>Data & Privacy</h3>
+                <p>Everything is stored locally in your browser's storage (IndexedDB). <strong>We do not see your scripts.</strong></p>
+                <p><strong>Important:</strong> Clear your browser data carefully! Always keep backups (`.json` or `.fdx`).</p>
+            </div>
+
+            <!-- Tab Content: Shortcuts -->
+            <div id="help-shortcuts" class="tab-content hidden">
+                <p>Check the <strong>Keyboard Shortcuts</strong> menu item to customize these.</p>
+                <ul class="shortcut-list">
+                    <li><strong>Enter:</strong> Creates a new line. Context-aware (e.g., Slug -> Action).</li>
+                    <li><strong>Tab:</strong> Changes element type (e.g., Action -> Character).</li>
+                    <li><strong>Ctrl+S:</strong> Force save (Auto-save is always on).</li>
+                    <li><strong>Ctrl+Z / Ctrl+Y:</strong> Undo / Redo.</li>
+                </ul>
+            </div>
+
+            <!-- Tab Content: Changelog -->
+            <div id="help-changelog" class="tab-content hidden">
+                <h3>v1.0.0</h3>
+                <ul>
+                    <li>Initial Release</li>
+                    <li>Mobile Treatment Mode</li>
+                    <li>Offline PWA Support</li>
+                </ul>
+            </div>
+        </div>
+        <div class="modal-footer">
+             <button onclick="document.getElementById('help-close-btn').click()" class="btn-text">Close</button>
+        </div>
+    </div>
+</div>
+
+<div id="youtube-player-container" class="youtube-hidden"></div>
+
+<div id="menu-overlay" class="modal-overlay hidden z-index-overlay"></div>
+</body>
+</html>

@@ -1,0 +1,215 @@
+/* PRINT STYLES & PAGE VIEW GEOMETRY */
+div#printingdiv { display: none }
+
+/* =========================================
+   PAGE VIEW (UI Feature) 
+   ========================================= */
+
+.page {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--bg-paper); /* Respect Theme */
+    color: var(--text-main);           /* Respect Theme */
+    
+    /* Default US Letter Dimensions */
+    width: 8.5in;
+    height: 11in;
+    
+    /* Strict Padding (The "Page" container) */
+    padding-top: 1.0in;
+    padding-bottom: 1.0in;
+    padding-left: 1.5in;
+    padding-right: 1.0in;
+    
+    box-sizing: border-box;
+    margin: 0 auto 2rem auto; /* UI Spacing between pages */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Content Wrapper */
+.page .content-wrapper {
+    font-family: 'Courier Prime', 'Courier', monospace;
+    font-size: 12pt;
+    line-height: 16px; /* Exact 6 lines per inch */
+    width: 100%;
+}
+
+/* Base Script Line in Page View */
+.page .script-line {
+    margin: 0;
+    padding: 0;
+    min-height: 16px;
+    white-space: pre-wrap;
+    position: relative;
+    width: 100%;
+}
+
+/* =========================================
+   ELEMENT GEOMETRY & SPACING (Page View)
+   ========================================= */
+
+/* Scene Heading: 2 blank lines before, 1 blank line after */
+.page .sc-slug {
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-top: 32px; /* 2 lines */
+    margin-bottom: 16px; /* 1 line */
+    width: 100%;
+}
+/* First slug on page needs no top margin */
+.page .content-wrapper > .sc-slug:first-child {
+    margin-top: 0;
+}
+
+/* Tighten Dialogue Blocks (Character/Parenthetical/Dialogue) */
+/* Character and Parenthetical have margin-bottom: 0 by default (see above). 
+   Dialogue needs margin-bottom: 0 ONLY if followed by Parenthetical or Dialogue (continuation). 
+   If followed by Character, it implies a new speech, so we keep the default 16px margin. */
+.page .sc-dialogue:has(+ :is(.sc-parenthetical, .sc-dialogue)) {
+    margin-bottom: 0;
+}
+
+/* Action: 1 blank line after */
+.page .sc-action {
+    margin-bottom: 16px; /* 1 line */
+    width: 100%;
+}
+
+/* Character: No margin top/bottom (Tight with Dialogue) */
+.page .sc-character {
+    text-transform: uppercase;
+    margin-left: 2.2in;
+    width: auto;
+    margin-top: 0; 
+    margin-bottom: 0;
+}
+
+/* Dialogue: 1 blank line after block */
+.page .sc-dialogue {
+    margin-left: 1.0in;
+    width: 3.5in;
+    margin-bottom: 16px; /* 1 line */
+}
+
+/* Parenthetical: Tight with Dialogue */
+.page .sc-parenthetical {
+    margin-left: 1.6in;
+    width: 2.4in;
+    margin-bottom: 0; 
+}
+
+/* Transition: 1 blank line before and after */
+.page .sc-transition {
+    text-align: right;
+    margin-left: auto;
+    margin-top: 16px; /* 1 line */
+    margin-bottom: 16px; /* 1 line */
+    width: auto;
+}
+
+/* Tighten up Character/Parenthetical/Dialogue blocks */
+/* If a Character is followed by Parens or Dialogue, remove bottom margin? 
+   Actually, we set margin-bottom: 0 on Character/Parenthetical above.
+   We only need to ensure the Dialogue has the bottom margin.
+*/
+
+/* Page Numbers (UI) */
+.page .page-number {
+    position: absolute;
+    top: 0.5in;
+    right: 0.5in;
+    font-family: 'Courier Prime', monospace;
+    font-size: 12pt;
+    color: var(--text-meta);
+    pointer-events: none;
+    display: block !important;
+    z-index: 10;
+}
+
+.page .page-header {
+    position: absolute;
+    top: 0.5in;
+    left: 0.5in;
+    text-align: left;
+    pointer-events: none;
+    color: var(--text-meta);
+    font-size: 0.6rem;
+}
+.page:first-child .page-number, .page:first-child .page-header {
+    display: none !important;
+}
+
+/* =========================================
+   PRINT MEDIA QUERY (The Actual Print Output)
+   ========================================= */
+@media print {
+    :root {
+        --bg-body: white;
+        --bg-paper: white;
+        --text-main: black;
+        --text-meta: black;
+    }
+
+    #print-title-page { display: block !important; height: 100vh; position: relative; page-break-after: always; text-align: center; padding-top: 3in; }
+    
+    #print-title-page #tp-title { margin-bottom: 2in; }
+    #print-title-page div:nth-of-type(2) { margin-bottom: 0.5in; }
+    #print-title-page #tp-author { margin-bottom: 4in; }
+    
+    #tp-contact {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        text-align: left;
+        font-size: 0.8rem;
+        line-height: 1.25;
+        width: 100%;
+    }
+
+    /* Hide UI elements */
+    #toolbar, #sidebar, #show-sidebar-btn, .loader-overlay, #mobile-menu-btn, .btn-icon, .btn-text { display: none !important; }
+    #editor-wrapper { padding: 0; margin: 0; }
+    
+    body {
+        margin: 0;
+        background: white;
+        color: black;
+    }
+
+    #app-container, #main-area, #scroll-area {
+        display: block;
+        height: auto;
+        overflow: visible;
+        background: white;
+    }
+
+    /* Ensure Page View is visible */
+    #editor-container { display: none; }
+    #page-view-container { display: block !important; }
+
+    .page {
+        margin: 0;
+        border: none;
+        box-shadow: none;
+        page-break-after: always;
+        width: 100%;
+        height: auto;
+        padding: 0; /* @page handles margins */
+        background-color: white;
+        color: black;
+    }
+    
+    /* In print, the browser's @page margins apply. 
+       If we keep our element margins (e.g. margin-left: 2.2in), they add to the @page margins. 
+       Correct.
+    */
+    
+    /* Page Setup */
+    @page {
+        size: letter;
+        margin-top: 1.0in;
+        margin-bottom: 1.0in;
+        margin-left: 1.5in;
+        margin-right: 1.0in;
+    }
+}

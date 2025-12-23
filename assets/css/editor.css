@@ -1,0 +1,140 @@
+/* EDITOR STYLES */
+
+/* Base Styles (Mobile First / Fallback) */
+.script-line {
+    outline: none;
+    white-space: pre-wrap;
+    min-height: 1em;
+    margin-bottom: 1em;
+    position: relative;
+}
+
+.script-line:empty::after {
+    content: '\feff';
+    visibility: hidden;
+}
+
+.sc-character:empty::before {
+    content: attr(data-suggest);
+    color: #cccccc;
+    pointer-events: none;
+    font-style: italic;
+}
+
+.sc-slug {
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-top: 1.5em;
+    margin-bottom: 1em;
+    position: relative;
+}
+
+.sc-action { width: 100%; margin-bottom: 1em; }
+.sc-character { width: 60%; margin-left: 20%; margin-top: 1em; margin-bottom: 1em; text-transform: uppercase; }
+.sc-dialogue { width: 80%; margin-left: 10%; margin-bottom: 1em; }
+.sc-parenthetical { width: 60%; margin-left: 20%; margin-bottom: 1em; margin-top: 0; }
+.sc-transition { text-align: right; width: 100%; margin-top: 1em; margin-bottom: 1em; text-transform: uppercase; }
+
+
+/* DESKTOP STRICT FORMATTING (>768px) */
+/* Matches Page View Geometry exactly */
+@media (min-width: 769px) {
+    .sc-slug { 
+        margin-left: 0; width: 100%; 
+        margin-top: 32px; margin-bottom: 16px; 
+    }
+    .sc-action { 
+        margin-left: 0; width: 100%; 
+        margin-bottom: 16px; 
+    }
+    .sc-character { 
+        margin-left: 2.2in; width: auto; 
+        margin-bottom: 0; 
+    }
+    .sc-dialogue { 
+        margin-left: 1.0in; width: 3.5in; 
+        margin-bottom: 16px; 
+    }
+    .sc-parenthetical { 
+        margin-left: 1.6in; width: 2.4in; 
+        margin-bottom: 0; 
+    }
+    .sc-transition { 
+        margin-left: auto; margin-right: 0; width: auto; 
+        text-align: right; margin-top: 16px; margin-bottom: 16px; 
+    }
+}
+
+
+/* CONTEXTUAL SPACING FOR SCRIPT ELEMENTS */
+
+/* Remove top margin for parentheticals/dialogue immediately following a character or another parenthetical */
+.sc-character + .sc-parenthetical,
+.sc-character + .sc-dialogue,
+.sc-parenthetical + .sc-dialogue {
+    margin-top: 0;
+}
+
+/* A "dialogue block" is a run of characters, parentheticals, and dialogues.
+   These elements should only have a bottom margin if they are followed by
+   a different type of element (e.g., an action or slug). */
+:is(.sc-character, .sc-parenthetical, .sc-dialogue):has(+ :is(.sc-character, .sc-parenthetical, .sc-dialogue)) {
+    margin-bottom: 0;
+}
+
+/* SCENE NUMBERS */
+.show-scene-numbers .sc-slug {
+    counter-increment: scene;
+    position: relative;
+}
+
+.show-scene-numbers .sc-slug::before,
+.show-scene-numbers .sc-slug::after {
+    content: counter(scene);
+    position: absolute;
+    font-family: 'Courier Prime', monospace;
+    font-weight: normal;
+    font-size: 12pt;
+    color: var(--text-meta);
+    width: 0.8in;
+    top: 0;
+}
+
+.show-scene-numbers .sc-slug::before {
+    left: -1.2in;
+    text-align: right;
+}
+
+.show-scene-numbers .sc-slug::after {
+    right: -1.0in;
+    text-align: left;
+}
+
+/* Page View Specific Scene Number Styling */
+.page-view-active .show-scene-numbers .sc-slug::before,
+.page-view-active .show-scene-numbers .sc-slug::after {
+    color: var(--text-main);
+    font-weight: bold;
+}
+
+/* EDITOR ICONS */
+.editor-music-icon {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    color: var(--text-meta);
+    font-size: 0.7em;
+    opacity: 0.5;
+    transition: opacity 0.2s ease-in-out;
+}
+
+.editor-music-icon:hover {
+    opacity: 1;
+    color: var(--accent);
+}
+
+.page-view-active .editor-music-icon {
+    display: none;
+}
