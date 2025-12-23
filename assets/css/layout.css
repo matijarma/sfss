@@ -154,7 +154,7 @@ html, body {
 }
 
 #sidebar-header {
-    padding: 8px 12px;
+    padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--border-color);
     font-size: 0.8rem;
     font-weight: bold;
@@ -323,6 +323,9 @@ html, body {
         position: sticky;
         top: 0;
     }
+    #toolbar > h1 > span {
+        display: none;
+    }
     #mobile-menu-btn {
         display: block;
     }
@@ -343,13 +346,6 @@ html, body {
 
     .desktop-only {
         display: none !important; 
-    }
-
-    #mobile-sidebar-close-btn {
-        position: absolute;
-        top: 0.5rem;
-        right: 0.5rem;
-        z-index: 50;
     }
 
     #sidebar {
@@ -419,7 +415,7 @@ html, body {
 }
 
 #mobile-menu-actions {
-    padding: 0.75rem;
+    margin: 1rem 0;
 }
 
 @media (min-width: 769px) {
@@ -513,4 +509,104 @@ html, body {
     color: inherit;
     cursor: pointer;
     border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* --- MOBILE IMPROVEMENTS --- */
+
+/* Mobile Sidebar Styles */
+#mobile-menu-actions {
+    margin: 0;
+    background-color: var(--bg-paper);
+    border-bottom: 1px solid var(--border-color);
+}
+#mobile-menu-actions .dropdown-item {
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+#mobile-menu-actions .dropdown-item:last-child {
+    border-bottom: none;
+}
+
+#mobile-menu-actions .dropdown-item i.mr-1 {
+    width: 1.5rem; /* Fixed width for icons alignment */
+    text-align: center;
+    margin-right: 0.5rem;
+    color: var(--accent);
+}
+
+/* App Menu Toggle Header */
+#mobile-app-menu-toggle {
+    padding: 1rem;
+    font-size: 1rem;
+    background-color: var(--scene-hover);
+    font-weight: 700;
+    justify-content: space-between;
+}
+
+/* Nested Menus */
+.menu-padding-left {
+    padding-left: 0; /* Reset */
+    background-color: var(--bg-body); /* Subtle contrast */
+}
+.menu-padding-left .dropdown-item {
+    padding-left: 2rem !important; /* Indent nested items */
+    font-size: 0.9rem;
+}
+
+/* Mobile Toolbar Switch */
+.toggle-switch-wrapper.mobile-only {
+    display: flex; /* Show on mobile (overriding .mobile-only default display logic if handled via media query, but .mobile-only is hidden on desktop) */
+    align-items: center;
+    gap: 8px;
+    margin-left: auto; /* Push to right of logo, or adjust as needed */
+}
+
+/* Adjust mobile-only visibility logic for flex items if needed */
+@media (max-width: 768px) {
+    .toggle-switch-wrapper.mobile-only {
+        display: flex !important;
+    }
+}
+
+.switch-sm {
+    width: 30px;
+    height: 18px;
+    margin: 0;
+}
+
+.switch-sm .slider:before {
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    bottom: 2px;
+}
+
+.switch-sm input:checked + .slider:before {
+    transform: translateX(12px);
+}
+
+.toggle-switch-wrapper .text-xs {
+    font-size: 0.75rem;
+    color: var(--text-meta);
+}
+
+/* Sidebar Welcome Toggle Switch Alignment */
+.switch {
+    margin-left: auto; /* Push to right */
+}
+
+/* Ensure Scene List expands */
+#sidebar {
+    display: flex;
+    flex-direction: column;
+}
+#scene-list {
+    flex: 1;
+    overflow-y: auto;
 }

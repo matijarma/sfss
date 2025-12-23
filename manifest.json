@@ -2,8 +2,8 @@
   "name": "Simple Free Screenplay Software",
   "short_name": "SFSS",
   "description": "Professional Client-Side Screenwriting PWA",
-  "id": "SFSS",
-  "start_url": ".",
+  "id": "/?best=screenwriting&app",
+  "start_url": "/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#d9dde2",
@@ -25,14 +25,14 @@
   "screenshots": [
     {
       "src": "assets/images/screenshot.jpg",
-      "sizes": "1200x1280",
+      "sizes": "480x987",
       "type": "image/jpeg",
       "form_factor": "narrow",
       "label": "Main Editor View"
     },
     {
       "src": "assets/images/screenshot-wide.jpg",
-      "sizes": "1920x1080",
+      "sizes": "1100x501",
       "type": "image/jpeg",
       "form_factor": "wide",
       "label": "Editor with Scene Settings"

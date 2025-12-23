@@ -22,7 +22,7 @@ export class SidebarManager {
         
         // Mobile menu
         document.getElementById('mobile-menu-btn').addEventListener('click', this.toggleMobileMenu.bind(this));
-        document.getElementById('mobile-sidebar-close-btn').addEventListener('click', this.toggleMobileMenu.bind(this));
+        document.getElementById('hide-sidebar-btn').addEventListener('click', this.toggleMobileMenu.bind(this));
         document.getElementById('menu-overlay').addEventListener('click', this.toggleMobileMenu.bind(this));
 
         const saveMenuToggle = document.getElementById('mobile-save-menu-toggle');
@@ -240,7 +240,7 @@ export class SidebarManager {
     }
 
     openSceneSettings(slug) {
-        if (!slug || document.body.classList.contains('mobile-view')) return;
+        if (!slug) return;
     
         const sceneId = slug.dataset.lineId;
         if (!sceneId) return;
@@ -563,7 +563,6 @@ export class SidebarManager {
     }
 
     openScriptMetaPopup() {
-        if (document.body.classList.contains('mobile-view')) return;
         this.closeSceneSettings();
         this.app.closePopups();
         document.getElementById('meta-title-popup').value = this.app.meta.title;

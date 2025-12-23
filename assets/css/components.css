@@ -81,7 +81,7 @@ input:checked + .slider:before {
 .btn-icon {
     background: none;
     border: none;
-    padding: 0.5rem;
+    padding: 0;
     color: var(--text-main);
     cursor: pointer;
     border-radius: 9999px;
@@ -1101,8 +1101,7 @@ select.settings-input option {
     }
     .scene-item.active-scene {
         border: initial;
-    padding: initial;
-    color: inherit;
+        color: inherit;
     }
 }
 

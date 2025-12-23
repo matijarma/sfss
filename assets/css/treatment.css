@@ -444,18 +444,15 @@ body.mode-switching #main-area {
     border-radius: 4px;
     transition: background-color 0.2s;
 }
-.treatment-body:focus {
-    background-color: var(--scene-hover);
-}
 
 .treatment-body[data-empty="true"]::before {
-    content: 'Write scene synopsis here...';
+    content: "Synopsis";
     color: var(--text-meta);
     opacity: 0.5;
     font-style: italic;
     position: absolute;
     pointer-events: none;
-    padding: 0.5rem; 
+    display: flex;
 }
 
 /* Transition Footer */
@@ -631,10 +628,6 @@ body.mode-switching #main-area {
     text-align: center;
 }
 
-.treatment-meta-line.author-line {
-    text-align: center;
-}
-
 .treatment-meta-toggle {
     position: absolute;
     top: -10px;
@@ -645,6 +638,10 @@ body.mode-switching #main-area {
     padding: 0.5rem;
     font-size: 0.8rem;
     cursor: pointer;
+}
+.treatment-mobile-meta input {
+    max-width: 70vw;
+    text-align: left;
 }
 
 .treatment-mobile-meta.collapsed .treatment-meta-line {

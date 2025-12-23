@@ -120,7 +120,7 @@ export class SFSS {
                 this.importJSON(content, true);
                 await this.populateOpenMenu();
                 await this.checkBackupStatus();
-                this.updateReadingModeButtonText();
+
                 
                 this.toggleLoader(false);
                 resolve();
@@ -221,6 +221,9 @@ export class SFSS {
         const showWelcome = localStorage.getItem('draftzero_show_welcome');
         // Default to true if null, or if strictly 'true'
         const shouldShow = showWelcome === null || showWelcome === 'true';
+        
+        const sidebarToggle = document.getElementById('sidebar-welcome-toggle');
+        if (sidebarToggle) sidebarToggle.checked = shouldShow;
 
         if (shouldShow) {
             await this.populateWelcomeScriptList();
@@ -326,7 +329,9 @@ export class SFSS {
         const treatmentSwitch = document.getElementById('treatment-mode-switch');
         if (treatmentSwitch) treatmentSwitch.addEventListener('change', () => this.toggleTreatmentMode());
         
-        
+        const mobileTreatmentSwitch = document.getElementById('mobile-treatment-switch');
+        if (mobileTreatmentSwitch) mobileTreatmentSwitch.addEventListener('change', () => this.toggleTreatmentMode());
+
         document.getElementById('top-type-selector').addEventListener('change', (e) => this.editorHandler.manualTypeChangeZD(e.target.value));
         document.getElementById('theme-toggle-btn').addEventListener('click', () => this.toggleTheme());
         document.getElementById('page-view-btn').addEventListener('click', () => this.togglePageView());
@@ -370,7 +375,7 @@ export class SFSS {
 
         document.querySelector('[data-action="new-screenplay"]').addEventListener('click', () => { this.newScreenplay(); this.sidebarManager.toggleMobileMenu(); });
         document.querySelector('[data-action="open-from-file"]').addEventListener('click', () => { document.getElementById('file-input').click(); this.sidebarManager.toggleMobileMenu(); });
-        document.querySelector('[data-action="theme"]').addEventListener('click', () => { this.toggleTheme(); this.sidebarManager.toggleMobileMenu(); });
+        
         document.querySelector('[data-action="install-pwa"]').addEventListener('click', () => { this.promptInstall(); this.sidebarManager.toggleMobileMenu(); });
         
         document.getElementById('mobile-open-menu-toggle').addEventListener('click', (e) => {
@@ -424,7 +429,18 @@ export class SFSS {
         });
         document.getElementById('welcome-startup-toggle').addEventListener('change', (e) => {
             localStorage.setItem('draftzero_show_welcome', e.target.checked);
+            const sidebarToggle = document.getElementById('sidebar-welcome-toggle');
+            if (sidebarToggle) sidebarToggle.checked = e.target.checked;
         });
+
+        const sidebarWelcomeToggle = document.getElementById('sidebar-welcome-toggle');
+        if (sidebarWelcomeToggle) {
+             sidebarWelcomeToggle.addEventListener('change', (e) => {
+                localStorage.setItem('draftzero_show_welcome', e.target.checked);
+                const modalToggle = document.getElementById('welcome-startup-toggle');
+                if (modalToggle) modalToggle.checked = e.target.checked;
+             });
+        }
 
         // Help Tabs
         const helpTabs = document.querySelectorAll('.tab-btn');
@@ -466,37 +482,6 @@ export class SFSS {
         window.addEventListener('popstate', (e) => {
             this.handleBackOrEscape(true);
         });
-        
-        // Mobile Reading Mode Toggle
-        const readModeBtn = document.getElementById('mobile-reading-mode-btn');
-        if (readModeBtn) {
-            readModeBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                // If treatment mode is active, toggle it OFF (to reading mode)
-                // If treatment mode is NOT active, toggle it ON (to treatment mode)?
-                // Request says button is "Reading Mode". So clicking it should go to Reading Mode.
-                // If we are already in reading mode, maybe it switches back?
-                // "change #mobile-treatment-btn so that it actually becomes the opposite - the reading mode toggle"
-                // So if I am in Treatment Mode (Default), I click "Switch to Reading Mode".
-                // Then I am in Reading Mode. Button should probably say "Switch to Treatment Mode"?
-                // Or "Planning Mode".
-                
-                this.toggleTreatmentMode();
-                this.sidebarManager.toggleMobileMenu();
-                this.updateReadingModeButtonText();
-            });
-        }
-    }
-    
-    updateReadingModeButtonText() {
-        const btn = document.getElementById('mobile-reading-mode-btn');
-        if (!btn) return;
-        
-        if (this.treatmentModeActive) {
-            btn.innerHTML = '<i class="fas fa-book-open mr-1"></i> Switch to Reading Mode';
-        } else {
-            btn.innerHTML = '<i class="fas fa-th-large mr-1"></i> Switch to Planning Mode';
-        }
     }
 
     handleBackOrEscape(isPopState = false) {
@@ -698,10 +683,10 @@ export class SFSS {
         
         this.treatmentModeActive = !this.treatmentModeActive;
         const switchEl = document.getElementById('treatment-mode-switch');
-        const mobileBtn = document.getElementById('mobile-treatment-btn');
+        const mobileSwitchEl = document.getElementById('mobile-treatment-switch');
         
         if(switchEl) switchEl.checked = this.treatmentModeActive;
-        if(mobileBtn) mobileBtn.classList.toggle('active', this.treatmentModeActive); 
+        if(mobileSwitchEl) mobileSwitchEl.checked = this.treatmentModeActive; 
         
         if (this.treatmentModeActive) {
             // Enter Treatment Mode
@@ -739,7 +724,6 @@ export class SFSS {
         }
 
         setTimeout(() => document.body.classList.remove('mode-switching'), 350);
-        this.updateReadingModeButtonText();
     }
 
     updateSceneDescriptionInTreatment(slugId, newTexts) {
@@ -993,7 +977,7 @@ export class SFSS {
                 } else {
                     this.refreshTreatmentView();
                 }
-                this.updateReadingModeButtonText();
+
             }
         } else {
             document.body.classList.remove('mobile-view');

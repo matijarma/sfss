@@ -33,7 +33,7 @@
         (function() {
             // 0. Immediate Theme Application to prevent flash
             try {
-                var storedTheme = localStorage.getItem('draftzero_theme');
+                var storedTheme = localStorage.getItem('sfss_theme');
                 var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
                 if (storedTheme === 'dark' || (!storedTheme && prefersDark)) {
                     document.documentElement.classList.add('dark-mode');
@@ -41,7 +41,7 @@
             } catch (e) { console.log('Theme detection failed', e); }
 
             // Your Version Logic
-            const staticversion = "prototype_" + "23-12-25_" + "443";    
+            const staticversion = "prototype_" + "23-12-25_" + "99";    
             //const staticversion = Math.round(Math.random()*1000000);
             const queryString = self.location.search;
             const params = new URLSearchParams(queryString);
@@ -118,6 +118,14 @@
             <img src="assets/images/icon-64.png" alt="Logo">
                     <span>S<span style="color:var(--accent)">F</span>SS</span>
         </h1>
+        <div class="toggle-switch-wrapper mobile-only ml-1">
+            <i class="fas fa-pen text-xs"></i>
+            <label class="switch switch-sm">
+                <input type="checkbox" id="mobile-treatment-switch">
+                <span class="slider round"></span>
+            </label>
+            <i class="fas fa-th-large text-xs"></i>
+        </div>
         
         <div class="toolbar-group desktop-only">
             <div id="file-menu-container" class="dropdown-container">
@@ -126,7 +134,7 @@
                     <a href="#" id="new-screenplay-btn" class="dropdown-item">New Screenplay</a>
                     
                     <div class="nested-dropdown-group">
-                        <a href="#" class="dropdown-item">Open</a>
+                        <a href="#" class="dropdown-item">Open </a>
                         <div id="open-menu-nested-dropdown" class="nested-dropdown hidden">
                             <a href="#" id="file-open-btn" class="dropdown-item">From file...</a>
                             
@@ -256,12 +264,14 @@
                     <i class="fas fa-up fa-chevron-down"></i>
                 </button>
                 <div id="mobile-app-menu-content" class="hidden border-bottom-light pb-1">
-                    <a href="#" data-action="new-screenplay" class="dropdown-item">New Screenplay</a>
+                    <a href="#" data-action="new-screenplay" class="dropdown-item">
+                        <i class="fas fa-plus-circle mr-1"></i> New Screenplay
+                    </a>
                     
                     <div id="mobile-open-menu-container">
                         <a href="#" id="mobile-open-menu-toggle" class="dropdown-item">
-                            Open
-                            <i class="fas fa-chevron-down menu-icon-small"></i>
+                            <span><i class="fas fa-folder-open mr-1"></i>&nbsp;Open</span>
+                            &nbsp;<i class="fas fa-chevron-down menu-icon-small"></i>
                         </a>
                         <div id="mobile-open-menu" class="hidden menu-padding-left">
                             <a href="#" data-action="open-from-file" class="dropdown-item">From file...</a>
@@ -276,7 +286,7 @@
                     
                     <div id="mobile-backup-menu-container">
                         <a href="#" id="mobile-backup-menu-toggle" class="dropdown-item">
-                            Backup <span id="mobile-backup-warning" class="hidden text-warning font-small">!</span>
+                            <span><i class="fas fa-file-export mr-1"></i> Backup <span id="mobile-backup-warning" class="hidden text-warning font-small">!</span></span>
                             <i class="fas fa-chevron-down menu-icon-small"></i>
                         </a>
                         <div id="mobile-backup-menu" class="hidden menu-padding-left">
@@ -287,12 +297,20 @@
                         </div>
                     </div>
                     
-                    <a href="#" data-action="theme" class="dropdown-item">Toggle Theme</a>
-                    <a href="#" id="mobile-reading-mode-btn" class="dropdown-item">
-                        <i class="fas fa-book-open mr-1"></i> Switch to Reading Mode
+                    <a href="#" data-action="help" class="dropdown-item">
+                        <i class="fas fa-question-circle mr-1"></i> Help & Info
                     </a>
-                    <a href="#" data-action="help" class="dropdown-item">Help & Info</a>
-                    <a href="#" data-action="install-pwa" class="dropdown-item hidden">Install App</a>
+                    <a href="#" data-action="install-pwa" class="dropdown-item hidden">
+                        <i class="fas fa-solid fa-download fa-bounce mr-1"></i> Install
+                    </a>
+
+                    <div class="dropdown-item flex-justify-between-center" style="padding-right: 1rem;">
+                        <span><i class="fas fa-hand-sparkles mr-1"></i> Show Welcome Screen</span>
+                         <label class="switch">
+                            <input type="checkbox" id="sidebar-welcome-toggle">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
                 </div>
             </div>
             
@@ -301,13 +319,10 @@
             <div id="sidebar-header">
                 <span id="script-title-header" class="truncate"></span>
                 <div class="sidebar-header-buttons">
-                    <button id="mobile-sidebar-close-btn" class="btn-icon mobile-only" title="Close Sidebar">
-                        <i class="fas fa-times"></i>
-                    </button>
-                    <button id="script-meta-btn" class="btn-icon desktop-only" title="Script Settings">
+                    <button id="script-meta-btn" class="btn-icon" title="Script Settings">
                         <i class="fas fa-cog"></i>
                     </button>
-                    <button id="hide-sidebar-btn" class="btn-icon desktop-only" title="Hide Sidebar">
+                    <button id="hide-sidebar-btn" class="btn-icon" title="Hide Sidebar">
                         <i class="fas fa-chevron-left"></i>
                     </button>
                 </div>
@@ -451,10 +466,11 @@
             </div>
         </div>
 
-        <div class="text-left mt-2 border-top-light pt-1">
-            <label class="flex-align-center text-xs pointer">
-                <input type="checkbox" id="welcome-startup-toggle" checked class="mr-1">
-                Show this on startup
+        <div class="text-left mt-2 border-top-light pt-1 flex-justify-between-center">
+            <span class="text-xs">Show this on startup</span>
+             <label class="switch">
+                <input type="checkbox" id="welcome-startup-toggle" checked>
+                <span class="slider round"></span>
             </label>
         </div>
     </div>
@@ -487,9 +503,15 @@
                     <li><strong>Treatment Mode (Plan):</strong> A card-based view to organize scenes, add notes, images, and tracks.</li>
                 </ul>
 
-                <h3>Data & Privacy</h3>
-                <p>Everything is stored locally in your browser's storage (IndexedDB). <strong>We do not see your scripts.</strong></p>
-                <p><strong>Important:</strong> Clear your browser data carefully! Always keep backups (`.json` or `.fdx`).</p>
+                <h3>Data & Privacy (Local-Only)</h3>
+                <p><strong>SFSS is not a "cloud" app.</strong> It is a client-side Progressive Web App (PWA) that runs entirely in your browser.</p>
+                <ul>
+                    <li><strong>Zero Data Transfer:</strong> Your scripts <strong>never</strong> leave your device. We do not see, store, or transmit your data. Zero bytes flow between you and any server after the initial page load.</li>
+                    <li><strong>Zero Tracking:</strong> We use <strong>zero cookies</strong> and <strong>zero analytics</strong>.</li>
+                    <li><strong>Offline Capable:</strong> Once loaded, the app works 100% offline.</li>
+                </ul>
+                <p><strong>The only exception:</strong> If you use the "Track/Music" feature to embed YouTube links, the app will communicate directly with YouTube's servers to fetch video metadata and play the audio. This happens <em>only</em> when you explicitly paste a link or play a track.</p>
+                <p><strong>Important:</strong> Since your data lives in your browser's storage (IndexedDB), <strong>clearing your browser data will delete your scripts!</strong> Always keep backups (`.json` or `.fdx`).</p>
             </div>
 
             <!-- Tab Content: Shortcuts -->

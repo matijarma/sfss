@@ -118,7 +118,7 @@ export class MobileApp {
     bindEventListeners() {
         // Toolbar & Menu
         document.getElementById('mobile-menu-btn').addEventListener('click', () => this.toggleSidebar());
-        document.getElementById('mobile-sidebar-close-btn').addEventListener('click', () => this.toggleSidebar());
+        document.getElementById('hide-sidebar-btn').addEventListener('click', () => this.toggleSidebar());
         document.getElementById('menu-overlay').addEventListener('click', () => this.toggleSidebar());
         
         // Page View Toggle
@@ -149,11 +149,6 @@ export class MobileApp {
         });
 
         // Sidebar Theme Toggle
-        document.querySelector('[data-action="theme"]').addEventListener('click', () => { 
-            document.documentElement.classList.toggle('dark-mode');
-            localStorage.setItem('draftzero_theme', document.documentElement.classList.contains('dark-mode') ? 'dark' : 'light');
-            this.toggleSidebar(); 
-        });
 
         document.querySelector('[data-action="install-pwa"]').addEventListener('click', (e) => {
             e.preventDefault();
@@ -448,6 +443,7 @@ export class MobileApp {
         const overlay = document.getElementById('menu-overlay');
         const isOpen = sidebar.classList.toggle('open');
         overlay.classList.toggle('active', isOpen);
+        
     }
     
     updateTitle() {
