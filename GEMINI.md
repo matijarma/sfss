@@ -45,8 +45,6 @@ The core value proposition is the "Formatting Engine," detailed in `screenplay-f
     *   **`js-mod/`**: Core JavaScript source modules.
     *   **`css/`**: Stylesheets split by function (`base.css`, `layout.css`, `editor.css`, etc.).
     *   **`icons/`**: App icons for PWA manifest.
-*   **`formatSamples/`**: Sample files (`.json`, `.fdx`, `.fdr`) for testing import/export.
-*   **`oldcode/`**: Archive of previous iterations and reference materials.
 
 ## Development & Usage
 
