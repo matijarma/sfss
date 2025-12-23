@@ -2,9 +2,7 @@
 
 **A professional, client-side Screenwriting Progressive Web App (PWA) designed for privacy, performance, and portability.**
 
-SFSS (also known as ZeroDraft) is a powerful, open-source tool that brings an industry-standard writing experience directly to your browser. Built with a "local-first" philosophy, it ensures total privacy and offline capability without reliance on external servers or subscriptions. All your work is saved directly to your device.
-
-![SFSS Interface](assets/icons/screenshot-wide.jpg)
+**Simple Free Screenwriting Software** or **SFSS** is a powerful, open-source tool that brings an industry-standard writing experience directly to your browser. Built with a "local-first" philosophy, it ensures total privacy and offline capability without reliance on external servers or subscriptions. All your work is saved directly to your device.
 
 ## ✨ Core Features
 
