@@ -41,7 +41,7 @@
             } catch (e) { console.log('Theme detection failed', e); }
 
             // Your Version Logic
-            const staticversion = "prototype_" + "23-12-25_" + "11";    
+            const staticversion = "prototype_" + "23-12-25_" + "3";    
             //const staticversion = Math.round(Math.random()*1000000);
             const queryString = self.location.search;
             const params = new URLSearchParams(queryString);
@@ -116,7 +116,7 @@
         
         <h1>
             <img src="assets/icons/icon-64.png" alt="Logo">
-                    <span>ZERO<span style="color:var(--accent)">DRAFT</span></span>
+                    <span>S<span style="color:var(--accent)">F</span>SS</span>
         </h1>
         
         <div class="toolbar-group desktop-only">
@@ -505,13 +505,17 @@
 
             <!-- Tab Content: Changelog -->
             <div id="help-changelog" class="tab-content hidden">
-                <h3>v1.0.0</h3>
+                <h3></h3>
                 <ul>
                     <li>Initial Release</li>
                     <li>Mobile Treatment Mode</li>
                     <li>Offline PWA Support</li>
                 </ul>
             </div>
+                <script>
+                    let a = document.getElementById("help-changelog");
+                    a.getElementsByTagName("h3")[0].innerHTML = "Version " + window.cacheverzija;
+                </script>
 
             <!-- Tab Content: Licenses -->
             <div id="help-licenses" class="tab-content hidden">
