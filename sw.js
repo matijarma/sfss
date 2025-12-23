@@ -29,8 +29,8 @@ const APP_SHELL_URLS = [
   'assets/js-mod/StorageManager.js',
   'assets/js-mod/ReportsManager.js',
   // Images/Icons
-  'assets/icons/icon-64.png',
-  'assets/icons/icon-512.png',
+  'assets/images/icon-64.png',
+  'assets/images/icon-512.png',
   // Fonts (Google)
   'assets/googlefonts/u-4n0q2lgwslOqpF_6gQ8kELawRZVsf6lvg.woff2',
   'assets/googlefonts/u-4n0q2lgwslOqpF_6gQ8kELawRZWMf6.woff2',

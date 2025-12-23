@@ -10,13 +10,13 @@
   "theme_color": "#0f62fe",
   "icons": [
     {
-      "src": "assets/icons/icon-512.png",
+      "src": "assets/images/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "assets/icons/maskable_icon.png",
+      "src": "assets/images/maskable_icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -24,14 +24,14 @@
   ],
   "screenshots": [
     {
-      "src": "assets/icons/screenshot1.jpg",
+      "src": "assets/images/screenshot.jpg",
       "sizes": "1200x1280",
       "type": "image/jpeg",
       "form_factor": "narrow",
       "label": "Main Editor View"
     },
     {
-      "src": "assets/icons/screenshot-wide.jpg",
+      "src": "assets/images/screenshot-wide.jpg",
       "sizes": "1920x1080",
       "type": "image/jpeg",
       "form_factor": "wide",

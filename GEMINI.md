@@ -44,7 +44,7 @@ The core value proposition is the "Formatting Engine," detailed in `screenplay-f
 *   **`assets/`**: Contains all static assets (CSS, JS, Fonts, Icons).
     *   **`js-mod/`**: Core JavaScript source modules.
     *   **`css/`**: Stylesheets split by function (`base.css`, `layout.css`, `editor.css`, etc.).
-    *   **`icons/`**: App icons for PWA manifest.
+    *   **`images/`**: App icons for PWA manifest.
 
 ## Development & Usage
 
