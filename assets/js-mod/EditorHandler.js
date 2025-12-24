@@ -638,4 +638,37 @@ export class EditorHandler {
         this.app.saveState(true);
         this.updateContext();
     }
+
+    // --- Collaboration Methods ---
+    toggleReadOnly(isReadOnly) {
+        this.app.editor.contentEditable = !isReadOnly;
+        if (isReadOnly) {
+            this.app.editor.classList.add('editor-locked');
+            this.closePopups();
+        } else {
+            this.app.editor.classList.remove('editor-locked');
+        }
+    }
+
+    getSnapshot() {
+        // Return full script state
+        return this.app.exportToJSONStructure();
+    }
+
+    applySnapshot(data, isSoft = false) {
+        // Restore full script state
+        if (isSoft) {
+             const scrollArea = document.getElementById('scroll-area');
+             const parentScroll = scrollArea ? scrollArea.scrollTop : 0;
+             
+             this.app.importJSON(data, true); 
+             
+             if (scrollArea) scrollArea.scrollTop = parentScroll;
+        } else {
+             this.app.importJSON(data, true); 
+        }
+        
+        // Persist the synced state
+        this.app.save();
+    }
 }

@@ -41,7 +41,7 @@
             } catch (e) { console.log('Theme detection failed', e); }
 
             // Your Version Logic
-            const staticversion = "" + "23-12-25_" + "public-" + "12";
+            const staticversion = "" + "24-12-25_" + "collabV1-" + "111";
             //const staticversion = Math.round(Math.random()*1000000);
             const queryString = self.location.search;
             const params = new URLSearchParams(queryString);
@@ -56,6 +56,7 @@
                 "assets/css/layout.css",
                 "assets/css/components.css",
                 "assets/css/editor.css",
+                "assets/css/collab.css",
                 "assets/css/print.css",
                 "assets/css/reports.css",
                 "assets/css/treatment.css"
@@ -68,7 +69,7 @@
             // 1. Handle Manifest (Optional, but you had it in your HTML)
             var manifest = document.createElement('link');
             manifest.rel = 'manifest';
-            manifest.href = 'manifest.json?v=' + v;
+            manifest.href = 'manifest-testing.json?v=' + v;
             document.head.appendChild(manifest);
 
             // 2. Inject CSS
@@ -132,6 +133,7 @@
                 <button id="file-menu-btn" class="btn-text">File</button>
                 <div id="file-menu-dropdown" class="dropdown-menu hidden">
                     <a href="#" id="new-screenplay-btn" class="dropdown-item">New Screenplay</a>
+                    <a href="#" id="collab-menu-btn" class="dropdown-item" style="color:var(--accent)">Collaboration (Beta)</a>
                     
                     <div class="nested-dropdown-group">
                         <a href="#" class="dropdown-item">Open </a>

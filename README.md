@@ -50,7 +50,7 @@ SFSS is a static web application and requires no server or build process to run.
 *   **Core Logic:** **Vanilla JavaScript (ES6+ Modules)**. The app is intentionally dependency-free for maximum performance and longevity.
 *   **Styling:** **Modular CSS** with CSS Variables for theming. No pre-processors are used.
 *   **Storage:** `IndexedDB` for script and image data; `LocalStorage` for user settings.
-*   **PWA:** `sw.js` (Service Worker) for offline caching and `manifest.json` for app installation.
+*   **PWA:** `sw.js` (Service Worker) for offline caching and `manifest-testing.json` for app installation.
 *   **Icons & Fonts:** FontAwesome and Courier Prime (locally hosted).
 
 ### Project Structure
@@ -60,7 +60,7 @@ The codebase is organized into a modular, class-based architecture.
 /
 ├── index.html              # Main application entry point, contains all modal HTML.
 ├── sw.js                   # Service Worker for PWA offline caching.
-├── manifest.json           # PWA manifest for app installation properties.
+├── manifest-testing.json           # PWA manifest for app installation properties.
 ├── assets/
 │   ├── css/                # Style sheets, modularized by function.
 │   │   ├── base.css        # Core variables, resets, and loader.

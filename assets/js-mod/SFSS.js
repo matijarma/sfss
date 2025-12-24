@@ -7,6 +7,8 @@ import { StorageManager } from './StorageManager.js';
 import { ReportsManager } from './ReportsManager.js';
 import { PageRenderer } from './PageRenderer.js';
 import { TreatmentRenderer } from './TreatmentRenderer.js';
+import { CollaborationManager } from './CollaborationManager.js';
+import { CollabUI } from './CollabUI.js';
 
 export class SFSS {
     constructor() {
@@ -68,6 +70,8 @@ export class SFSS {
         this.editorHandler = new EditorHandler(this);
         this.reportsManager = new ReportsManager(this);
         this.treatmentRenderer = new TreatmentRenderer(this);
+        this.collaborationManager = new CollaborationManager(this);
+        this.collabUI = new CollabUI(this);
         
         this.ELEMENT_TYPES = constants.ELEMENT_TYPES;
         this.TYPE_LABELS = constants.TYPE_LABELS;
@@ -215,6 +219,16 @@ export class SFSS {
         }
 
         this.toggleLoader(false);
+        
+        // Check for Auto-Join Link
+        const urlParams = new URLSearchParams(window.location.search);
+        const autoJoinRoom = urlParams.get('room');
+        if (autoJoinRoom) {
+            console.log("Auto-joining room from URL:", autoJoinRoom);
+            window.history.replaceState({}, document.title, window.location.pathname);
+            // Delay slightly to ensure UI is ready
+            setTimeout(() => this.collabUI.joinFromUrl(autoJoinRoom), 500);
+        }
     }
 
     async checkWelcomeScreen() {
@@ -321,6 +335,8 @@ export class SFSS {
         document.getElementById('show-sidebar-btn').addEventListener('click', () => this.toggleSidebar(false, true));
 
         document.getElementById('file-open-btn').addEventListener('click', () => document.getElementById('file-input').click());
+        const collabBtn = document.getElementById('collab-menu-btn');
+        if (collabBtn) collabBtn.addEventListener('click', () => this.collabUI.openModal());
         document.getElementById('download-json-btn').addEventListener('click', () => this.downloadJSON());
         document.getElementById('download-fdx-btn').addEventListener('click', () => this.downloadFDX());
         document.getElementById('download-fountain-btn').addEventListener('click', () => this.downloadFountain());
@@ -1087,6 +1103,11 @@ export class SFSS {
             }
             this.history.push(currentState);
             this.historyIndex = this.history.length - 1;
+            
+            // Broadcast Real-time Update
+            if (this.collaborationManager && this.collaborationManager.hasBaton) {
+                this.collaborationManager.sendUpdate(currentState);
+            }
         };
 
         if (force) saveFn();
