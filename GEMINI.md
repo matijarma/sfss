@@ -1,60 +1,95 @@
-# SFSS - Project Context
+# SFSS (Simple Free Screenplay Software) - Project Context
 
-## Project Overview
-**SFSS** is a professional, client-side Screenwriting Progressive Web App (PWA). It is designed to provide industry-standard screenplay formatting directly in the browser, with offline capabilities and local data persistence.
+## 1. Project Overview
 
-The application is built as a Single Page Application (SPA). It features a custom "screenplay formatting engine" that enforces strict typographic rules (Courier 12pt, specific margins) to ensure one page equals roughly one minute of screen time.
+**SFSS** is a professional, client-side Screenwriting Progressive Web App (PWA). It provides an industry-standard writing environment directly in the browser, adhering to strict typographic rules (Courier 12pt, specific margins) where one page equals roughly one minute of screen time.
 
-## Technology Stack
+*   **Type:** Single Page Application (SPA) / Progressive Web App (PWA).
+*   **Philosophy:** Local-First, Privacy-Focused, Offline-Capable.
+*   **Core Value:** "WYSIWYG" screenplay formatting without server dependency.
 
-*   **Frontend Core:** Vanilla JavaScript (ES Modules).
-*   **Styling:** CSS (Modularized in `assets/css/`).
-*   **PWA:** Service Worker (`sw.js`), Web App Manifest (`manifest.json`), File Handling API.
-*   **Storage:** Browser LocalStorage / IndexedDB (via `StorageManager`).
-*   **Icons:** FontAwesome.
-*   **Fonts:** Courier Prime (via Google Fonts).
+## 2. Technology Stack
 
-## Architecture
+*   **Language:** Vanilla JavaScript (ES6 Modules). No frameworks (React/Vue/Angular).
+*   **Styling:** Modular CSS (`assets/css/`). Uses CSS Variables for theming (Light/Dark).
+*   **P2P Networking:** **Trystero** for serverless, WebRTC-based peer-to-peer connections.
+*   **Storage:** `IndexedDB` (via `IDBHemanifest.json scripts; `LocalStorage` for preferences.
+*   **PWA:** `sw.js` (Service Worker), `manifest-testing.json`, and File Handling API support.
+*   **External Assets:** FontAwesome (local), Courier Prime font (local).
 
-The application follows a modular architecture using ES6 Classes.
+## 3. Architecture & Key Modules
 
-### Entry Point
-*   **`index.html`**: The main entry point. It sets up the HTML skeleton, includes CSS/Fonts, handles cache-busting and initializes the application by loading `assets/script.js`.
+The application is built on a modular class-based architecture, orchestrated by a central controller.
 
-### Core Logic (`assets/js-mod/`)
-The JavaScript logic is centralized in `assets/js-mod/SFSS.js`, which orchestrates several specialized manager classes:
+### Entry & Initialization
+*   **`index.html`**: The single entry point. Sets up the DOM skeleton, loads CSS, and bootstraps the app.
+*   **`assets/script.js`**: Simple bootstrapper that imports and initializes the main `SFSS` class.
 
-*   **`SFSS.js`**: The main controller class. Initializes the app, binds events, and coordinates between modules.
-*   **`EditorHandler.js`**: Manages the `contenteditable` interface, text input, and formatting logic.
-*   **`SidebarManager.js`**: Controls the scene navigation sidebar and scene metadata.
-*   **`StorageManager.js`**: Handles persistence of scripts (Saving/Loading/Deleting) to `IndexedDB`.
-*   **`PageRenderer.js`**: Responsible for the "Page View" mode, calculating pagination based on strict physical dimensions.
-*   **`MediaPlayer.js`**: Manages the built-in music/audio player.
-*   **`ReportsManager.js`**: Generates script breakdowns and reports.
-*   **`Constants.js`**: Defines element types (Slug, Action, Character, etc.) and other static configuration.
+### Core Modules (`assets/js-mod/`)
 
-### Formatting Engine
-The core value proposition is the "Formatting Engine," detailed in `screenplay-formatting-engine.md`. It enforces:
-*   **Font:** 12pt Courier (10 pitch).
-*   **Line Height:** 12pt (6 lines per inch).
-*   **Margins:** Specific US Letter and A4 emulation margins to ensure consistent pagination.
+| Class | Description |
+| :--- | :--- |
+| **`SFSS.js`** | **Main Controller**. Initializes sub-modules, handles global state, event binding, and high-level orchestration (Save/Load, Mode Switching). |
+| **`EditorHandler.js`** | Manages the `contenteditable` editor. Handles text input, element types (Slug, Action, Dialogue), and keyboard shortcuts (Enter/Tab logic). |
+| **`PageRenderer.js`** | **Critical**. The "Formatting Engine". Calculates virtual pagination based on strict physical dimensions (US Letter/A4) to simulate print output in the browser. |
+| **`StorageManager.js`** | Handles data persistence. Manages CRUD operations for scripts in `IndexedDB` and handles Auto-Save/Backup logic. |
+| **`SidebarManager.js`** | Controls the navigation sidebar, scene list, and script metadata UI. |
+| **`TreatmentRenderer.js`**| Renders the "Treatment Mode" (Kanban-style scene cards) for planning and outlining. |
+| **`ReportsManager.js`** | Generates statistical reports (Scene counts, Character interactions) and visualizations. |
+| **`MediaPlayer.js`** | Integrates YouTube IFrame API for the soundtrack feature attached to scenes. |
+| **`CollaborationManager.js`**| Manages P2P connections, data synchronization, and media streams using Trystero. |
+| **`CollabUI.js`**| Renders and manages all UI components for the real-time collaboration feature. |
+| **`Constants.js`** | Defines static configuration, element types (`sc-slug`, `sc-action`, etc.), and format mappings (FDX/Fountain). |
+| **`IDBHelper.js`** | specific wrapper for `IndexedDB` promises. |
 
-## Key Directories
+## 4. Data Structures
 
-*   **`assets/`**: Contains all static assets (CSS, JS, Fonts, Icons).
-    *   **`js-mod/`**: Core JavaScript source modules.
-    *   **`css/`**: Stylesheets split by function (`base.css`, `layout.css`, `editor.css`, etc.).
-    *   **`images/`**: App icons for PWA manifest.
+### Script Data Model (JSON)
+The internal storage format is a JSON object structure:
+```json
+{
+  "id": "script-123456789",
+  "createdAt": "ISO8601 String",
+  "lastSavedAt": "ISO8601 String",
+  "content": {
+    "meta": { "title": "...", "author": "..." },
+    "sceneMeta": { "line-id-xyz": { "description": "...", "color": "..." } },
+    "blocks": [
+      { 
+        "type": "sc-slug", 
+        "text": "INT. ROOM - DAY", 
+        "id": "line-xyz" 
+      },
+      { 
+        "type": "sc-action", 
+        "text": "Something happens.", 
+        "id": "line-abc" 
+      }
+    ],
+    "characters": ["HERO", "VILLAIN"]
+  }
+}
+```
 
-## Development & Usage
+### Element Types (CSS Classes)
+The editor relies on specific CSS classes to style paragraphs:
+*   `sc-slug`: Scene Heading (Bold, Uppercase)
+*   `sc-action`: Action lines
+*   `sc-character`: Character Name (Centered-ish)
+*   `sc-dialogue`: Dialogue block
+*   `sc-parenthetical`: Parenthetical instructions
+*   `sc-transition`: Cut to/Fade out (Right aligned)
 
-### Conventions
-*   **JavaScript:** Use ES6 classes and modules.
-*   **CSS:** standard CSS variables are used for theming (light/dark mode).
-*   **State:** The application state is transient in memory and persisted to LocalStorage on change.
-*   **File Handling:** Supports importing/exporting `.json` (internal format), `.fdx` (Final Draft), and `.fountain`.
+## 5. Development Workflow
 
-## Formatting Rules (Summary)
-*   **Live Text Area:** $6.0" \times 9.0"$.
-*   **US Letter:** Standard margins.
-*   **A4:** "Emulation" margins to force the text block to match US Letter flow.
+Since this is a Vanilla JS project, there is no build step.
+
+1.  **Run:** Serve the root directory using any static file server (e.g., `python3 -m http.server`, `php -S localhost:8000`, or VS Code Live Server).
+2.  **Edit:** Modify files in `assets/js-mod/` or `assets/css/`.
+3.  **Test:** Refresh the browser. Ensure Hard Refresh (Ctrl+F5) if caching is aggressive due to Service Worker.
+
+### Key Conventions
+*   **Strict Formatting:** Do not alter `PageRenderer.js` or `print.css` margins without understanding the "Screenplay Formatting Engine" specs (12pt Courier, 6 lines/inch).
+*   **Separation of Concerns:** Keep UI logic in `SidebarManager`/`EditorHandler` and data logic in `SFSS`/`StorageManager`.
+*   **Accessibility:** Ensure `aria-labels` and keyboard navigation are maintained.
+*   **Dependencies:** The project aims to be self-contained. The only external runtime dependency is **Trystero.js** for WebRTC functionality. Do not add npm packages.

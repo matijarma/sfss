@@ -7,6 +7,8 @@ import { StorageManager } from './StorageManager.js';
 import { ReportsManager } from './ReportsManager.js';
 import { PageRenderer } from './PageRenderer.js';
 import { TreatmentRenderer } from './TreatmentRenderer.js';
+import { CollaborationManager } from './CollaborationManager.js';
+import { CollabUI } from './CollabUI.js';
 
 export class SFSS {
     constructor() {
@@ -68,6 +70,8 @@ export class SFSS {
         this.editorHandler = new EditorHandler(this);
         this.reportsManager = new ReportsManager(this);
         this.treatmentRenderer = new TreatmentRenderer(this);
+        this.collaborationManager = new CollaborationManager(this);
+        this.collabUI = new CollabUI(this);
         
         this.ELEMENT_TYPES = constants.ELEMENT_TYPES;
         this.TYPE_LABELS = constants.TYPE_LABELS;
@@ -215,6 +219,16 @@ export class SFSS {
         }
 
         this.toggleLoader(false);
+        
+        // Check for Auto-Join Link
+        const urlParams = new URLSearchParams(window.location.search);
+        const autoJoinRoom = urlParams.get('room');
+        if (autoJoinRoom) {
+            console.log("Auto-joining room from URL:", autoJoinRoom);
+            window.history.replaceState({}, document.title, window.location.pathname);
+            // Delay slightly to ensure UI is ready
+            setTimeout(() => this.collabUI.joinFromUrl(autoJoinRoom), 500);
+        }
     }
 
     async checkWelcomeScreen() {
@@ -321,6 +335,8 @@ export class SFSS {
         document.getElementById('show-sidebar-btn').addEventListener('click', () => this.toggleSidebar(false, true));
 
         document.getElementById('file-open-btn').addEventListener('click', () => document.getElementById('file-input').click());
+        const collabBtn = document.getElementById('collab-menu-btn');
+        if (collabBtn) collabBtn.addEventListener('click', () => this.collabUI.openModal());
         document.getElementById('download-json-btn').addEventListener('click', () => this.downloadJSON());
         document.getElementById('download-fdx-btn').addEventListener('click', () => this.downloadFDX());
         document.getElementById('download-fountain-btn').addEventListener('click', () => this.downloadFountain());
@@ -559,6 +575,11 @@ export class SFSS {
         if (document.body.classList.contains('mobile-view')) {
             history.pushState({ modal: key }, '', window.location.href);
         }
+    }
+
+    ensureWritingMode() {
+        if (this.treatmentModeActive) this.toggleTreatmentMode();
+        if (this.pageViewActive) this.togglePageView();
     }
 
     openHelp() {
@@ -1087,6 +1108,11 @@ export class SFSS {
             }
             this.history.push(currentState);
             this.historyIndex = this.history.length - 1;
+            
+            // Broadcast Real-time Update
+            if (this.collaborationManager && this.collaborationManager.hasBaton) {
+                this.collaborationManager.sendUpdate(currentState);
+            }
         };
 
         if (force) saveFn();
@@ -1193,672 +1219,1600 @@ export class SFSS {
         }
     }
 
-    async persistSettings() {
-        const currentTopId = this.getCurrentScrollElement();
+        isElementInViewport(el) {
+
+            if (!el) return false;
+
+            const scrollContainer = document.getElementById('scroll-area');
+
+            if (!scrollContainer) return false; 
+
         
-        this.applySettings();
-        localStorage.setItem('sfss_meta', JSON.stringify(this.meta));
-        this.saveState(true);
-        await this.save();
+
+            const rect = el.getBoundingClientRect();
+
+            const containerRect = scrollContainer.getBoundingClientRect();
+
         
-        if (this.pageViewActive) {
-            this.paginate();
-            this.restoreScrollToElement(currentTopId);
+
+            return (
+
+                rect.top >= containerRect.top &&
+
+                rect.left >= containerRect.left &&
+
+                rect.bottom <= containerRect.bottom &&
+
+                rect.right <= containerRect.right
+
+            );
+
         }
-    }
 
-    applySettings() {
-        this.updatePageTitle();
-        this.sidebarManager.updateSidebarHeader();
-        this.toggleSceneNumbers(this.meta.showSceneNumbers);
-        
-        const sceneNumBtn = document.getElementById('toolbar-scene-numbers');
-        const dateBtn = document.getElementById('toolbar-date');
-        if(sceneNumBtn) sceneNumBtn.classList.toggle('active', this.meta.showSceneNumbers);
-        if(dateBtn) dateBtn.classList.toggle('active', this.meta.showDate);
-
-        const tp = document.getElementById('print-title-page');
-        if (this.meta.showTitlePage) {
-            tp.classList.add('visible');
-            document.getElementById('tp-title').textContent = this.meta.title || 'UNTITLED SCREENPLAY';
-            document.getElementById('tp-author').textContent = this.meta.author || 'Author Name';
-            const contactEl = document.getElementById('tp-contact');
-            contactEl.innerHTML = ''; 
-            const lines = (this.meta.contact || '').split('\n');
-            lines.forEach((line, index) => {
-                contactEl.appendChild(document.createTextNode(line));
-                if (index < lines.length - 1) {
-                    contactEl.appendChild(document.createElement('br'));
-                }
-            });
-        } else {
-            tp.classList.remove('visible');
-        }
-    }
-
-    generateKeymapSettings() {
-        const container = document.getElementById('keymap-settings');
-        container.innerHTML = '';
-        
-        // --- Global Shortcuts Section ---
-        const globalHeader = document.createElement('h3');
-        globalHeader.textContent = 'Global Shortcuts';
-        globalHeader.style.marginBottom = '0.5rem';
-        container.appendChild(globalHeader);
-
-        const globalTable = document.createElement('table');
-        globalTable.className = 'keymap-table';
-        globalTable.style.marginBottom = '1.5rem';
-        
-        const row = document.createElement('tr');
-        const labelCell = document.createElement('td');
-        labelCell.textContent = 'Toggle Element Type';
-        
-        const inputCell = document.createElement('td');
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'settings-input';
-        input.value = this.shortcuts.cycleType || '';
-        input.readOnly = true;
-        input.placeholder = 'Click to record...';
-        input.style.cursor = 'pointer';
-        input.style.textAlign = 'center';
-        
-        input.addEventListener('keydown', (e) => {
-            e.preventDefault();
-            if (e.key === 'Escape') {
-                input.blur();
-                return;
-            }
-            if (e.key === 'Backspace') {
-                this.shortcuts.cycleType = '';
-                input.value = '';
-                return;
-            }
-            
-            const keys = [];
-            if (e.ctrlKey || e.metaKey) keys.push('Ctrl');
-            if (e.altKey) keys.push('Alt');
-            if (e.shiftKey) keys.push('Shift');
-            
-            if (!['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
-                keys.push(e.key.toUpperCase());
-            }
-            
-            // Allow just modifiers (e.g. Ctrl+Shift)
-            if (keys.length > 0) {
-                const shortcut = keys.join('+');
-                this.shortcuts.cycleType = shortcut;
-                input.value = shortcut;
-            }
-        });
-        
-        inputCell.appendChild(input);
-        row.appendChild(labelCell);
-        row.appendChild(inputCell);
-        globalTable.appendChild(row);
-        container.appendChild(globalTable);
-
-        // --- Element Transitions Section ---
-        const transHeader = document.createElement('h3');
-        transHeader.textContent = 'Element Transitions';
-        transHeader.style.marginBottom = '0.5rem';
-        container.appendChild(transHeader);
-
-        const keyOrder = ['tab', 'enter'];
-
-        const table = document.createElement('table');
-        table.className = 'keymap-table';
-
-        const thead = document.createElement('thead');
-        thead.innerHTML = `
-            <tr>
-                <th>Element</th>
-                <th><span class="keycap">Tab</span> ➔</th>
-                <th><span class="keycap">Enter</span> ➔</th>
-            </tr>
-        `;
-        table.appendChild(thead);
-
-        const tbody = document.createElement('tbody');
-        for (const type in this.keymap) {
-            const typeLabel = constants.TYPE_LABELS[type];
-            const row = document.createElement('tr');
-            
-            const typeCell = document.createElement('td');
-            typeCell.textContent = typeLabel;
-            row.appendChild(typeCell);
-
-            keyOrder.forEach(key => {
-                const keyCell = document.createElement('td');
-                const selector = this.createKeymapSelector(type, key);
-                keyCell.appendChild(selector);
-                row.appendChild(keyCell);
-            });
-
-            tbody.appendChild(row);
-        }
-        table.appendChild(tbody);
-        container.appendChild(table);
-    }
-
-    createKeymapSelector(type, key) {
-        const selector = document.createElement('select');
-        selector.className = 'settings-input'; 
-        selector.dataset.type = type;
-        selector.dataset.key = key;
-        const noneOption = document.createElement('option');
-        noneOption.value = 'null';
-        noneOption.textContent = 'None (Show Menu)';
-        selector.appendChild(noneOption);
-        for (const optionType in constants.TYPE_LABELS) {
-            const isActionEnterAction = type === constants.ELEMENT_TYPES.ACTION && key === 'enter' && optionType === constants.ELEMENT_TYPES.ACTION;
-            if (optionType === type && !isActionEnterAction) continue;
-            const option = document.createElement('option');
-            option.value = optionType;
-            option.textContent = `${constants.TYPE_LABELS[optionType]}`;
-            selector.appendChild(option);
-        }
-        selector.value = this.keymap[type][key] || 'null';
-        selector.addEventListener('change', (e) => {
-            this.keymap[e.target.dataset.type][e.target.dataset.key] = e.target.value === 'null' ? null : e.target.value;
-        });
-        return selector;
-    }
-
-    updatePageTitle() {
-        document.title = this.meta.title || 'Untitled Screenplay';
-    }
-
-    toggleSceneNumbers(active) {
-        this.editor.classList.toggle('show-scene-numbers', active);
-        this.pageViewContainer.classList.toggle('show-scene-numbers', active);
-    }
     
-    updatePageCount() {
-        const linesPerPage = 55;
-        let totalLines = 0;
-        this.editor.querySelectorAll('.script-line').forEach(block => {
-            const text = block.textContent;
-            const type = this.editorHandler.getBlockType(block);
-            totalLines++; 
-            switch (type) {
-                case constants.ELEMENT_TYPES.SLUG: totalLines++; break;
-                case constants.ELEMENT_TYPES.ACTION: totalLines += Math.floor(text.length / 60); break;
-                case constants.ELEMENT_TYPES.DIALOGUE: totalLines += Math.floor(text.length / 35); break;
-                case constants.ELEMENT_TYPES.TRANSITION: totalLines++; break;
+
+        scrollToActive() {
+
+            // Helper to scroll to the active cursor
+
+            const activeBlock = this.editor.querySelector('.collab-active-block');
+
+            if (activeBlock) {
+
+                activeBlock.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
             }
-        });
-        return Math.ceil(totalLines / linesPerPage) || 1;
-    }
 
-    findParentSlug(block) {
-        if (!block) return null;
-        if (this.pageViewActive && this.pageViewContainer.contains(block)) {
-            const originalBlock = this.editor.querySelector(`[data-line-id="${block.dataset.lineId}"]`);
-            return originalBlock ? this.findParentSlug(originalBlock) : null;
         }
-        if (block.classList.contains(constants.ELEMENT_TYPES.SLUG)) return block;
-        let prev = block.previousElementSibling;
-        while (prev) {
-            if (prev.classList.contains(constants.ELEMENT_TYPES.SLUG)) return prev;
-            prev = prev.previousElementSibling;
-        }
-        return null;
-    }
 
-    getSceneElements(startSlugElement) {
-        const sceneElements = [startSlugElement];
-        let nextElement = startSlugElement.nextElementSibling;
-        while (nextElement && !nextElement.classList.contains(constants.ELEMENT_TYPES.SLUG)) {
-            if (nextElement.classList.contains('script-line')) {
-                sceneElements.push(nextElement);
-            }
-            nextElement = nextElement.nextElementSibling;
-        }
-        return sceneElements;
-    }
+    
 
-    focusEditorEnd() {
-        if (document.activeElement === this.editor || this.editor.contains(document.activeElement)) return;
-        const last = this.editor.lastElementChild;
-        if (last) this.editorHandler.focusBlock(last);
-        else this.editorHandler.focusBlock(this.editorHandler.createBlock(constants.ELEMENT_TYPES.SLUG, 'INT. '));
-    }
+        async persistSettings() {
 
-    toggleTheme() {
-        document.documentElement.classList.toggle('dark-mode');
-        localStorage.setItem('sfss_theme', document.documentElement.classList.contains('dark-mode') ? 'dark' : 'light');
-    }
+            const currentTopId = this.getCurrentScrollElement();
 
-    promptInstall() {
-        const prompt = window.deferredInstallPrompt;
-        if (!prompt) return;
-
-        prompt.prompt();
-        prompt.userChoice.then((choiceResult) => {
-            if (choiceResult.outcome === 'accepted') {
-                console.log('User accepted the install prompt');
-            } else {
-                console.log('User dismissed the install prompt');
-            }
-            window.deferredInstallPrompt = null; 
             
-            const installBtn = document.getElementById('install-pwa-btn');
-            if(installBtn) installBtn.classList.add('hidden');
-            
-            const mobileInstallBtn = document.querySelector('[data-action="install-pwa"]');
-            if(mobileInstallBtn) mobileInstallBtn.classList.add('hidden');
-        });
-    }
 
-    updateToolbarButtons() {
-        const sceneNumBtn = document.getElementById('toolbar-scene-numbers');
-        const dateBtn = document.getElementById('toolbar-date');
+            this.applySettings();
 
-        if (this.treatmentModeActive) {
-            if (sceneNumBtn) sceneNumBtn.style.display = 'none';
-            if (dateBtn) dateBtn.style.display = 'none';
-        } else {
-            if (sceneNumBtn) sceneNumBtn.style.display = ''; // Visible in Writing Mode (and Page View)
-            
-            if (dateBtn) {
-                // Only visible in Page View of Writing Mode
-                dateBtn.style.display = this.pageViewActive ? '' : 'none';
-                dateBtn.disabled = false; // Reset disabled state just in case
-                dateBtn.style.opacity = '1';
-            }
-        }
-    }
+            localStorage.setItem('sfss_meta', JSON.stringify(this.meta));
 
-    togglePageView() {
-        const topElementId = this.getCurrentScrollElement();
-        
-        this.pageViewActive = !this.pageViewActive;
-        
-        if (this.pageViewActive) {
-             this.pushHistoryState('pageview');
-        }
-
-        document.getElementById('app-container').classList.toggle('page-view-active', this.pageViewActive);
-        document.getElementById('page-view-btn').classList.toggle('active', this.pageViewActive);
-        
-        this.updateToolbarButtons();
-
-        if (this.treatmentModeActive) return; 
-
-        if (this.pageViewActive) {
-            this.editor.style.display = 'none';
-            document.getElementById('print-title-page').style.display = 'none';
-            this.pageViewContainer.classList.remove('hidden');
-
-            requestAnimationFrame(() => {
-                this.paginate();
-                if (topElementId) {
-                    this.restoreScrollToElement(topElementId);
-                }
-            });
-        } else {
-            this.editor.style.display = '';
-            document.getElementById('print-title-page').style.display = '';
-            this.pageViewContainer.classList.add('hidden');
-            if (topElementId) {
-                this.restoreScrollToElement(topElementId);
-            }
-        }
-    }
-
-        paginate() {
-            const scriptLines = Array.from(this.editor.querySelectorAll('.script-line'));
-            if (scriptLines.length === 0) return;
-            
-            const options = {
-                showSceneNumbers: this.meta.showSceneNumbers,
-                showPageNumbers: true,
-                showDate: this.meta.showDate,
-                headerText: this.getHeaderText()
-            };
-            
-            this.pageRenderer.render(scriptLines, this.pageViewContainer, options);
-        }        
-            async save() {
-                const data = this.exportToJSONStructure();
-                await this.storageManager.saveScript(this.activeScriptId, data);
-                const status = document.getElementById('save-status');
-                status.style.opacity = '1';
-                setTimeout(() => status.style.opacity = '0', 2000);
-                this.isDirty = false;
-            }
-
-    exportToJSONStructure(forceDOM = false) {
-        if (!forceDOM && this.treatmentModeActive && this.scriptData) {
-            this.scriptData.meta = this.meta;
-            this.scriptData.sceneMeta = this.sceneMeta;
-            this.scriptData.characters = Array.from(this.characters);
-            return this.scriptData;
-        }
-
-        const blocks = [];
-        this.editor.querySelectorAll('.script-line').forEach(node => {
-            blocks.push({ type: this.editorHandler.getBlockType(node), text: node.textContent, id: node.dataset.lineId });
-        });
-        return { meta: this.meta, sceneMeta: this.sceneMeta, blocks: blocks, characters: Array.from(this.characters) };
-    }
-
-    async downloadJSON() {
-        await this.storageManager.updateBackupTimestamp(this.activeScriptId);
-        const data = this.exportToJSONStructure();
-        const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `${this.meta.title || 'script'}.json`;
-        a.click();
-    }
-
-    uploadFile(input) {
-        const file = input.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                const newScript = this.storageManager.createNewScript();
-                await this.loadScript(newScript.id, newScript);
-
-                if (file.name.endsWith('.fdx')) await this.importFDX(e.target.result);
-                else await this.importJSON(JSON.parse(e.target.result)); 
-            } catch (err) { 
-                console.error(err);
-                alert('Invalid file format or error importing.'); 
-            }
-        };
-        reader.readAsText(file);
-        input.value = '';
-    }
-
-    async importJSON(data, fromLoad = false) {
-        if (!data.blocks) return; 
-        
-        if (data.meta) {
-            this.meta = { ...this.meta, ...data.meta };
-        }
-        if (data.sceneMeta) {
-            this.sceneMeta = data.sceneMeta;
-        }
-
-        this.editor.innerHTML = '';
-        data.blocks.forEach(b => {
-            const block = this.editorHandler.createBlock(b.type, b.text)
-            if (b.id) { 
-                block.dataset.lineId = b.id;
-            }
-        });
-        if (data.characters) this.characters = new Set(data.characters);
-        
-        this.applySettings();
-        this.sidebarManager.updateSceneList();
-        
-        if (this.treatmentModeActive) {
-             this.scriptData = data; 
-             this.refreshTreatmentView();
-        } else {
-             this.mediaPlayer.updatePlaylist();
-        }
-        
-        if (!fromLoad) {
-            await this.save();
             this.saveState(true);
-        }
-    }
 
-    async importFDX(xmlText) {
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-        const mainContent = xmlDoc.querySelector('FinalDraft > Content');
-        if (!mainContent) { alert("No script content found in FDX."); return; }
-        const paragraphs = mainContent.querySelectorAll("Paragraph");
-        this.editor.innerHTML = '';
-        this.characters.clear();
-        this.meta.title = xmlDoc.querySelector('Title') ? xmlDoc.querySelector('Title').textContent : ''; 
-        this.applySettings();
-        paragraphs.forEach(p => {
-            const type = p.getAttribute("Type");
-            let text = Array.from(p.getElementsByTagName("Text")).map(t => t.textContent).join('');
-            if (!text && p.textContent) text = p.textContent;
-            const dzType = constants.FDX_REVERSE_MAP[type] || constants.ELEMENT_TYPES.ACTION;
-            this.editorHandler.createBlock(dzType, text);
-            if (dzType === constants.ELEMENT_TYPES.CHARACTER) {
-                const clean = this.editorHandler.getCleanCharacterName(text);
-                if (clean.length > 1) this.characters.add(clean);
+            await this.save();
+
+            
+
+            if (this.pageViewActive) {
+
+                this.paginate();
+
+                this.restoreScrollToElement(currentTopId);
+
             }
-        });
-        this.sidebarManager.updateSceneList();
-        await this.save();
-        this.saveState(true);
-    }
+
+        }
+
     
 
-    async downloadFDX() {
-        await this.storageManager.updateBackupTimestamp(this.activeScriptId);
-        let xml = `<?xml version="1.0" encoding="UTF-8" standalone="no" ?>\n<FinalDraft DocumentType="Script" Template="No" Version="1">\n<Content>\n`;
-        this.editor.querySelectorAll('.script-line').forEach(block => {
-            const type = this.editorHandler.getBlockType(block);
-            const fdxType = constants.FDX_MAP[type] || 'Action';
-            const text = this.escapeXML(block.textContent);
-            xml += `<Paragraph Type="${fdxType}">\n<Text>${text}</Text>\n</Paragraph>\n`;
-        });
-        xml += `</Content>\n</FinalDraft>`;
-        const blob = new Blob([xml], {type: 'text/xml'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `${this.meta.title || 'script'}.fdx`;
-        a.click();
-    }
+        applySettings() {
+
+            this.updatePageTitle();
+
+            this.sidebarManager.updateSidebarHeader();
+
+            this.toggleSceneNumbers(this.meta.showSceneNumbers);
+
+            
+
+            const sceneNumBtn = document.getElementById('toolbar-scene-numbers');
+
+            const dateBtn = document.getElementById('toolbar-date');
+
+            if(sceneNumBtn) sceneNumBtn.classList.toggle('active', this.meta.showSceneNumbers);
+
+            if(dateBtn) dateBtn.classList.toggle('active', this.meta.showDate);
+
     
-    async downloadFountain() {
-        await this.storageManager.updateBackupTimestamp(this.activeScriptId);
-        let fountain = [];
-        const title = this.meta.title || "Untitled";
-        const author = this.meta.author || "Unknown";
-        fountain.push(`Title: ${title}\nAuthor: ${author}\n`);
 
-        const blocks = this.editor.querySelectorAll('.script-line');
-        for (let i = 0; i < blocks.length; i++) {
-            const block = blocks[i];
-            const text = block.textContent;
-            const type = this.editorHandler.getBlockType(block);
-            let prevType = null;
-            if (i > 0) {
-                prevType = this.editorHandler.getBlockType(blocks[i-1]);
-            }
+            const tp = document.getElementById('print-title-page');
 
-            if (type === constants.ELEMENT_TYPES.SLUG) {
-                if (i > 0) fountain.push('');
-                fountain.push(text.toUpperCase());
-            } else if (type === constants.ELEMENT_TYPES.ACTION) {
-                if (prevType && ![constants.ELEMENT_TYPES.ACTION, constants.ELEMENT_TYPES.SLUG].includes(prevType)) {
-                     fountain.push('');
-                }
-                fountain.push(text);
-            } else if (type === constants.ELEMENT_TYPES.CHARACTER) {
-                 if (prevType && ![constants.ELEMENT_TYPES.ACTION, constants.ELEMENT_TYPES.SLUG].includes(prevType)) {
-                     fountain.push('');
-                }
-                fountain.push(text.toUpperCase());
-            } else if (type === constants.ELEMENT_TYPES.DIALOGUE) {
-                fountain.push(text);
-            } else if (type === constants.ELEMENT_TYPES.PARENTHETICAL) {
-                fountain.push(text);
-            } else if (type === constants.ELEMENT_TYPES.TRANSITION) {
-                fountain.push('');
-                fountain.push(`> ${text.toUpperCase()}`);
-            }
-        }
+            if (this.meta.showTitlePage) {
 
-        const fountainText = fountain.join('\n');
-        const blob = new Blob([fountainText], {type: 'text/plain;charset=utf-8'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `${this.meta.title || 'script'}.fountain`;
-        a.click();
-    }
+                tp.classList.add('visible');
 
-    async downloadText() {
-        await this.storageManager.updateBackupTimestamp(this.activeScriptId);
-        
-        let txtfile = [];
+                document.getElementById('tp-title').textContent = this.meta.title || 'UNTITLED SCREENPLAY';
 
-        const blocks = this.editor.querySelectorAll('.script-line');
-        for (let i = 0; i < blocks.length; i++) {
-            const block = blocks[i];
-            const text = block.textContent;
-            const type = this.editorHandler.getBlockType(block);
-            let prevType = null;
-            if (i > 0) {
-                prevType = this.editorHandler.getBlockType(blocks[i-1]);
-            }
+                document.getElementById('tp-author').textContent = this.meta.author || 'Author Name';
 
-            if (type === constants.ELEMENT_TYPES.SLUG) {
-                if (i > 0) txtfile.push('');
-                txtfile.push(text.toUpperCase());
-            } else if (type === constants.ELEMENT_TYPES.ACTION) {
-                if (prevType && ![constants.ELEMENT_TYPES.ACTION, constants.ELEMENT_TYPES.SLUG].includes(prevType)) {
-                     txtfile.push('');
-                }
-                txtfile.push(text);
-            } else if (type === constants.ELEMENT_TYPES.CHARACTER) {
-                 if (prevType && ![constants.ELEMENT_TYPES.ACTION, constants.ELEMENT_TYPES.SLUG].includes(prevType)) {
-                     txtfile.push('');
-                }
-                txtfile.push(text.toUpperCase());
-            } else if (type === constants.ELEMENT_TYPES.DIALOGUE) {
-                txtfile.push(text);
-            } else if (type === constants.ELEMENT_TYPES.PARENTHETICAL) {
-                txtfile.push(text);
-            } else if (type === constants.ELEMENT_TYPES.TRANSITION) {
-                txtfile.push('');
-                txtfile.push(`> ${text.toUpperCase()}`);
-            }
-        }
+                const contactEl = document.getElementById('tp-contact');
 
-        const txtfajlstring = txtfile.join('\n');
-        const blob = new Blob([txtfajlstring], {type: 'text/plain;charset=utf-8'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `${this.meta.title || 'script'}.txt`;
-        a.click();
-    }
+                contactEl.innerHTML = ''; 
 
-    async populateOpenMenu(container) {
-        if (!container) {
-            const list1 = document.getElementById('saved-scripts-list');
-            if (list1) await this.populateOpenMenu(list1);
-            const list2 = document.getElementById('mobile-saved-scripts-list');
-            if (list2) await this.populateOpenMenu(list2);
-            return;
-        }
-        container.innerHTML = '';
-        const scripts = await this.storageManager.getAllScripts();
-        const scriptIds = Object.keys(scripts);
+                const lines = (this.meta.contact || '').split('\n');
 
-        if (scriptIds.length === 0) {
-            container.innerHTML = '<span class="dropdown-item" style="color:var(--text-meta);">No saved scripts.</span>';
-            return;
-        }
+                lines.forEach((line, index) => {
 
-        scriptIds.forEach(scriptId => {
-            const script = scripts[scriptId];
-            const title = script.content?.meta?.title || new Date(script.lastSavedAt).toLocaleString();
-            const isActive = scriptId === this.activeScriptId;
+                    contactEl.appendChild(document.createTextNode(line));
 
-            const item = document.createElement('div');
-            item.className = 'dropdown-item flex-justify-between-center'; 
-            
-            item.style.display = 'flex';
-            item.style.justifyContent = 'space-between';
-            item.style.alignItems = 'center';
-            
-            if (isActive) {
-                item.classList.add('dropdown-item-active');
-                item.title = 'Currently open';
-            }
+                    if (index < lines.length - 1) {
 
-            const titleSpan = document.createElement('span');
-            titleSpan.textContent = title + (isActive ? ' (Open)' : '');
-            titleSpan.style.flexGrow = '1';
-            
-            if (isActive) {
-                titleSpan.classList.add('font-bold', 'text-accent');
+                        contactEl.appendChild(document.createElement('br'));
+
+                    }
+
+                });
+
             } else {
-                titleSpan.onclick = async () => {
-                    await this.loadScript(scriptId);
-                    if (document.body.classList.contains('mobile-view')) {
-                        this.sidebarManager.toggleMobileMenu();
-                    }
-                };
+
+                tp.classList.remove('visible');
+
             }
 
-            const deleteBtn = document.createElement('button');
-            deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
-            deleteBtn.className = 'btn-icon btn-icon-faded'; 
-            deleteBtn.onclick = async (e) => {
-                e.stopPropagation();
-                if (confirm(`Are you sure you want to delete "${title}"? This cannot be undone.`)) {
-                    const nextId = await this.storageManager.deleteScript(scriptId);
-                    if (this.activeScriptId === scriptId) {
-                        await this.loadScript(nextId);
-                    } else {
-                        await this.populateOpenMenu();
-                    }
+        }
+
+    
+
+        generateKeymapSettings() {
+
+            const container = document.getElementById('keymap-settings');
+
+            container.innerHTML = '';
+
+            
+
+            // --- Global Shortcuts Section ---
+
+            const globalHeader = document.createElement('h3');
+
+            globalHeader.textContent = 'Global Shortcuts';
+
+            globalHeader.style.marginBottom = '0.5rem';
+
+            container.appendChild(globalHeader);
+
+    
+
+            const globalTable = document.createElement('table');
+
+            globalTable.className = 'keymap-table';
+
+            globalTable.style.marginBottom = '1.5rem';
+
+            
+
+            const row = document.createElement('tr');
+
+            const labelCell = document.createElement('td');
+
+            labelCell.textContent = 'Toggle Element Type';
+
+            
+
+            const inputCell = document.createElement('td');
+
+            const input = document.createElement('input');
+
+            input.type = 'text';
+
+            input.className = 'settings-input';
+
+            input.value = this.shortcuts.cycleType || '';
+
+            input.readOnly = true;
+
+            input.placeholder = 'Click to record...';
+
+            input.style.cursor = 'pointer';
+
+            input.style.textAlign = 'center';
+
+            
+
+            input.addEventListener('keydown', (e) => {
+
+                e.preventDefault();
+
+                if (e.key === 'Escape') {
+
+                    input.blur();
+
+                    return;
+
                 }
+
+                if (e.key === 'Backspace') {
+
+                    this.shortcuts.cycleType = '';
+
+                    input.value = '';
+
+                    return;
+
+                }
+
+                
+
+                const keys = [];
+
+                if (e.ctrlKey || e.metaKey) keys.push('Ctrl');
+
+                if (e.altKey) keys.push('Alt');
+
+                if (e.shiftKey) keys.push('Shift');
+
+                
+
+                if (!['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
+
+                    keys.push(e.key.toUpperCase());
+
+                }
+
+                
+
+                // Allow just modifiers (e.g. Ctrl+Shift)
+
+                if (keys.length > 0) {
+
+                    const shortcut = keys.join('+');
+
+                    this.shortcuts.cycleType = shortcut;
+
+                    input.value = shortcut;
+
+                }
+
+            });
+
+            
+
+            inputCell.appendChild(input);
+
+            row.appendChild(labelCell);
+
+            row.appendChild(inputCell);
+
+            globalTable.appendChild(row);
+
+            container.appendChild(globalTable);
+
+    
+
+            // --- Element Transitions Section ---
+
+            const transHeader = document.createElement('h3');
+
+            transHeader.textContent = 'Element Transitions';
+
+            transHeader.style.marginBottom = '0.5rem';
+
+            container.appendChild(transHeader);
+
+    
+
+            const keyOrder = ['tab', 'enter'];
+
+    
+
+            const table = document.createElement('table');
+
+            table.className = 'keymap-table';
+
+    
+
+            const thead = document.createElement('thead');
+
+            thead.innerHTML = `
+
+                <tr>
+
+                    <th>Element</th>
+
+                    <th><span class="keycap">Tab</span> ➔</th>
+
+                    <th><span class="keycap">Enter</span> ➔</th>
+
+                </tr>
+
+            `;
+
+            table.appendChild(thead);
+
+    
+
+            const tbody = document.createElement('tbody');
+
+            for (const type in this.keymap) {
+
+                const typeLabel = constants.TYPE_LABELS[type];
+
+                const row = document.createElement('tr');
+
+                
+
+                const typeCell = document.createElement('td');
+
+                typeCell.textContent = typeLabel;
+
+                row.appendChild(typeCell);
+
+    
+
+                keyOrder.forEach(key => {
+
+                    const keyCell = document.createElement('td');
+
+                    const selector = this.createKeymapSelector(type, key);
+
+                    keyCell.appendChild(selector);
+
+                    row.appendChild(keyCell);
+
+                });
+
+    
+
+                tbody.appendChild(row);
+
+            }
+
+            table.appendChild(tbody);
+
+            container.appendChild(table);
+
+        }
+
+    
+
+        createKeymapSelector(type, key) {
+
+            const selector = document.createElement('select');
+
+            selector.className = 'settings-input'; 
+
+            selector.dataset.type = type;
+
+            selector.dataset.key = key;
+
+            const noneOption = document.createElement('option');
+
+            noneOption.value = 'null';
+
+            noneOption.textContent = 'None (Show Menu)';
+
+            selector.appendChild(noneOption);
+
+            for (const optionType in constants.TYPE_LABELS) {
+
+                const isActionEnterAction = type === constants.ELEMENT_TYPES.ACTION && key === 'enter' && optionType === constants.ELEMENT_TYPES.ACTION;
+
+                if (optionType === type && !isActionEnterAction) continue;
+
+                const option = document.createElement('option');
+
+                option.value = optionType;
+
+                option.textContent = `${constants.TYPE_LABELS[optionType]}`;
+
+                selector.appendChild(option);
+
+            }
+
+            selector.value = this.keymap[type][key] || 'null';
+
+            selector.addEventListener('change', (e) => {
+
+                this.keymap[e.target.dataset.type][e.target.dataset.key] = e.target.value === 'null' ? null : e.target.value;
+
+            });
+
+            return selector;
+
+        }
+
+    
+
+        updatePageTitle() {
+
+            document.title = this.meta.title || 'Untitled Screenplay';
+
+        }
+
+    
+
+        toggleSceneNumbers(active) {
+
+            this.editor.classList.toggle('show-scene-numbers', active);
+
+            this.pageViewContainer.classList.toggle('show-scene-numbers', active);
+
+        }
+
+        
+
+        updatePageCount() {
+
+            const linesPerPage = 55;
+
+            let totalLines = 0;
+
+            this.editor.querySelectorAll('.script-line').forEach(block => {
+
+                const text = block.textContent;
+
+                const type = this.editorHandler.getBlockType(block);
+
+                totalLines++; 
+
+                switch (type) {
+
+                    case constants.ELEMENT_TYPES.SLUG: totalLines++; break;
+
+                    case constants.ELEMENT_TYPES.ACTION: totalLines += Math.floor(text.length / 60); break;
+
+                    case constants.ELEMENT_TYPES.DIALOGUE: totalLines += Math.floor(text.length / 35); break;
+
+                    case constants.ELEMENT_TYPES.TRANSITION: totalLines++; break;
+
+                }
+
+            });
+
+            return Math.ceil(totalLines / linesPerPage) || 1;
+
+        }
+
+    
+
+        findParentSlug(block) {
+
+            if (!block) return null;
+
+            if (this.pageViewActive && this.pageViewContainer.contains(block)) {
+
+                const originalBlock = this.editor.querySelector(`[data-line-id="${block.dataset.lineId}"]`);
+
+                return originalBlock ? this.findParentSlug(originalBlock) : null;
+
+            }
+
+            if (block.classList.contains(constants.ELEMENT_TYPES.SLUG)) return block;
+
+            let prev = block.previousElementSibling;
+
+            while (prev) {
+
+                if (prev.classList.contains(constants.ELEMENT_TYPES.SLUG)) return prev;
+
+                prev = prev.previousElementSibling;
+
+            }
+
+            return null;
+
+        }
+
+    
+
+        getSceneElements(startSlugElement) {
+
+            const sceneElements = [startSlugElement];
+
+            let nextElement = startSlugElement.nextElementSibling;
+
+            while (nextElement && !nextElement.classList.contains(constants.ELEMENT_TYPES.SLUG)) {
+
+                if (nextElement.classList.contains('script-line')) {
+
+                    sceneElements.push(nextElement);
+
+                }
+
+                nextElement = nextElement.nextElementSibling;
+
+            }
+
+            return sceneElements;
+
+        }
+
+    
+
+        focusEditorEnd() {
+
+            if (document.activeElement === this.editor || this.editor.contains(document.activeElement)) return;
+
+            const last = this.editor.lastElementChild;
+
+            if (last) this.editorHandler.focusBlock(last);
+
+            else this.editorHandler.focusBlock(this.editorHandler.createBlock(constants.ELEMENT_TYPES.SLUG, 'INT. '));
+
+        }
+
+    
+
+        toggleTheme() {
+
+            document.documentElement.classList.toggle('dark-mode');
+
+            localStorage.setItem('sfss_theme', document.documentElement.classList.contains('dark-mode') ? 'dark' : 'light');
+
+        }
+
+    
+
+        promptInstall() {
+
+            const prompt = window.deferredInstallPrompt;
+
+            if (!prompt) return;
+
+    
+
+            prompt.prompt();
+
+            prompt.userChoice.then((choiceResult) => {
+
+                if (choiceResult.outcome === 'accepted') {
+
+                    console.log('User accepted the install prompt');
+
+                } else {
+
+                    console.log('User dismissed the install prompt');
+
+                }
+
+                window.deferredInstallPrompt = null; 
+
+                
+
+                const installBtn = document.getElementById('install-pwa-btn');
+
+                if(installBtn) installBtn.classList.add('hidden');
+
+                
+
+                const mobileInstallBtn = document.querySelector('[data-action="install-pwa"]');
+
+                if(mobileInstallBtn) mobileInstallBtn.classList.add('hidden');
+
+            });
+
+        }
+
+    
+
+        updateToolbarButtons() {
+
+            const sceneNumBtn = document.getElementById('toolbar-scene-numbers');
+
+            const dateBtn = document.getElementById('toolbar-date');
+
+    
+
+            if (this.treatmentModeActive) {
+
+                if (sceneNumBtn) sceneNumBtn.style.display = 'none';
+
+                if (dateBtn) dateBtn.style.display = 'none';
+
+            } else {
+
+                if (sceneNumBtn) sceneNumBtn.style.display = ''; // Visible in Writing Mode (and Page View)
+
+                
+
+                if (dateBtn) {
+
+                    // Only visible in Page View of Writing Mode
+
+                    dateBtn.style.display = this.pageViewActive ? '' : 'none';
+
+                    dateBtn.disabled = false; // Reset disabled state just in case
+
+                    dateBtn.style.opacity = '1';
+
+                }
+
+            }
+
+        }
+
+    
+
+        togglePageView() {
+
+            const topElementId = this.getCurrentScrollElement();
+
+            
+
+            this.pageViewActive = !this.pageViewActive;
+
+            
+
+            if (this.pageViewActive) {
+
+                 this.pushHistoryState('pageview');
+
+            }
+
+    
+
+            document.getElementById('app-container').classList.toggle('page-view-active', this.pageViewActive);
+
+            document.getElementById('page-view-btn').classList.toggle('active', this.pageViewActive);
+
+            
+
+            this.updateToolbarButtons();
+
+    
+
+            if (this.treatmentModeActive) return; 
+
+    
+
+            if (this.pageViewActive) {
+
+                this.editor.style.display = 'none';
+
+                document.getElementById('print-title-page').style.display = 'none';
+
+                this.pageViewContainer.classList.remove('hidden');
+
+    
+
+                requestAnimationFrame(() => {
+
+                    this.paginate();
+
+                    if (topElementId) {
+
+                        this.restoreScrollToElement(topElementId);
+
+                    }
+
+                });
+
+            } else {
+
+                this.editor.style.display = '';
+
+                document.getElementById('print-title-page').style.display = '';
+
+                this.pageViewContainer.classList.add('hidden');
+
+                if (topElementId) {
+
+                    this.restoreScrollToElement(topElementId);
+
+                }
+
+            }
+
+        }
+
+    
+
+            paginate() {
+
+                const scriptLines = Array.from(this.editor.querySelectorAll('.script-line'));
+
+                if (scriptLines.length === 0) return;
+
+                
+
+                const options = {
+
+                    showSceneNumbers: this.meta.showSceneNumbers,
+
+                    showPageNumbers: true,
+
+                    showDate: this.meta.showDate,
+
+                    headerText: this.getHeaderText()
+
+                };
+
+                
+
+                this.pageRenderer.render(scriptLines, this.pageViewContainer, options);
+
+            }        
+
+                async save() {
+
+                    const data = this.exportToJSONStructure();
+
+                    await this.storageManager.saveScript(this.activeScriptId, data);
+
+                    const status = document.getElementById('save-status');
+
+                    status.style.opacity = '1';
+
+                    setTimeout(() => status.style.opacity = '0', 2000);
+
+                    this.isDirty = false;
+
+                }
+
+    
+
+        exportToJSONStructure(forceDOM = false) {
+
+            if (!forceDOM && this.treatmentModeActive && this.scriptData) {
+
+                this.scriptData.meta = this.meta;
+
+                this.scriptData.sceneMeta = this.sceneMeta;
+
+                this.scriptData.characters = Array.from(this.characters);
+
+                return this.scriptData;
+
+            }
+
+    
+
+            const blocks = [];
+
+            this.editor.querySelectorAll('.script-line').forEach(node => {
+
+                blocks.push({ type: this.editorHandler.getBlockType(node), text: node.textContent, id: node.dataset.lineId });
+
+            });
+
+            return { meta: this.meta, sceneMeta: this.sceneMeta, blocks: blocks, characters: Array.from(this.characters) };
+
+        }
+
+    
+
+        async downloadJSON() {
+
+            await this.storageManager.updateBackupTimestamp(this.activeScriptId);
+
+            const data = this.exportToJSONStructure();
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+
+            const a = document.createElement('a');
+
+            a.href = URL.createObjectURL(blob);
+
+            a.download = `${this.meta.title || 'script'}.json`;
+
+            a.click();
+
+        }
+
+    
+
+        uploadFile(input) {
+
+            const file = input.files[0];
+
+            if (!file) return;
+
+            const reader = new FileReader();
+
+            reader.onload = async (e) => {
+
+                try {
+
+                    const newScript = this.storageManager.createNewScript();
+
+                    await this.loadScript(newScript.id, newScript);
+
+    
+
+                    if (file.name.endsWith('.fdx')) await this.importFDX(e.target.result);
+
+                    else await this.importJSON(JSON.parse(e.target.result)); 
+
+                } catch (err) { 
+
+                    console.error(err);
+
+                    alert('Invalid file format or error importing.'); 
+
+                }
+
             };
 
-            item.appendChild(titleSpan);
-            item.appendChild(deleteBtn);
-            container.appendChild(item);
-        });
-    }
+            reader.readAsText(file);
 
-    async checkBackupStatus() {
-        const script = await this.storageManager.getScript(this.activeScriptId);
-        if (!script) return;
+            input.value = '';
 
-        const backupWarnings = [document.getElementById('backup-warning'), document.getElementById('mobile-backup-warning')];
-        const thirtyMinutes = 30 * 60 * 1000;
-
-        let timeAgo = 'a while';
-        if(script.lastBackupAt) {
-            const minutes = Math.floor((new Date() - new Date(script.lastBackupAt)) / 60000);
-            if (minutes < 60) {
-                timeAgo = `${minutes}m ago`;
-            } else if (minutes < 1440) {
-                timeAgo = `${Math.floor(minutes / 60)}h ago`;
-            } else {
-                timeAgo = `${Math.floor(minutes / 1440)}d ago`;
-            }
         }
-        const title = script.lastBackupAt ? `Last backup: ${timeAgo}` : 'Not backed up yet';
 
-        backupWarnings.forEach(backupWarning => {
-            if(!backupWarning) return;
-            if (!script.lastBackupAt || (new Date() - new Date(script.lastBackupAt) > thirtyMinutes)) {
-                backupWarning.classList.remove('hidden');
-                backupWarning.title = title;
+    
+
+        typewriterEffect(element, text) {
+
+            if (element._typewriterTimeout) {
+
+                clearTimeout(element._typewriterTimeout);
+
+            }
+
+            
+
+            let i = 0;
+
+            const speed = 30; // ms per char
+
+            
+
+            const typeChar = () => {
+
+                if (i < text.length) {
+
+                    element.textContent += text.charAt(i);
+
+                    i++;
+
+                    element._typewriterTimeout = setTimeout(typeChar, speed);
+
+                } else {
+
+                    element._typewriterTimeout = null;
+
+                }
+
+            };
+
+            typeChar();
+
+        }
+
+    
+
+        async importJSON(data, fromLoad = false, animate = false, activeLineId = null) {
+
+            if (!data.blocks) return; 
+
+            
+
+            if (data.meta) {
+
+                this.meta = { ...this.meta, ...data.meta };
+
+            }
+
+            if (data.sceneMeta) {
+
+                this.sceneMeta = data.sceneMeta;
+
+            }
+
+    
+
+            // Smart DOM Update (Visual Optimization)
+
+            const newBlockMap = new Map(data.blocks.map(b => [b.id, b]));
+
+            const existingBlocks = Array.from(this.editor.querySelectorAll('.script-line'));
+
+            const existingBlockMap = new Map(existingBlocks.map(b => [b.dataset.lineId, b]));
+
+            
+
+            // Remove active class from previous
+
+            const prevActive = this.editor.querySelector('.collab-active-block');
+
+            if (prevActive) prevActive.classList.remove('collab-active-block');
+
+    
+
+            // 1. Remove deleted blocks
+
+            existingBlocks.forEach(b => {
+
+                if (!newBlockMap.has(b.dataset.lineId)) {
+
+                    b.remove();
+
+                }
+
+            });
+
+    
+
+            // 2. Update or Insert blocks
+
+            let previousNode = null;
+
+            let lastChangedBlock = null;
+
+            
+
+            data.blocks.forEach(blockData => {
+
+                let blockEl = existingBlockMap.get(blockData.id);
+
+                
+
+                if (blockEl) {
+
+                    // Update content if changed
+
+                    if (blockEl.textContent !== blockData.text) {
+
+                        // Mark as changed
+
+                        lastChangedBlock = blockEl;
+
+                        
+
+                        if (animate && blockData.text.startsWith(blockEl.textContent)) {
+
+                            const suffix = blockData.text.substring(blockEl.textContent.length);
+
+                            // Only animate reasonable lengths to avoid lag
+
+                            if (suffix.length > 50) {
+
+                                 if (blockEl._typewriterTimeout) clearTimeout(blockEl._typewriterTimeout);
+
+                                 blockEl.textContent = blockData.text;
+
+                            } else {
+
+                                 this.typewriterEffect(blockEl, suffix);
+
+                            }
+
+                        } else {
+
+                            if (blockEl._typewriterTimeout) clearTimeout(blockEl._typewriterTimeout);
+
+                            blockEl.textContent = blockData.text;
+
+                        }
+
+                    }
+
+                    // Update type if changed
+
+                    const currentType = this.editorHandler.getBlockType(blockEl);
+
+                    if (currentType !== blockData.type) {
+
+                        this.editorHandler.setBlockType(blockEl, blockData.type);
+
+                        // Type change counts as a change for cursor position
+
+                        lastChangedBlock = blockEl;
+
+                    }
+
+                    
+
+                    // Ensure order
+
+                    if (previousNode) {
+
+                        if (blockEl.previousElementSibling !== previousNode) {
+
+                            this.editor.insertBefore(blockEl, previousNode.nextSibling);
+
+                        }
+
+                    } else {
+
+                        if (this.editor.firstElementChild !== blockEl) {
+
+                            this.editor.prepend(blockEl);
+
+                        }
+
+                    }
+
+                } else {
+
+                    // Create new
+
+                    blockEl = this.editorHandler.createBlock(blockData.type, blockData.text);
+
+                    blockEl.dataset.lineId = blockData.id;
+
+                    if (previousNode) {
+
+                        this.editor.insertBefore(blockEl, previousNode.nextSibling);
+
+                    } else {
+
+                        this.editor.prepend(blockEl);
+
+                    }
+
+                    lastChangedBlock = blockEl; // New block is active
+
+                }
+
+                previousNode = blockEl;
+
+            });
+
+    
+
+            // Apply Active Cursor
+
+            // Priority: Explicit activeLineId > lastChangedBlock
+
+            let activeBlock = null;
+
+            if (activeLineId) {
+
+                activeBlock = this.editor.querySelector(`[data-line-id="${activeLineId}"]`);
+
+            } else if (lastChangedBlock) {
+
+                activeBlock = lastChangedBlock;
+
+            }
+
+    
+
+            if (activeBlock) {
+
+                activeBlock.classList.add('collab-active-block');
+
+                
+
+                if (animate && !this.isElementInViewport(activeBlock)) {
+
+                    this.scrollToActive();
+
+                }
+
+            }
+
+    
+
+            if (data.characters) this.characters = new Set(data.characters);
+
+            
+
+            this.applySettings();
+
+            this.sidebarManager.updateSceneList();
+
+            
+
+            if (this.treatmentModeActive) {
+
+                 this.scriptData = data; 
+
+                 this.refreshTreatmentView();
+
             } else {
-                backupWarning.classList.add('hidden');
+
+                 this.mediaPlayer.updatePlaylist();
+
             }
-        });
+
+            
+
+            if (!fromLoad) {
+
+                await this.save();
+
+                this.saveState(true);
+
+            }
+
+        }
+
+    
+
+        async importFDX(xmlText) {
+
+            const parser = new DOMParser();
+
+            const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+
+            const mainContent = xmlDoc.querySelector('FinalDraft > Content');
+
+            if (!mainContent) { alert("No script content found in FDX."); return; }
+
+            const paragraphs = mainContent.querySelectorAll("Paragraph");
+
+            this.editor.innerHTML = '';
+
+            this.characters.clear();
+
+            this.meta.title = xmlDoc.querySelector('Title') ? xmlDoc.querySelector('Title').textContent : ''; 
+
+            this.applySettings();
+
+            paragraphs.forEach(p => {
+
+                const type = p.getAttribute("Type");
+
+                let text = Array.from(p.getElementsByTagName("Text")).map(t => t.textContent).join('');
+
+                if (!text && p.textContent) text = p.textContent;
+
+                const dzType = constants.FDX_REVERSE_MAP[type] || constants.ELEMENT_TYPES.ACTION;
+
+                this.editorHandler.createBlock(dzType, text);
+
+                if (dzType === constants.ELEMENT_TYPES.CHARACTER) {
+
+                    const clean = this.editorHandler.getCleanCharacterName(text);
+
+                    if (clean.length > 1) this.characters.add(clean);
+
+                }
+
+            });
+
+            this.sidebarManager.updateSceneList();
+
+            await this.save();
+
+            this.saveState(true);
+
+        }
+
+        
+
+    
+
+        async downloadFDX() {
+
+            await this.storageManager.updateBackupTimestamp(this.activeScriptId);
+
+            let xml = `<?xml version="1.0" encoding="UTF-8" standalone="no" ?>\n<FinalDraft DocumentType="Script" Template="No" Version="1">\n<Content>\n`;
+
+            this.editor.querySelectorAll('.script-line').forEach(block => {
+
+                const type = this.editorHandler.getBlockType(block);
+
+                const fdxType = constants.FDX_MAP[type] || 'Action';
+
+                const text = this.escapeXML(block.textContent);
+
+                xml += `<Paragraph Type="${fdxType}">\n<Text>${text}</Text>\n</Paragraph>\n`;
+
+            });
+
+            xml += `</Content>\n</FinalDraft>`;
+
+            const blob = new Blob([xml], {type: 'text/xml'});
+
+            const a = document.createElement('a');
+
+            a.href = URL.createObjectURL(blob);
+
+            a.download = `${this.meta.title || 'script'}.fdx`;
+
+            a.click();
+
+        }
+
+        
+
+        async downloadFountain() {
+
+            await this.storageManager.updateBackupTimestamp(this.activeScriptId);
+
+            let fountain = [];
+
+            const title = this.meta.title || "Untitled";
+
+            const author = this.meta.author || "Unknown";
+
+            fountain.push(`Title: ${title}\nAuthor: ${author}\n`);
+
+    
+
+            const blocks = this.editor.querySelectorAll('.script-line');
+
+            for (let i = 0; i < blocks.length; i++) {
+
+                const block = blocks[i];
+
+                const text = block.textContent;
+
+                const type = this.editorHandler.getBlockType(block);
+
+                let prevType = null;
+
+                if (i > 0) {
+
+                    prevType = this.editorHandler.getBlockType(blocks[i-1]);
+
+                }
+
+    
+
+                if (type === constants.ELEMENT_TYPES.SLUG) {
+
+                    if (i > 0) fountain.push('');
+
+                    fountain.push(text.toUpperCase());
+
+                } else if (type === constants.ELEMENT_TYPES.ACTION) {
+
+                    if (prevType && ![constants.ELEMENT_TYPES.ACTION, constants.ELEMENT_TYPES.SLUG].includes(prevType)) {
+
+                         fountain.push('');
+
+                    }
+
+                    fountain.push(text);
+
+                } else if (type === constants.ELEMENT_TYPES.CHARACTER) {
+
+                     if (prevType && ![constants.ELEMENT_TYPES.ACTION, constants.ELEMENT_TYPES.SLUG].includes(prevType)) {
+
+                         fountain.push('');
+
+                    }
+
+                    fountain.push(text.toUpperCase());
+
+                } else if (type === constants.ELEMENT_TYPES.DIALOGUE) {
+
+                    fountain.push(text);
+
+                } else if (type === constants.ELEMENT_TYPES.PARENTHETICAL) {
+
+                    fountain.push(text);
+
+                } else if (type === constants.ELEMENT_TYPES.TRANSITION) {
+
+                    fountain.push('');
+
+                    fountain.push(`> ${text.toUpperCase()}`);
+
+                }
+
+            }
+
+    
+
+            const fountainText = fountain.join('\n');
+
+            const blob = new Blob([fountainText], {type: 'text/plain;charset=utf-8'});
+
+            const a = document.createElement('a');
+
+            a.href = URL.createObjectURL(blob);
+
+            a.download = `${this.meta.title || 'script'}.fountain`;
+
+            a.click();
+
+        }
+
+    
+
+        async downloadText() {
+
+            await this.storageManager.updateBackupTimestamp(this.activeScriptId);
+
+            
+
+            let txtfile = [];
+
+    
+
+            const blocks = this.editor.querySelectorAll('.script-line');
+
+            for (let i = 0; i < blocks.length; i++) {
+
+                const block = blocks[i];
+
+                const text = block.textContent;
+
+                const type = this.editorHandler.getBlockType(block);
+
+                let prevType = null;
+
+                if (i > 0) {
+
+                    prevType = this.editorHandler.getBlockType(blocks[i-1]);
+
+                }
+
+    
+
+                if (type === constants.ELEMENT_TYPES.SLUG) {
+
+                    if (i > 0) txtfile.push('');
+
+                    txtfile.push(text.toUpperCase());
+
+                } else if (type === constants.ELEMENT_TYPES.ACTION) {
+
+                    if (prevType && ![constants.ELEMENT_TYPES.ACTION, constants.ELEMENT_TYPES.SLUG].includes(prevType)) {
+
+                         txtfile.push('');
+
+                    }
+
+                    txtfile.push(text);
+
+                } else if (type === constants.ELEMENT_TYPES.CHARACTER) {
+
+                     if (prevType && ![constants.ELEMENT_TYPES.ACTION, constants.ELEMENT_TYPES.SLUG].includes(prevType)) {
+
+                         txtfile.push('');
+
+                    }
+
+                    txtfile.push(text.toUpperCase());
+
+                } else if (type === constants.ELEMENT_TYPES.DIALOGUE) {
+
+                    txtfile.push(text);
+
+                } else if (type === constants.ELEMENT_TYPES.PARENTHETICAL) {
+
+                    txtfile.push(text);
+
+                } else if (type === constants.ELEMENT_TYPES.TRANSITION) {
+
+                    txtfile.push('');
+
+                    txtfile.push(`> ${text.toUpperCase()}`);
+
+                }
+
+            }
+
+    
+
+            const txtfajlstring = txtfile.join('\n');
+
+            const blob = new Blob([txtfajlstring], {type: 'text/plain;charset=utf-8'});
+
+            const a = document.createElement('a');
+
+            a.href = URL.createObjectURL(blob);
+
+            a.download = `${this.meta.title || 'script'}.txt`;
+
+            a.click();
+
+        }
+
+    
+
+        async populateOpenMenu(container) {
+
+            if (!container) {
+
+                const list1 = document.getElementById('saved-scripts-list');
+
+                if (list1) await this.populateOpenMenu(list1);
+
+                const list2 = document.getElementById('mobile-saved-scripts-list');
+
+                if (list2) await this.populateOpenMenu(list2);
+
+                return;
+
+            }
+
+            container.innerHTML = '';
+
+            const scripts = await this.storageManager.getAllScripts();
+
+            const scriptIds = Object.keys(scripts);
+
+    
+
+            if (scriptIds.length === 0) {
+
+                container.innerHTML = '<span class="dropdown-item" style="color:var(--text-meta);">No saved scripts.</span>';
+
+                return;
+
+            }
+
+    
+
+            scriptIds.forEach(scriptId => {
+
+                const script = scripts[scriptId];
+
+                const title = script.content?.meta?.title || new Date(script.lastSavedAt).toLocaleString();
+
+                const isActive = scriptId === this.activeScriptId;
+
+    
+
+                const item = document.createElement('div');
+
+                item.className = 'dropdown-item flex-justify-between-center'; 
+
+                
+
+                item.style.display = 'flex';
+
+                item.style.justifyContent = 'space-between';
+
+                item.style.alignItems = 'center';
+
+                
+
+                if (isActive) {
+
+                    item.classList.add('dropdown-item-active');
+
+                    item.title = 'Currently open';
+
+                }
+
+    
+
+                const titleSpan = document.createElement('span');
+
+                titleSpan.textContent = title + (isActive ? ' (Open)' : '');
+
+                titleSpan.style.flexGrow = '1';
+
+                
+
+                if (isActive) {
+
+                    titleSpan.classList.add('font-bold', 'text-accent');
+
+                } else {
+
+                    titleSpan.onclick = async () => {
+
+                        await this.loadScript(scriptId);
+
+                        if (document.body.classList.contains('mobile-view')) {
+
+                            this.sidebarManager.toggleMobileMenu();
+
+                        }
+
+                    };
+
+                }
+
+    
+
+                const deleteBtn = document.createElement('button');
+
+                deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+
+                deleteBtn.className = 'btn-icon btn-icon-faded'; 
+
+                deleteBtn.onclick = async (e) => {
+
+                    e.stopPropagation();
+
+                    if (confirm(`Are you sure you want to delete "${title}"? This cannot be undone.`)) {
+
+                        const nextId = await this.storageManager.deleteScript(scriptId);
+
+                        if (this.activeScriptId === scriptId) {
+
+                            await this.loadScript(nextId);
+
+                        } else {
+
+                            await this.populateOpenMenu();
+
+                        }
+
+                    }
+
+                };
+
+    
+
+                item.appendChild(titleSpan);
+
+                item.appendChild(deleteBtn);
+
+                container.appendChild(item);
+
+            });
+
+        }
+
+    
+
+        async checkBackupStatus() {
+
+            const script = await this.storageManager.getScript(this.activeScriptId);
+
+            if (!script) return;
+
+    
+
+            const backupWarnings = [document.getElementById('backup-warning'), document.getElementById('mobile-backup-warning')];
+
+            const thirtyMinutes = 30 * 60 * 1000;
+
+    
+
+            let timeAgo = 'a while';
+
+            if(script.lastBackupAt) {
+
+                const minutes = Math.floor((new Date() - new Date(script.lastBackupAt)) / 60000);
+
+                if (minutes < 60) {
+
+                    timeAgo = `${minutes}m ago`;
+
+                } else if (minutes < 1440) {
+
+                    timeAgo = `${Math.floor(minutes / 60)}h ago`;
+
+                } else {
+
+                    timeAgo = `${Math.floor(minutes / 1440)}d ago`;
+
+                }
+
+            }
+
+            const title = script.lastBackupAt ? `Last backup: ${timeAgo}` : 'Not backed up yet';
+
+    
+
+            backupWarnings.forEach(backupWarning => {
+
+                if(!backupWarning) return;
+
+                if (!script.lastBackupAt || (new Date() - new Date(script.lastBackupAt) > thirtyMinutes)) {
+
+                    backupWarning.classList.remove('hidden');
+
+                    backupWarning.title = title;
+
+                } else {
+
+                    backupWarning.classList.add('hidden');
+
+                }
+
+            });
+
+        }
+
+    
+
+        escapeXML(str) {
+
+            return str.replace(/[<>&'"']/g, c => {
+
+                switch (c) {
+
+                    case '<': return '&lt;';
+
+                    case '>': return '&gt;';
+
+                    case '&': return '&amp;';
+
+                    case '\'': return '&apos;';
+
+                    case '"':
+
+                    default: return '&quot;';
+
+                }
+
+            });
+
+        }
+
     }
 
-    escapeXML(str) {
-        return str.replace(/[<>&'"']/g, c => {
-            switch (c) {
-                case '<': return '&lt;';
-                case '>': return '&gt;';
-                case '&': return '&amp;';
-                case '\'': return '&apos;';
-                case '"':
-                default: return '&quot;';
-            }
-        });
-    }
-}
+    

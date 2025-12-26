@@ -638,4 +638,32 @@ export class EditorHandler {
         this.app.saveState(true);
         this.updateContext();
     }
+
+    // --- Collaboration Methods ---
+    toggleReadOnly(isReadOnly) {
+        this.app.editor.contentEditable = !isReadOnly;
+        if (isReadOnly) {
+            this.app.editor.classList.add('editor-locked');
+            this.closePopups();
+        } else {
+            this.app.editor.classList.remove('editor-locked');
+        }
+    }
+
+    getSnapshot() {
+        // Return full script state
+        return this.app.exportToJSONStructure();
+    }
+
+    applySnapshot(data, isSoft = false, animate = false, activeLineId = null) {
+        // Restore full script state
+        if (isSoft) {
+             this.app.importJSON(data, true, animate, activeLineId); 
+        } else {
+             this.app.importJSON(data, true, animate, activeLineId); 
+        }
+        
+        // Persist the synced state
+        this.app.save();
+    }
 }

@@ -1,0 +1,52 @@
+{
+  "name": "Simple Free Screenplay Software",
+  "short_name": "SFSS",
+  "description": "Professional Client-Side Screenwriting PWA",
+  "id": "/testing/SFSS-testing",
+  "start_url": "/testing/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#d9dde2",
+  "theme_color": "#0f62fe",
+  "icons": [
+    {
+      "src": "assets/images/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/images/maskable_icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "assets/images/screenshot.jpg",
+      "sizes": "480x987",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Main Editor View"
+    },
+    {
+      "src": "assets/images/screenshot-wide.jpg",
+      "sizes": "1100x501",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "Editor with Scene Settings"
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "index.html",
+      "accept": {
+        "application/xml": [ ".fdx" ],
+        "text/plain": [ ".fountain", ".txt" ],
+        "application/json": [ ".json" ]
+      },
+      "launch_type": "multiple-clients"
+    }
+  ]
+}

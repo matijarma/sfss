@@ -41,7 +41,7 @@
             } catch (e) { console.log('Theme detection failed', e); }
 
             // Your Version Logic
-            const staticversion = "" + "23-12-25_" + "public-" + "12";
+            const staticversion = "" + "26-12-25_" + "public-" + "1251";
             //const staticversion = Math.round(Math.random()*1000000);
             const queryString = self.location.search;
             const params = new URLSearchParams(queryString);
@@ -56,6 +56,7 @@
                 "assets/css/layout.css",
                 "assets/css/components.css",
                 "assets/css/editor.css",
+                "assets/css/collab.css",
                 "assets/css/print.css",
                 "assets/css/reports.css",
                 "assets/css/treatment.css"
@@ -132,6 +133,7 @@
                 <button id="file-menu-btn" class="btn-text">File</button>
                 <div id="file-menu-dropdown" class="dropdown-menu hidden">
                     <a href="#" id="new-screenplay-btn" class="dropdown-item">New Screenplay</a>
+                    <a href="#" id="collab-menu-btn" class="dropdown-item" style="color:var(--accent)">Collaboration (Beta)</a>
                     
                     <div class="nested-dropdown-group">
                         <a href="#" class="dropdown-item">Open </a>
