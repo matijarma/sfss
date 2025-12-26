@@ -49,6 +49,13 @@ The powerful sidebar acts as your production hub:
 *   **Soundtrack Integration:** Link **YouTube** tracks to scenes. The integrated media player allows you to listen to your scene-specific playlist while writing.
 *   **Organization:** Color-code scenes and assign semantic icons (e.g., Car, Home, Phone) for quick visual reference.
 
+### 🤝 Real-Time Collaboration (Beta)
+Write with a partner in a secure, serverless environment.
+*   **Peer-to-Peer Connection:** Connect directly to your collaborator's device with no central server, ensuring maximum privacy.
+*   **End-to-End Encryption:** All data, including your script, video, and audio, is encrypted and visible only to the participants.
+*   **Editing Baton:** A simple "baton" passing system prevents conflicting edits by ensuring only one writer has control at a time.
+*   **Integrated Video/Audio Chat:** Discuss ideas face-to-face without leaving the application.
+
 ### 💾 Import / Export
 *   **SFSS JSON (`.json`)**: Full project backup including metadata, images, and history.
 *   **Final Draft (`.fdx`)**: Import and export compatibility with the industry standard.

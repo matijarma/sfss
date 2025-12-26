@@ -12,7 +12,8 @@
 
 *   **Language:** Vanilla JavaScript (ES6 Modules). No frameworks (React/Vue/Angular).
 *   **Styling:** Modular CSS (`assets/css/`). Uses CSS Variables for theming (Light/Dark).
-*   **Storage:** `IndexedDB` (via `IDBHelper.js` wrapper) for scripts; `LocalStorage` for preferences.
+*   **P2P Networking:** **Trystero** for serverless, WebRTC-based peer-to-peer connections.
+*   **Storage:** `IndexedDB` (via `IDBHemanifest.json scripts; `LocalStorage` for preferences.
 *   **PWA:** `sw.js` (Service Worker), `manifest-testing.json`, and File Handling API support.
 *   **External Assets:** FontAwesome (local), Courier Prime font (local).
 
@@ -36,6 +37,8 @@ The application is built on a modular class-based architecture, orchestrated by 
 | **`TreatmentRenderer.js`**| Renders the "Treatment Mode" (Kanban-style scene cards) for planning and outlining. |
 | **`ReportsManager.js`** | Generates statistical reports (Scene counts, Character interactions) and visualizations. |
 | **`MediaPlayer.js`** | Integrates YouTube IFrame API for the soundtrack feature attached to scenes. |
+| **`CollaborationManager.js`**| Manages P2P connections, data synchronization, and media streams using Trystero. |
+| **`CollabUI.js`**| Renders and manages all UI components for the real-time collaboration feature. |
 | **`Constants.js`** | Defines static configuration, element types (`sc-slug`, `sc-action`, etc.), and format mappings (FDX/Fountain). |
 | **`IDBHelper.js`** | specific wrapper for `IndexedDB` promises. |
 
@@ -89,10 +92,4 @@ Since this is a Vanilla JS project, there is no build step.
 *   **Strict Formatting:** Do not alter `PageRenderer.js` or `print.css` margins without understanding the "Screenplay Formatting Engine" specs (12pt Courier, 6 lines/inch).
 *   **Separation of Concerns:** Keep UI logic in `SidebarManager`/`EditorHandler` and data logic in `SFSS`/`StorageManager`.
 *   **Accessibility:** Ensure `aria-labels` and keyboard navigation are maintained.
-*   **No External Dependencies:** Do not add npm packages. The project aims to be self-contained.
-
-## 6. Formatting Rules (The "Engine")
-
-Refer to `screenplay-formatting-engine.md` for the mathematical specifications of the layout.
-*   **US Letter:** $8.5" \times 11"$. Live area $6" \times 9"$.
-*   **A4 Emulation:** Specific margins are applied to A4 paper to force the text block to match US Letter flow exactly, preventing pagination drift between regions.
+*   **Dependencies:** The project aims to be self-contained. The only external runtime dependency is **Trystero.js** for WebRTC functionality. Do not add npm packages.

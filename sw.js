@@ -7,7 +7,7 @@ console.log("ServiceWorker cache version: " + CACHE_NAME);
 const APP_SHELL_URLS = [
   '.',
   'index.html',
-  'manifest-testing.json',
+  'manifest.json',
   // CSS
   'assets/css/base.css',
   'assets/css/layout.css',

@@ -8,6 +8,8 @@ export class CollabUI {
     init() {
         this.injectHTML();
         this.bindEvents();
+        this.hasRemoteStream = false;
+        this.remoteVideoEnabled = false;
         
         // Hook into Manager Callbacks
         this.manager.onBatonStatusChange = (hasBaton) => {
@@ -25,13 +27,14 @@ export class CollabUI {
             this.showToast(`Peer Disconnected`);
             this.updateStatus(false);
             const remoteVideo = document.getElementById('collab-remote-video');
-            if (remoteVideo) remoteVideo.srcObject = null;
-            this.log(`Peer Signal Lost: ${peerId}`, 'warn');
+            if (remoteVideo) {
+                remoteVideo.srcObject = null;
+            }
+            this.hasRemoteStream = false;
+            this.remoteVideoEnabled = false;
+            this.updateVideoVisibility();
             
-            // If we are alone, maybe hide HUD?
-            // User requested "collab gui remains open" as bug when peer leaves.
-            // But if I am host, I might wait for them to return.
-            // I'll log a "Waiting" message.
+            this.log(`Peer Signal Lost: ${peerId}`, 'warn');
             this.log(`Session Active. Waiting for peer re-connection...`, 'info');
         };
         this.manager.onRemoteStream = (stream, peerId) => {
@@ -40,7 +43,16 @@ export class CollabUI {
                 remoteVideo.srcObject = stream;
                 remoteVideo.play().catch(e => console.log('Remote play error', e));
                 this.log(`Receiving Video Feed (WebRTC Stream)`, 'success');
+                this.hasRemoteStream = true;
+                // Assume enabled until told otherwise (or wait for state)
+                this.remoteVideoEnabled = true; 
+                this.updateVideoVisibility();
             }
+        };
+        this.manager.onPeerMediaChange = (peerId, state) => {
+            this.remoteVideoEnabled = state.video;
+            // We can also handle audio indication here (e.g. mute icon on remote video)
+            this.updateVideoVisibility();
         };
         this.manager.onDisconnect = () => {
             this.updateStatus(false);
@@ -48,6 +60,7 @@ export class CollabUI {
             document.getElementById('collab-hud').classList.add('hidden');
             document.getElementById('collab-top-bar').classList.add('hidden');
             document.getElementById('collab-modal').classList.add('hidden'); // Ensure modal closes
+            this.restoreToolbarItems(); 
             this.log('Disconnected from Swarm.', 'error');
         };
     }
@@ -106,7 +119,7 @@ export class CollabUI {
                 </div>
                 <span id="collab-room-id-display" class="text-meta" style="font-family:monospace; opacity: 0.7;"></span>
             </div>
-            
+            <div class="flex-grow"></div>
             <div class="collab-bar-section">
                 <button id="collab-baton-btn" disabled>Waiting...</button>
                 <button id="collab-leave-btn" class="btn-text" style="color:var(--text-meta)" title="Leave Session"><i class="fas fa-sign-out-alt"></i></button>
@@ -123,7 +136,7 @@ export class CollabUI {
             </div>
             
             <div class="collab-hud-right-pane">
-                <div class="collab-video-container">
+                <div id="collab-video-wrapper" class="collab-video-container hidden">
                     <video id="collab-remote-video" autoplay playsinline></video>
                     <video id="collab-local-video" autoplay playsinline muted></video>
                 </div>
@@ -190,7 +203,8 @@ export class CollabUI {
         document.getElementById('collab-leave-btn').addEventListener('click', () => {
             if(confirm("Disconnect from session?")) {
                 this.manager.disconnect();
-                this.manager.disableMedia();
+                this.manager.stopMedia();
+                this.restoreToolbarItems(); // Restore UI
                 document.getElementById('collab-hud').classList.add('hidden');
                 document.getElementById('collab-top-bar').classList.add('hidden');
                 document.getElementById('collab-modal').classList.add('hidden');
@@ -198,7 +212,7 @@ export class CollabUI {
         });
 
         document.getElementById('collab-baton-btn').addEventListener('click', () => {
-             this.log("Initiating Baton Transfer Protocol...", 'system');
+             this.log("Transferring write access (Baton)...", 'system');
              this.manager.passBaton();
         });
 
@@ -211,110 +225,352 @@ export class CollabUI {
 
         document.getElementById('collab-cam-btn').addEventListener('click', async (e) => {
             const btn = e.currentTarget;
-            const micBtn = document.getElementById('collab-mic-btn');
-            
+            const localVideo = document.getElementById('collab-local-video');
+
             if (btn.classList.contains('active')) {
-                this.manager.disableMedia();
+                // Turn OFF Camera (disable track)
+                this.manager.toggleVideo(false);
                 btn.classList.remove('active');
-                micBtn.classList.remove('active');
-                micBtn.disabled = true;
-                micBtn.innerHTML = '<i class="fas fa-microphone-slash"></i>';
-                document.getElementById('collab-local-video').srcObject = null;
-                this.log("Media Stream Terminated (Privacy Mode)", 'warn');
+                this.updateVideoVisibility();
+                this.log("Camera disabled.", 'info');
             } else {
-                this.log("Requesting Hardware Access (Camera/Mic)...", 'system');
-                const result = await this.manager.enableMedia(document.getElementById('collab-local-video'));
+                // Turn ON Camera
+                this.log("Starting Camera...", 'system');
+                const result = await this.manager.enableMedia(localVideo);
+                
                 if (result.success) {
                     btn.classList.add('active');
-                    micBtn.disabled = false;
-                    micBtn.classList.add('active');
-                    micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
-                    this.log("Media Stream Active (Encrypted)", 'success');
+                    this.updateVideoVisibility();
+                    this.log("Camera enabled.", 'success');
                 } else {
-                    this.log(`Hardware Access Denied: ${result.error}`, 'error');
-                    alert("Error accessing media: " + result.error);
+                    this.log(`Error accessing camera: ${result.error}`, 'error');
                 }
             }
         });
-        
-        document.getElementById('collab-mic-btn').addEventListener('click', (e) => {
+
+        document.getElementById('collab-mic-btn').addEventListener('click', async (e) => {
             const btn = e.currentTarget;
+            const localVideo = document.getElementById('collab-local-video');
+
             if (btn.classList.contains('active')) {
-                const ok = this.manager.toggleAudio(false);
-                if (ok) {
-                    btn.classList.remove('active');
-                    btn.innerHTML = '<i class="fas fa-microphone-slash"></i>';
-                    this.log("Audio Track Muted", 'warn');
-                }
+                // Mute
+                this.manager.toggleAudio(false);
+                btn.classList.remove('active');
+                btn.innerHTML = '<i class="fas fa-microphone-slash"></i>';
+                this.log("Microphone muted.", 'info');
             } else {
-                const ok = this.manager.toggleAudio(true);
-                if (ok) {
+                // Unmute
+                // Check if we can just toggle
+                if (this.manager.toggleAudio(true)) {
                     btn.classList.add('active');
                     btn.innerHTML = '<i class="fas fa-microphone"></i>';
-                    this.log("Audio Track Active", 'success');
+                    this.log("Microphone unmuted.", 'success');
+                } else {
+                    // No stream? Start it.
+                    this.log("Starting Microphone...", 'system');
+                    const result = await this.manager.enableMedia(localVideo);
+                    if (result.success) {
+                        btn.classList.add('active');
+                        btn.innerHTML = '<i class="fas fa-microphone"></i>';
+                        btn.disabled = false; // Enable if it was disabled
+                        
+                        // If camera button is NOT active, ensure video is disabled
+                        if (!document.getElementById('collab-cam-btn').classList.contains('active')) {
+                            this.manager.toggleVideo(false);
+                        }
+                        
+                        this.updateVideoVisibility();
+                        this.log("Microphone started.", 'success');
+                    } else {
+                        this.log(`Error accessing microphone: ${result.error}`, 'error');
+                    }
                 }
             }
         });
     }
 
-    async initSession(roomId, isHost) {
-        if (!roomId) return;
+    updateVideoVisibility() {
+        const wrapper = document.getElementById('collab-video-wrapper');
+        const localVideo = document.getElementById('collab-local-video');
+        const camBtn = document.getElementById('collab-cam-btn');
         
-        // Show Waiting View ONLY if Host (Guest joins immediately)
-        if (isHost) {
-            document.getElementById('collab-start-view').classList.add('hidden');
-            document.getElementById('collab-waiting-view').classList.remove('hidden');
-        } else {
-            // Guest: Hide modal immediately, we assume success or show error later
-            document.getElementById('collab-modal').classList.add('hidden');
-        }
-        
-        const link = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
-        document.getElementById('collab-invite-link').value = link;
-        
-        this.log(`Initializing Session ID: ${roomId}`, 'info');
-        this.log(`Role Assigned: ${isHost ? 'HOST (Initiator)' : 'GUEST (Peer)'}`, 'info');
-        this.log(`Connecting to Signaling Server (BitTorrent Tracker)...`, 'system');
-        this.log(`Resolving DHT for Room Swarm...`, 'system');
+        // Conditions
+        const showRemote = this.hasRemoteStream && this.remoteVideoEnabled;
+        const localCamActive = camBtn.classList.contains('active');
 
-        const success = this.manager.connect(roomId, isHost);
-        if (success) {
-            this.showHUD(roomId);
-            if (isHost) this.showToast("Session Ready. Waiting for Peer...");
-            else this.showToast("Joining Session...");
+        if (showRemote) {
+            // SHOW WRAPPER (Remote + Local PIP)
+            wrapper.classList.remove('hidden');
             
-            // Auto-Start Media
-            const camBtn = document.getElementById('collab-cam-btn');
-            const micBtn = document.getElementById('collab-mic-btn');
-            
-            // Simulate delay for "Connecting" feel
-            setTimeout(async () => {
-                this.log("Attempting Auto-Start Media Stream...", 'system');
-                const result = await this.manager.enableMedia(document.getElementById('collab-local-video'));
-                if (result.success) {
-                    camBtn.classList.add('active');
-                    micBtn.disabled = false;
-                    micBtn.classList.add('active');
-                    micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
-                    this.log("Local Media Stream Attached.", 'success');
-                } else {
-                     this.log(`Auto-start media prevented: ${result.error}`, 'warn');
-                }
-            }, 800);
-
-            if (document.body.classList.contains('mobile-view')) {
-                document.getElementById('collab-baton-btn').style.display = 'none';
+            // Move local video to wrapper if not there
+            if (localVideo.parentNode !== wrapper) {
+                // Reset styles
+                localVideo.style = ""; 
+                wrapper.appendChild(localVideo);
             }
-
         } else {
-             alert("Failed to initialize connection.");
-             this.log("CRITICAL: Connection Initialization Failed", 'error');
-             document.getElementById('collab-modal').classList.remove('hidden'); // Re-show if failed
+            // HIDE WRAPPER
+            wrapper.classList.add('hidden');
+            
+            if (localCamActive) {
+                // SHOW LOCAL VIDEO ON BUTTON
+                if (localVideo.parentNode !== camBtn) {
+                    camBtn.appendChild(localVideo);
+                    // Apply styles for button background
+                    camBtn.style.position = 'relative';
+                    camBtn.style.overflow = 'hidden';
+                    
+                    localVideo.style.position = 'absolute';
+                    localVideo.style.top = '0';
+                    localVideo.style.left = '0';
+                    localVideo.style.width = '100%';
+                    localVideo.style.height = '100%';
+                    localVideo.style.objectFit = 'cover';
+                    localVideo.style.zIndex = '0';
+                    localVideo.style.opacity = '0.4';
+                    localVideo.style.pointerEvents = 'none';
+                    
+                    // Ensure icon is above
+                    const icon = camBtn.querySelector('i');
+                    if(icon) {
+                        icon.style.position = 'relative';
+                        icon.style.zIndex = '1';
+                    }
+                }
+            } else {
+                // Local video off, just ensure it's hidden or back in wrapper (doesn't matter much if hidden)
+                // Put it back in wrapper to be safe
+                if (localVideo.parentNode !== wrapper) {
+                    localVideo.style = "";
+                    wrapper.appendChild(localVideo);
+                    
+                    // Reset button styles
+                    camBtn.style = "";
+                    const icon = camBtn.querySelector('i');
+                    if(icon) icon.style = "";
+                }
+            }
         }
     }
+
+        
+
+            async initSession(roomId, isHost) {
+
+                if (!roomId) return;
+
+                
+
+                // Ensure Writing Mode
+
+                this.app.ensureWritingMode();
+
+                
+
+                // Show Waiting View ONLY if Host (Guest joins immediately)
+
+                if (isHost) {
+
+                    document.getElementById('collab-start-view').classList.add('hidden');
+
+                    document.getElementById('collab-waiting-view').classList.remove('hidden');
+
+                } else {
+
+                    // Guest: Hide modal immediately, we assume success or show error later
+
+                    document.getElementById('collab-modal').classList.add('hidden');
+
+                }
+
+                
+
+                const link = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
+
+                document.getElementById('collab-invite-link').value = link;
+
+                
+
+                this.log(`Initializing session. Room ID: ${roomId}`, 'info');
+
+                this.log(`Role: ${isHost ? 'HOST (You started the session)' : 'GUEST (You joined a session)'}`, 'info');
+
+                this.log(`Connecting to secure peer-to-peer network...`, 'system');
+
+                this.log(`Searching for peers in the swarm...`, 'system');
+
+        
+
+                const success = this.manager.connect(roomId, isHost);
+
+                if (success) {
+
+                    this.showHUD(roomId);
+
+                    this.moveToolbarItems(); // Move UI elements
+
+                    if (isHost) this.showToast("Session started. Waiting for others to join...");
+
+                    else this.showToast("Joining session...");
+
+                    
+
+                    // Auto-Start Media
+
+                    const camBtn = document.getElementById('collab-cam-btn');
+
+                    const micBtn = document.getElementById('collab-mic-btn');
+
+                    
+
+                    // Simulate delay for "Connecting" feel
+
+                    setTimeout(async () => {
+
+                        this.log("Attempting to auto-start camera...", 'system');
+
+                        const result = await this.manager.enableMedia(document.getElementById('collab-local-video'));
+
+                        if (result.success) {
+
+                            camBtn.classList.add('active');
+
+                            micBtn.disabled = false;
+
+                            
+
+                            // Default to Muted
+
+                            this.manager.toggleAudio(false);
+
+                            micBtn.classList.remove('active');
+
+                            micBtn.innerHTML = '<i class="fas fa-microphone-slash"></i>';
+
+                            
+
+                            this.updateVideoVisibility();
+
+                            this.log("Camera started. Mic muted by default.", 'success');
+
+                        } else {
+
+                             this.log(`Could not auto-start camera: ${result.error}`, 'warn');
+
+                        }
+
+                    }, 800);
+
+        
+
+                    if (document.body.classList.contains('mobile-view')) {
+
+                        document.getElementById('collab-baton-btn').style.display = 'none';
+
+                    }
+
+        
+
+                } else {
+
+                     alert("Failed to initialize connection.");
+
+                     this.log("Error: Connection initialization failed.", 'error');
+
+                     document.getElementById('collab-modal').classList.remove('hidden'); // Re-show if failed
+
+                }
+
+            }
     
+    moveToolbarItems() {
+        const topBar = document.getElementById('collab-top-bar');
+        if (!topBar) return;
+
+        // Ensure we don't move if already moved
+        if (this.itemsMoved) return;
+        this.itemsMoved = true;
+
+        // Elements to move
+        const logo = document.querySelector('#toolbar > h1');
+        const undoBtn = document.getElementById('undo-btn');
+        const redoBtn = document.getElementById('redo-btn');
+        const typeSelector = document.getElementById('type-selector-container');
+        const musicPlayer = document.getElementById('music-player');
+
+        // Create placeholders to remember positions
+        this.placeholders = {};
+        const createPlaceholder = (el, id) => {
+            if (el) {
+                const p = document.createElement('div');
+                p.id = `placeholder-${id}`;
+                p.style.display = 'none';
+                el.parentNode.insertBefore(p, el);
+                this.placeholders[id] = p;
+                return true;
+            }
+            return false;
+        };
+
+        if(createPlaceholder(logo, 'logo')) {
+            // Logo goes to far left. We need to insert it at the start of the first section.
+            const firstSection = topBar.querySelector('.collab-bar-section');
+            if(firstSection) firstSection.insertBefore(logo, firstSection.firstChild);
+        }
+
+        const centerSection = document.createElement('div');
+        centerSection.className = 'collab-bar-section center-tools';
+        // Add Undo/Redo/TypeSelector/Music to a center section or append to existing?
+        // Let's create a container for them in the top bar
+        
+        // We'll insert them into the left section or a new middle section. 
+        // Existing layout: [Left Section (Badge, RoomID)] ... [Right Section (Baton, Leave)]
+        // We want: [Logo] [Left Section] [Tools] [Right Section]
+        
+        // Actually, just append to the first section or create a middle one.
+        // Let's put them in the middle.
+        if(createPlaceholder(undoBtn, 'undo')) centerSection.appendChild(undoBtn);
+        if(createPlaceholder(redoBtn, 'redo')) centerSection.appendChild(redoBtn);
+        if(createPlaceholder(typeSelector, 'types')) centerSection.appendChild(typeSelector);
+        if(createPlaceholder(musicPlayer, 'music')) centerSection.appendChild(musicPlayer);
+        
+        // Insert center section before the last section (Right Section)
+        topBar.insertBefore(centerSection, topBar.lastElementChild);
+    }
+
+    restoreToolbarItems() {
+        if (!this.itemsMoved || !this.placeholders) return;
+        
+        const restore = (id, elId) => {
+            const p = this.placeholders[id];
+            const el = id === 'logo' ? document.querySelector('#collab-top-bar h1') : 
+                       id === 'undo' ? document.getElementById('undo-btn') :
+                       id === 'redo' ? document.getElementById('redo-btn') :
+                       id === 'types' ? document.getElementById('type-selector-container') :
+                       id === 'music' ? document.getElementById('music-player') : null;
+            
+            if (p && el) {
+                p.parentNode.insertBefore(el, p);
+                p.remove();
+            }
+        };
+
+        restore('logo');
+        restore('undo');
+        restore('redo');
+        restore('types');
+        restore('music');
+        
+        // Remove the temporary center section
+        const centerSection = document.querySelector('#collab-top-bar .center-tools');
+        if (centerSection) centerSection.remove();
+
+        this.itemsMoved = false;
+        this.placeholders = null;
+    }
+
     joinFromUrl(roomId) {
-        this.log(`Detected Invite Link. Auto-joining: ${roomId}`, 'system');
+        this.log(`Detected invite link. Auto-joining room: ${roomId}`, 'system');
         const welcome = document.getElementById('mobile-welcome-modal');
         if (welcome) welcome.classList.add('hidden');
         
@@ -353,14 +609,14 @@ export class CollabUI {
             btn.style.opacity = '1';
             
             badge.className = 'collab-status-badge writer';
-            badgeText.textContent = 'WRITER (Active)';
+            badgeText.textContent = 'WRITER (You can edit)';
         } else {
             btn.disabled = true;
             btn.textContent = "Waiting...";
             btn.style.opacity = '0.7';
             
             badge.className = 'collab-status-badge reader';
-            badgeText.textContent = 'READER (Locked)';
+            badgeText.textContent = 'READER (View only)';
         }
     }
 

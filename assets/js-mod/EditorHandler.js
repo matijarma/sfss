@@ -655,17 +655,12 @@ export class EditorHandler {
         return this.app.exportToJSONStructure();
     }
 
-    applySnapshot(data, isSoft = false) {
+    applySnapshot(data, isSoft = false, animate = false, activeLineId = null) {
         // Restore full script state
         if (isSoft) {
-             const scrollArea = document.getElementById('scroll-area');
-             const parentScroll = scrollArea ? scrollArea.scrollTop : 0;
-             
-             this.app.importJSON(data, true); 
-             
-             if (scrollArea) scrollArea.scrollTop = parentScroll;
+             this.app.importJSON(data, true, animate, activeLineId); 
         } else {
-             this.app.importJSON(data, true); 
+             this.app.importJSON(data, true, animate, activeLineId); 
         }
         
         // Persist the synced state

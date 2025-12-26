@@ -29,6 +29,13 @@ The application is a feature-complete writing studio built with three primary mo
     -   **Data Visualization:** Reports include pie charts and tables for easy analysis of script breakdown (INT. vs EXT., DAY vs. NIGHT).
     -   **Exportable:** Reports can be printed or saved to PDF.
 
+-   ### 🤝 **Real-Time Collaboration (Beta)**
+    -   **Peer-to-Peer:** Connect directly to a collaborator with no server in between, using WebRTC.
+    -   **End-to-End Encrypted:** All communication, including script data and video/audio chat, is fully encrypted.
+    -   **Baton Passing:** A simple "baton" system ensures only one person can write at a time, preventing conflicts.
+    -   **Integrated Video/Audio Chat:** Communicate with your writing partner directly within the app.
+    -   **Live Console:** A transparent console log shows connection status and security information, providing peace of mind.
+
 -   ### ⚙️ **General**
     -   **100% Client-Side:** No database, no cloud logins. All work is saved locally via `IndexedDB`.
     -   **PWA Ready:** Installable on Desktop (Windows, Mac, Linux) and Mobile (iOS, Android) for a native app experience.
@@ -43,16 +50,17 @@ SFSS is a static web application and requires no server or build process to run.
 1.  **Download:** Clone or download the repository.
 2.  **Run:** Open `index.html` in a modern web browser (Chrome, Firefox, Safari).
 3.  **Install (Optional):** Use the "Install" button in the app's menu (or the browser's PWA install prompt) to save it as a local application.
-
+manifest.json
 ## 🛠️ Technical Deep Dive
 
 ### Technology Stack
 *   **Core Logic:** **Vanilla JavaScript (ES6+ Modules)**. The app is intentionally dependency-free for maximum performance and longevity.
+*   **P2P Networking:** **Trystero** (via `trystero.min.js`) for serverless WebRTC connections.
 *   **Styling:** **Modular CSS** with CSS Variables for theming. No pre-processors are used.
 *   **Storage:** `IndexedDB` for script and image data; `LocalStorage` for user settings.
 *   **PWA:** `sw.js` (Service Worker) for offline caching and `manifest-testing.json` for app installation.
 *   **Icons & Fonts:** FontAwesome and Courier Prime (locally hosted).
-
+manifest.json
 ### Project Structure
 The codebase is organized into a modular, class-based architecture.
 
@@ -80,10 +88,13 @@ The codebase is organized into a modular, class-based architecture.
 │   │   ├── ReportsManager.js # Generates script breakdowns and reports.
 │   │   ├── TreatmentRenderer.js# Renders the card-based "Treatment Mode".
 │   │   ├── MediaPlayer.js  # Manages the YouTube IFrame API player.
+│   │   ├── CollaborationManager.js # Handles P2P connection, data, and media streams.
+│   │   ├── CollabUI.js     # Manages the UI for the collaboration feature.
 │   │   ├── Constants.js    # Defines element types and other static configs.
 │   │   └── IDBHelper.js    # A wrapper for IndexedDB operations.
 │   │
 │   ├── script.js           # Main script bootstrapper, loads SFSS.js.
+│   ├── trystero.min.js     # WebRTC helper library for P2P networking.
 │   ├── fontawesome/        # Font Awesome library (local).
 │   └── googlefonts/        # Courier Prime font files (local).
 │

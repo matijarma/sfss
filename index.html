@@ -41,7 +41,7 @@
             } catch (e) { console.log('Theme detection failed', e); }
 
             // Your Version Logic
-            const staticversion = "" + "24-12-25_" + "collabV1-" + "111";
+            const staticversion = "" + "26-12-25_" + "public-" + "1251";
             //const staticversion = Math.round(Math.random()*1000000);
             const queryString = self.location.search;
             const params = new URLSearchParams(queryString);
@@ -69,7 +69,7 @@
             // 1. Handle Manifest (Optional, but you had it in your HTML)
             var manifest = document.createElement('link');
             manifest.rel = 'manifest';
-            manifest.href = 'manifest-testing.json?v=' + v;
+            manifest.href = 'manifest.json?v=' + v;
             document.head.appendChild(manifest);
 
             // 2. Inject CSS
