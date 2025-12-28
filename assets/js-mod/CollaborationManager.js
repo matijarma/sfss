@@ -74,6 +74,8 @@ export class CollaborationManager {
                 this.log('Host Mode: You have the baton and can write.', 'success');
             }
 
+            document.body.classList.add('is-collaborating');
+
             return true;
         } catch (e) {
             this.log(`Critical Connection Error: ${e.message}`, 'error');
@@ -103,6 +105,8 @@ export class CollaborationManager {
         
         this.stopMedia();
         this.app.editorHandler.toggleReadOnly(false);
+
+        document.body.classList.remove('is-collaborating');
 
         if (this.onDisconnect) this.onDisconnect();
         if (this.onBatonStatusChange) this.onBatonStatusChange(true);

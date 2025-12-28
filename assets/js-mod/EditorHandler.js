@@ -47,6 +47,8 @@ export class EditorHandler {
                 type = constants.ELEMENT_TYPES.CHARACTER;
             } else if (trimmedLine.startsWith('(') && trimmedLine.endsWith(')')) {
                 type = constants.ELEMENT_TYPES.PARENTHETICAL;
+                // Strip brackets for internal storage (CSS handles display)
+                line = trimmedLine.replace(/^\(+|\)+$/g, '').trim();
             } else if (isAllUpper && trimmedLine.endsWith('TO:')) {
                 type = constants.ELEMENT_TYPES.TRANSITION;
             }
@@ -136,6 +138,19 @@ export class EditorHandler {
             }
             else if (e.key === 'ArrowDown') { e.preventDefault(); this.popupNavigate(1); }
             else if (e.key === 'ArrowUp') { e.preventDefault(); this.popupNavigate(-1); }
+            else if (e.key === 'ArrowRight') {
+                if (this.popupState.type === 'auto') {
+                     const menu = this.autoMenu;
+                     const items = menu.querySelectorAll('.menu-item');
+                     const selected = items[this.popupState.selectedIndex];
+                     if (selected && selected.dataset.deletable === "true") {
+                         e.preventDefault();
+                         const name = selected.dataset.charName;
+                         this.app.characters.delete(name);
+                         this.triggerAutocomplete(this.popupState.targetBlock);
+                     }
+                }
+            }
             else if (e.key === 'Enter' || e.key === 'Tab') { 
                 e.preventDefault();
                 const block = this.popupState.targetBlock;
@@ -233,13 +248,13 @@ export class EditorHandler {
 
                         // Special handling for Parentheticals
                         if (type === constants.ELEMENT_TYPES.PARENTHETICAL) {
-                            // Strip existing brackets from split parts if they exist
-                            let cleanFirst = firstPart.replace(/^\(/, '').trim();
-                            let cleanSecond = secondPart.replace(/\)$/, '').trim();
+                            // Strip existing brackets from split parts if they exist (though textContent should be clean now)
+                            let cleanFirst = firstPart.replace(/^\(+/, '').trim();
+                            let cleanSecond = secondPart.replace(/\)+$/, '').trim();
                             
-                            // Re-wrap if content exists
-                            firstPart = cleanFirst ? `(${cleanFirst})` : '';
-                            secondPart = cleanSecond ? `(${cleanSecond})` : '';
+                            // Do NOT re-wrap. CSS handles brackets.
+                            firstPart = cleanFirst;
+                            secondPart = cleanSecond;
                         }
 
                         block.textContent = firstPart;
@@ -292,8 +307,13 @@ export class EditorHandler {
                         this.triggerAutocomplete(block);
                         break;
                     case constants.ELEMENT_TYPES.PARENTHETICAL:
-                        this.setBlockType(block, constants.ELEMENT_TYPES.DIALOGUE);
-                        this.focusBlock(block);
+                        if (block.textContent.trim() === '') {
+                            this.setBlockType(block, constants.ELEMENT_TYPES.DIALOGUE);
+                            this.focusBlock(block);
+                        } else {
+                            const newBlock = this.createBlock(constants.ELEMENT_TYPES.DIALOGUE, '', block);
+                            this.focusBlock(newBlock);
+                        }
                         break;
                 }
             } else { 
@@ -362,6 +382,11 @@ export class EditorHandler {
             }
         }
         
+        // Fix: If text becomes empty while popup is active, close it.
+        if (this.popupState.active && text.trim().length === 0) {
+            this.closePopups();
+        }
+
         this.updateContext();
         if (type === constants.ELEMENT_TYPES.SLUG) {
             clearTimeout(this.sceneListUpdateTimeout);
@@ -376,13 +401,10 @@ export class EditorHandler {
         const type = this.getBlockType(block);
         let text = block.textContent.trim();
         if (type === constants.ELEMENT_TYPES.PARENTHETICAL) {
-             // Remove existing brackets to clean up first
+             // Remove existing brackets so CSS ::before/::after can handle them without duplication
              let clean = text.replace(/^\(+|\)+$/g, '').trim(); 
-             if (clean.length > 0) {
-                 block.textContent = `(${clean})`;
-             } else if (text.length > 0) {
-                 // If it was just brackets, clear it or leave empty
-                 block.textContent = ''; 
+             if (block.textContent !== clean) {
+                 block.textContent = clean;
              }
         }
         if (type === constants.ELEMENT_TYPES.CHARACTER) this.commitCharacter(text);
@@ -430,6 +452,19 @@ export class EditorHandler {
         if (suggestedChar) block.setAttribute('data-suggest', suggestedChar);
     }
 
+    isCharacterUsed(name) {
+        const cleanName = this.getCleanCharacterName(name);
+        if (!cleanName) return false;
+        // Check if character appears in the script
+        const charBlocks = this.app.editor.querySelectorAll(`.${constants.ELEMENT_TYPES.CHARACTER}`);
+        for (const block of charBlocks) {
+            if (this.getCleanCharacterName(block.textContent) === cleanName) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     triggerSuffixAutocomplete(block) {
         // Find existing partial suffix? e.g. "JOHN (V"
         const text = block.textContent;
@@ -474,7 +509,46 @@ export class EditorHandler {
         options.forEach((opt, idx) => {
             const div = document.createElement('div');
             div.className = `menu-item ${idx === 0 ? 'selected' : ''}`;
-            if (type === 'selector') {
+            
+            if (type === 'auto') {
+                 // Character Autocomplete with potential Delete button
+                 div.style.display = 'flex';
+                 div.style.justifyContent = 'space-between';
+                 div.style.alignItems = 'center';
+                 
+                 const span = document.createElement('span');
+                 span.textContent = opt;
+                 div.appendChild(span);
+
+                 // Check if unused
+                 if (!this.isCharacterUsed(opt)) {
+                     const delBtn = document.createElement('span');
+                     delBtn.innerHTML = '<i class="fas fa-times"></i>';
+                     delBtn.title = "Remove from database (Right Arrow)";
+                     delBtn.style.color = '#ef4444'; // Red-500
+                     delBtn.style.cursor = 'pointer';
+                     delBtn.style.padding = '0 6px';
+                     delBtn.style.fontSize = '0.8em';
+                     delBtn.style.opacity = '0.6';
+                     
+                     delBtn.onmouseover = () => delBtn.style.opacity = '1';
+                     delBtn.onmouseout = () => delBtn.style.opacity = '0.6';
+
+                     delBtn.onclick = (e) => {
+                         e.stopPropagation();
+                         this.app.characters.delete(opt);
+                         // Triggering autocomplete again will refresh the list
+                         // We need to keep focus on input? triggerAutocomplete uses textContent.
+                         this.triggerAutocomplete(block);
+                     };
+                     
+                     div.appendChild(delBtn);
+                     div.dataset.deletable = "true";
+                     div.dataset.charName = opt;
+                 }
+                 div.onclick = () => { this.popupState.selectedIndex = idx; this.popupSelect(); };
+
+            } else if (type === 'selector') {
                 const label = document.createElement('span');
                 label.textContent = constants.TYPE_LABELS[opt];
                 div.appendChild(label);
@@ -485,9 +559,12 @@ export class EditorHandler {
                     k.textContent = key.toUpperCase();
                     div.appendChild(k);
                 }
-            } else div.textContent = opt;
+                div.onclick = () => { this.popupState.selectedIndex = idx; this.popupSelect(); };
+            } else {
+                div.textContent = opt;
+                div.onclick = () => { this.popupState.selectedIndex = idx; this.popupSelect(); };
+            }
 
-            div.onclick = () => { this.popupState.selectedIndex = idx; this.popupSelect(); };
             menu.appendChild(div);
         });
 

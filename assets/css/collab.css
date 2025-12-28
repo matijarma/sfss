@@ -251,10 +251,10 @@ button#collab-cam-btn.active {
 input[readonly] { cursor: pointer; background-color: var(--scene-hover); }
 
 /* --- ACTIVE CURSOR FOR COLLAB READER --- */
-.collab-active-block {
+.is-collaborating .collab-active-block {
     position: relative;
 }
-.collab-active-block::after {
+.is-collaborating .collab-active-block::after {
     content: '';
     display: inline-block;
     width: 2px;

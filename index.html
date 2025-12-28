@@ -41,7 +41,7 @@
             } catch (e) { console.log('Theme detection failed', e); }
 
             // Your Version Logic
-            const staticversion = "" + "26-12-25_" + "public-" + "1251";
+            const staticversion = "" + "28-12-25_" + "public-" + "1252";
             //const staticversion = Math.round(Math.random()*1000000);
             const queryString = self.location.search;
             const params = new URLSearchParams(queryString);
@@ -129,27 +129,34 @@
         </div>
         
         <div class="toolbar-group desktop-only">
-            <div id="file-menu-container" class="dropdown-container">
-                <button id="file-menu-btn" class="btn-text">File</button>
-                <div id="file-menu-dropdown" class="dropdown-menu hidden">
-                    <a href="#" id="new-screenplay-btn" class="dropdown-item">New Screenplay</a>
-                    <a href="#" id="collab-menu-btn" class="dropdown-item" style="color:var(--accent)">Collaboration (Beta)</a>
+            <!-- SCREENPLAY MENU -->
+            <div id="screenplay-menu-container" class="dropdown-container">
+                <button id="screenplay-menu-btn" class="btn-text"><i class="fas fa-file-alt mr-1"></i></button>
+                <div id="screenplay-menu-dropdown" class="dropdown-menu hidden">
+                    <a href="#" id="new-screenplay-btn" class="dropdown-item">
+                        <i class="fas fa-plus-circle mr-1 fa-fw"></i> New Screenplay
+                    </a>
                     
                     <div class="nested-dropdown-group">
-                        <a href="#" class="dropdown-item">Open </a>
+                        <a href="#" class="dropdown-item">
+                            <i class="fas fa-folder-open mr-1 fa-fw"></i> Open
+                            <i class="fas fa-caret-right ml-auto"></i>
+                        </a>
                         <div id="open-menu-nested-dropdown" class="nested-dropdown hidden">
                             <a href="#" id="file-open-btn" class="dropdown-item">From file...</a>
-                            
                             <div id="saved-scripts-list"></div>
-                            
                             <div class="meta-text-small-padded">
                                 SFSS is a client-side app. All data is stored in your browser.
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="nested-dropdown-group">
-                        <a href="#" class="dropdown-item">Backup <span id="backup-warning" class="hidden" style="font-size:0.7rem; color:var(--scene-color-3-light);"></span></a>
+                        <a href="#" class="dropdown-item">
+                            <i class="fas fa-file-export mr-1 fa-fw"></i> Backup
+                            <i class="fas fa-caret-right ml-auto"></i>
+                            <span id="backup-warning" class="hidden" style="font-size:0.7rem; color:var(--scene-color-3-light);">!</span>
+                        </a>
                         <div class="nested-dropdown hidden">
                             <a href="#" id="download-json-btn" class="dropdown-item">JSON (.json)</a>
                             <a href="#" id="download-fdx-btn" class="dropdown-item">Final Draft (.fdx)</a>
@@ -157,11 +164,38 @@
                             <a href="#" id="download-text-btn" class="dropdown-item">Plain Text (.txt)</a>
                         </div>
                     </div>
-                    <a href="#" id="print-btn" class="dropdown-item">Print</a>
-                    <a href="#" id="install-pwa-btn" class="dropdown-item hidden">Install App</a>
-                    <a href="#" id="settings-btn" class="dropdown-item">Keyboard Shortcuts</a>
-                    <a href="#" id="reports-menu-btn" class="dropdown-item">Reports</a>
-                    <a href="#" id="help-btn" class="dropdown-item">Help & Info</a>
+                </div>
+            </div>
+
+            <!-- DOCUMENTS MENU -->
+            <div id="documents-menu-container" class="dropdown-container">
+                <button id="documents-menu-btn" class="btn-text"><i class="fas fa-copy mr-1"></i></button>
+                 <div id="documents-menu-dropdown" class="dropdown-menu hidden">
+                    <a href="#" id="print-btn" class="dropdown-item">
+                        <i class="fas fa-print mr-1 fa-fw"></i> Prepare & Print
+                    </a>
+                    <a href="#" id="reports-menu-btn" class="dropdown-item">
+                        <i class="fas fa-chart-bar mr-1 fa-fw"></i> Reports
+                    </a>
+                 </div>
+            </div>
+
+            <!-- APP MENU -->
+            <div id="app-menu-container" class="dropdown-container">
+                <button id="app-menu-btn" class="btn-text"><i class="fas fa-bars mr-1"></i></button>
+                <div id="app-menu-dropdown" class="dropdown-menu hidden">
+                    <a href="#" id="collab-menu-btn" class="dropdown-item">
+                        <i class="fas fa-users mr-1 fa-fw"></i> Collaboration
+                    </a>
+                    <a href="#" id="settings-btn" class="dropdown-item">
+                        <i class="fas fa-keyboard mr-1 fa-fw"></i> Shortcuts
+                    </a>
+                    <a href="#" id="help-btn" class="dropdown-item">
+                        <i class="fas fa-question-circle mr-1 fa-fw"></i> Help & Info
+                    </a>
+                    <a href="#" id="install-pwa-btn" class="dropdown-item hidden">
+                        <i class="fas fa-download mr-1 fa-fw"></i> Install App
+                    </a>
                 </div>
             </div>
 

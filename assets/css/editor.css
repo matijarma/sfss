@@ -33,6 +33,8 @@
 .sc-character { width: 60%; margin-left: 20%; margin-top: 1em; margin-bottom: 1em; text-transform: uppercase; }
 .sc-dialogue { width: 80%; margin-left: 10%; margin-bottom: 1em; }
 .sc-parenthetical { width: 60%; margin-left: 20%; margin-bottom: 1em; margin-top: 0; }
+.sc-parenthetical::before { content: '('; }
+.sc-parenthetical::after { content: ')'; }
 .sc-transition { text-align: right; width: 100%; margin-top: 1em; margin-bottom: 1em; text-transform: uppercase; }
 
 

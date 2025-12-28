@@ -97,6 +97,8 @@ div#printingdiv { display: none }
     width: 2.4in;
     margin-bottom: 0; 
 }
+.page .sc-parenthetical::before { content: '('; }
+.page .sc-parenthetical::after { content: ')'; }
 
 /* Transition: 1 blank line before and after */
 .page .sc-transition {

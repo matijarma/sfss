@@ -127,6 +127,10 @@ export class SFSS {
         
                 const content = script.content;
                 this.importJSON(content, true);
+                
+                // One-time cleanup for existing DOM elements (double brackets fix)
+                this.cleanupParentheticals();
+
                 await this.populateOpenMenu();
                 await this.checkBackupStatus();
 
@@ -134,6 +138,20 @@ export class SFSS {
                 this.toggleLoader(false);
                 resolve();
             }, 50);
+        });
+    }
+
+    cleanupParentheticals() {
+        // Remove any explicit brackets from parenthetical blocks in the DOM
+        // because CSS ::before/::after now handles them.
+        this.editor.querySelectorAll(`.${constants.ELEMENT_TYPES.PARENTHETICAL}`).forEach(block => {
+            const text = block.textContent;
+            if (text.startsWith('(') || text.endsWith(')')) {
+                const clean = text.replace(/^\(+|\)+$/g, '').trim();
+                if (clean !== text) {
+                    block.textContent = clean;
+                }
+            }
         });
     }
 
@@ -160,7 +178,9 @@ export class SFSS {
         const activeScriptId = await this.storageManager.init();
         await this.loadScript(activeScriptId);
         
-        this.initMenu('file-menu-container', 'file-menu-dropdown');
+        this.initMenu('screenplay-menu-container', 'screenplay-menu-dropdown');
+        this.initMenu('documents-menu-container', 'documents-menu-dropdown');
+        this.initMenu('app-menu-container', 'app-menu-dropdown');
 
         window.onafterprint = () => {
             const printStyle = document.getElementById('print-style');
@@ -1958,13 +1978,16 @@ export class SFSS {
     
 
             const blocks = [];
-
             this.editor.querySelectorAll('.script-line').forEach(node => {
-
-                blocks.push({ type: this.editorHandler.getBlockType(node), text: node.textContent, id: node.dataset.lineId });
-
+                let text = node.textContent;
+                const type = this.editorHandler.getBlockType(node);
+                if (type === constants.ELEMENT_TYPES.PARENTHETICAL) {
+                    // Re-add brackets for data storage/export since CSS handles them visually
+                    if (!text.startsWith('(')) text = '(' + text;
+                    if (!text.endsWith(')')) text = text + ')';
+                }
+                blocks.push({ type: type, text: text, id: node.dataset.lineId });
             });
-
             return { meta: this.meta, sceneMeta: this.sceneMeta, blocks: blocks, characters: Array.from(this.characters) };
 
         }
@@ -2138,86 +2161,57 @@ export class SFSS {
                 
 
                 if (blockEl) {
+                    // Sanitize text if it's parenthetical (strip brackets for display)
+                    let displayText = blockData.text;
+                    if (blockData.type === constants.ELEMENT_TYPES.PARENTHETICAL) {
+                         displayText = displayText.replace(/^\(+|\)+$/g, '').trim();
+                    }
 
                     // Update content if changed
-
-                    if (blockEl.textContent !== blockData.text) {
-
+                    if (blockEl.textContent !== displayText) {
                         // Mark as changed
-
                         lastChangedBlock = blockEl;
-
                         
-
-                        if (animate && blockData.text.startsWith(blockEl.textContent)) {
-
-                            const suffix = blockData.text.substring(blockEl.textContent.length);
-
+                        if (animate && displayText.startsWith(blockEl.textContent)) {
+                            const suffix = displayText.substring(blockEl.textContent.length);
                             // Only animate reasonable lengths to avoid lag
-
                             if (suffix.length > 50) {
-
                                  if (blockEl._typewriterTimeout) clearTimeout(blockEl._typewriterTimeout);
-
-                                 blockEl.textContent = blockData.text;
-
+                                 blockEl.textContent = displayText;
                             } else {
-
                                  this.typewriterEffect(blockEl, suffix);
-
                             }
-
                         } else {
-
                             if (blockEl._typewriterTimeout) clearTimeout(blockEl._typewriterTimeout);
-
-                            blockEl.textContent = blockData.text;
-
+                            blockEl.textContent = displayText;
                         }
-
                     }
-
                     // Update type if changed
-
                     const currentType = this.editorHandler.getBlockType(blockEl);
-
                     if (currentType !== blockData.type) {
-
                         this.editorHandler.setBlockType(blockEl, blockData.type);
-
                         // Type change counts as a change for cursor position
-
                         lastChangedBlock = blockEl;
-
                     }
-
                     
-
                     // Ensure order
-
                     if (previousNode) {
-
                         if (blockEl.previousElementSibling !== previousNode) {
-
                             this.editor.insertBefore(blockEl, previousNode.nextSibling);
-
                         }
-
                     } else {
-
                         if (this.editor.firstElementChild !== blockEl) {
-
                             this.editor.prepend(blockEl);
-
                         }
-
                     }
-
                 } else {
-
                     // Create new
-
-                    blockEl = this.editorHandler.createBlock(blockData.type, blockData.text);
+                    let displayText = blockData.text;
+                    if (blockData.type === constants.ELEMENT_TYPES.PARENTHETICAL) {
+                         displayText = displayText.replace(/^\(+|\)+$/g, '').trim();
+                    }
+                    
+                    blockEl = this.editorHandler.createBlock(blockData.type, displayText);
 
                     blockEl.dataset.lineId = blockData.id;
 
@@ -2372,15 +2366,17 @@ export class SFSS {
             let xml = `<?xml version="1.0" encoding="UTF-8" standalone="no" ?>\n<FinalDraft DocumentType="Script" Template="No" Version="1">\n<Content>\n`;
 
             this.editor.querySelectorAll('.script-line').forEach(block => {
-
                 const type = this.editorHandler.getBlockType(block);
-
                 const fdxType = constants.FDX_MAP[type] || 'Action';
-
-                const text = this.escapeXML(block.textContent);
-
+                let rawText = block.textContent;
+                
+                if (type === constants.ELEMENT_TYPES.PARENTHETICAL) {
+                    if (!rawText.startsWith('(')) rawText = '(' + rawText;
+                    if (!rawText.endsWith(')')) rawText = rawText + ')';
+                }
+                
+                const text = this.escapeXML(rawText);
                 xml += `<Paragraph Type="${fdxType}">\n<Text>${text}</Text>\n</Paragraph>\n`;
-
             });
 
             xml += `</Content>\n</FinalDraft>`;
@@ -2460,13 +2456,12 @@ export class SFSS {
                     fountain.push(text.toUpperCase());
 
                 } else if (type === constants.ELEMENT_TYPES.DIALOGUE) {
-
                     fountain.push(text);
-
                 } else if (type === constants.ELEMENT_TYPES.PARENTHETICAL) {
-
-                    fountain.push(text);
-
+                    let pText = text;
+                    if (!pText.startsWith('(')) pText = '(' + pText;
+                    if (!pText.endsWith(')')) pText = pText + ')';
+                    fountain.push(pText);
                 } else if (type === constants.ELEMENT_TYPES.TRANSITION) {
 
                     fountain.push('');
