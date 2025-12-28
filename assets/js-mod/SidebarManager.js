@@ -259,9 +259,11 @@ export class SidebarManager {
     
         const header = popup.querySelector('#scene-settings-popup-header');
         let sceneTitle = slug.textContent.trim();
-        const sceneNumber = Array.from(this.app.editor.querySelectorAll('.sc-slug')).indexOf(slug) + 1;
-    
+        
+        // Scene Number Logic: Check meta first, else calculate
         const meta = this.app.sceneMeta[sceneId] || {};
+        const autoNumber = Array.from(this.app.editor.querySelectorAll('.sc-slug')).indexOf(slug) + 1;
+        const displaySceneNumber = meta.number || autoNumber;
     
         const iconHtml = meta.icon ? `<span class="scene-item-icon-container"><i class="${meta.icon} fa-fw"></i></span>` : '';
         const colorClass = meta.color || '';
@@ -287,7 +289,7 @@ export class SidebarManager {
             <div class="scene-item-main scene-item-main-flex">
                 ${iconHtml}
                 <div class="truncate" title="${sceneTitle}">
-                    <span class="opacity-50 mr-1">${sceneNumber}.</span>
+                    <span class="opacity-50 mr-1">#${displaySceneNumber}</span>
                     <span class="ml-1">${sceneTitle}</span>
                 </div>
             </div>
@@ -311,6 +313,10 @@ export class SidebarManager {
             <div class="settings-section">
                 <div class="meta-grid">
                     <div class="col-span-full">
+                         <div style="display:flex; gap:10px; align-items:center; margin-bottom: 0.5rem;">
+                             <label class="settings-label" for="scene-number-input" style="width: auto; margin:0;"># No:</label>
+                             <input type="text" id="scene-number-input" class="settings-input" style="width: 60px; text-align:center;" value="${meta.number || ''}" placeholder="${autoNumber}">
+                         </div>
                         <label class="settings-label" for="scene-description-input"><i class="fas fa-align-left fa-fw"></i> Description:</label>
                         <textarea id="scene-description-input" class="settings-input" rows="2" placeholder="A brief summary of the scene.">${meta.description || ''}</textarea>
                     </div>
@@ -351,6 +357,7 @@ export class SidebarManager {
         
         document.getElementById('scene-description-input').addEventListener('input', () => this.saveSceneMeta(sceneId));
         document.getElementById('scene-notes-input').addEventListener('input', () => this.saveSceneMeta(sceneId));
+        document.getElementById('scene-number-input').addEventListener('input', () => this.saveSceneMeta(sceneId));
 
         this.renderSceneImages(sceneId);
         const addImgBtn = document.getElementById('add-image-btn');
@@ -516,17 +523,20 @@ export class SidebarManager {
         const descriptionInput = document.getElementById('scene-description-input');
         const notesInput = document.getElementById('scene-notes-input');
         const trackInput = document.getElementById('scene-track-input');
+        const numberInput = document.getElementById('scene-number-input');
 
         const description = descriptionInput ? descriptionInput.value : this.app.sceneMeta[sceneId].description;
         const notes = notesInput ? notesInput.value : this.app.sceneMeta[sceneId].notes;
         const track = trackInput ? trackInput.value : this.app.sceneMeta[sceneId].track;
+        const number = numberInput ? numberInput.value.trim() : this.app.sceneMeta[sceneId].number;
 
         // Note: this.app.sceneMeta[sceneId].images is managed separately now
         this.app.sceneMeta[sceneId] = { 
             ...this.app.sceneMeta[sceneId], 
             description, 
             notes, 
-            track 
+            track,
+            number
         };
 
         localStorage.setItem('sfss_scene_meta', JSON.stringify(this.app.sceneMeta));
@@ -619,6 +629,8 @@ export class SidebarManager {
             
             text = text.trim() || 'UNTITLED';
             const meta = this.app.sceneMeta[lineId] || {};
+            const displaySceneNumber = meta.number || index;
+
             const item = document.createElement('div');
             item.className = 'scene-item';
             
@@ -665,7 +677,7 @@ export class SidebarManager {
 
             item.innerHTML = `
                 <div class="scene-grid-layout">
-                    <span class="scene-grid-number">${index}.</span>
+                    <span class="scene-grid-number">${displaySceneNumber}.</span>
                     <span class="scene-grid-icon">${iconHtml}</span>
                     <span class="scene-grid-title truncate" title="${text}" style="${italicStyle}">${text}</span>
                     <div class="scene-grid-meta">

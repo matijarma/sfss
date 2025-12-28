@@ -9,6 +9,7 @@ import { PageRenderer } from './PageRenderer.js';
 import { TreatmentRenderer } from './TreatmentRenderer.js';
 import { CollaborationManager } from './CollaborationManager.js';
 import { CollabUI } from './CollabUI.js';
+import { FountainParser } from './FountainParser.js';
 
 export class SFSS {
     constructor() {
@@ -72,6 +73,7 @@ export class SFSS {
         this.treatmentRenderer = new TreatmentRenderer(this);
         this.collaborationManager = new CollaborationManager(this);
         this.collabUI = new CollabUI(this);
+        this.fountainParser = new FountainParser();
         
         this.ELEMENT_TYPES = constants.ELEMENT_TYPES;
         this.TYPE_LABELS = constants.TYPE_LABELS;
@@ -1917,31 +1919,91 @@ export class SFSS {
 
     
 
-            paginate() {
+                paginate() {
 
-                const scriptLines = Array.from(this.editor.querySelectorAll('.script-line'));
+    
 
-                if (scriptLines.length === 0) return;
+                    const scriptLines = Array.from(this.editor.querySelectorAll('.script-line'));
 
-                
+    
 
-                const options = {
+                    if (scriptLines.length === 0) return;
 
-                    showSceneNumbers: this.meta.showSceneNumbers,
+    
 
-                    showPageNumbers: true,
+                    
 
-                    showDate: this.meta.showDate,
+    
 
-                    headerText: this.getHeaderText()
+                    // Extract Scene Number Map
 
-                };
+    
 
-                
+                    const sceneNumberMap = {};
 
-                this.pageRenderer.render(scriptLines, this.pageViewContainer, options);
+    
 
-            }        
+                    if (this.meta.showSceneNumbers) {
+
+    
+
+                        Object.keys(this.sceneMeta).forEach(id => {
+
+    
+
+                            if (this.sceneMeta[id].number) sceneNumberMap[id] = this.sceneMeta[id].number;
+
+    
+
+                        });
+
+    
+
+                    }
+
+    
+
+                    
+
+    
+
+                    const options = {
+
+    
+
+                        showSceneNumbers: this.meta.showSceneNumbers,
+
+    
+
+                        showPageNumbers: true,
+
+    
+
+                        showDate: this.meta.showDate,
+
+    
+
+                        headerText: this.getHeaderText(),
+
+    
+
+                        sceneNumberMap: sceneNumberMap
+
+    
+
+                    };
+
+    
+
+                    
+
+    
+
+                    this.pageRenderer.render(scriptLines, this.pageViewContainer, options);
+
+    
+
+                }        
 
                 async save() {
 
@@ -2014,43 +2076,151 @@ export class SFSS {
 
     
 
-        uploadFile(input) {
-
-            const file = input.files[0];
-
-            if (!file) return;
-
-            const reader = new FileReader();
-
-            reader.onload = async (e) => {
-
-                try {
-
-                    const newScript = this.storageManager.createNewScript();
-
-                    await this.loadScript(newScript.id, newScript);
+            uploadFile(input) {
 
     
 
-                    if (file.name.endsWith('.fdx')) await this.importFDX(e.target.result);
+                const file = input.files[0];
 
-                    else await this.importJSON(JSON.parse(e.target.result)); 
+    
 
-                } catch (err) { 
+                if (!file) return;
 
-                    console.error(err);
+    
 
-                    alert('Invalid file format or error importing.'); 
+                const reader = new FileReader();
 
-                }
+    
 
-            };
+                reader.onload = async (e) => {
 
-            reader.readAsText(file);
+    
 
-            input.value = '';
+                    try {
 
-        }
+    
+
+                        const newScript = this.storageManager.createNewScript();
+
+    
+
+                        await this.loadScript(newScript.id, newScript);
+
+    
+
+        
+
+    
+
+                        if (file.name.endsWith('.fdx')) {
+
+    
+
+                            await this.importFDX(e.target.result);
+
+    
+
+                        } else if (file.name.endsWith('.json')) {
+
+    
+
+                            await this.importJSON(JSON.parse(e.target.result)); 
+
+    
+
+                        } else if (file.name.endsWith('.fountain')) {
+
+    
+
+                            const parsed = this.fountainParser.parse(e.target.result);
+
+    
+
+                            await this.importJSON({ 
+
+    
+
+                                blocks: parsed.blocks, 
+
+    
+
+                                meta: { ...this.meta, ...parsed.meta }, 
+
+    
+
+                                sceneMeta: parsed.sceneMeta 
+
+    
+
+                            });
+
+    
+
+                        } else {
+
+    
+
+                            // Fallback for .txt or other: Use fountain parser anyway as it handles plain text well
+
+    
+
+                            const parsed = this.fountainParser.parse(e.target.result);
+
+    
+
+                            await this.importJSON({ 
+
+    
+
+                                blocks: parsed.blocks, 
+
+    
+
+                                meta: { ...this.meta, ...parsed.meta }, 
+
+    
+
+                                sceneMeta: parsed.sceneMeta 
+
+    
+
+                            });
+
+    
+
+                        }
+
+    
+
+                    } catch (err) { 
+
+    
+
+                        console.error(err);
+
+    
+
+                        alert('Invalid file format or error importing.'); 
+
+    
+
+                    }
+
+    
+
+                };
+
+    
+
+                reader.readAsText(file);
+
+    
+
+                input.value = '';
+
+    
+
+            }
 
     
 
@@ -2305,284 +2475,1364 @@ export class SFSS {
 
     
 
-        async importFDX(xmlText) {
+            async importFDX(xmlText) {
 
-            const parser = new DOMParser();
+    
 
-            const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+                const parser = new DOMParser();
 
-            const mainContent = xmlDoc.querySelector('FinalDraft > Content');
+    
 
-            if (!mainContent) { alert("No script content found in FDX."); return; }
+                const xmlDoc = parser.parseFromString(xmlText, "text/xml");
 
-            const paragraphs = mainContent.querySelectorAll("Paragraph");
+    
 
-            this.editor.innerHTML = '';
+                const mainContent = xmlDoc.querySelector('FinalDraft > Content');
 
-            this.characters.clear();
+    
 
-            this.meta.title = xmlDoc.querySelector('Title') ? xmlDoc.querySelector('Title').textContent : ''; 
+                if (!mainContent) { alert("No script content found in FDX."); return; }
 
-            this.applySettings();
+    
 
-            paragraphs.forEach(p => {
+                
 
-                const type = p.getAttribute("Type");
+    
 
-                let text = Array.from(p.getElementsByTagName("Text")).map(t => t.textContent).join('');
+                const paragraphs = mainContent.querySelectorAll("Paragraph");
 
-                if (!text && p.textContent) text = p.textContent;
+    
 
-                const dzType = constants.FDX_REVERSE_MAP[type] || constants.ELEMENT_TYPES.ACTION;
+                this.editor.innerHTML = '';
 
-                this.editorHandler.createBlock(dzType, text);
+    
 
-                if (dzType === constants.ELEMENT_TYPES.CHARACTER) {
+                this.characters.clear();
 
-                    const clean = this.editorHandler.getCleanCharacterName(text);
+    
 
-                    if (clean.length > 1) this.characters.add(clean);
+                this.sceneMeta = {}; // Reset scene meta
 
-                }
+    
 
-            });
+                
 
-            this.sidebarManager.updateSceneList();
+    
 
-            await this.save();
+                this.meta.title = xmlDoc.querySelector('Title') ? xmlDoc.querySelector('Title').textContent : ''; 
 
-            this.saveState(true);
+    
 
-        }
+                // Try to get Author/Contact from TitlePage if possible (basic check)
+
+    
+
+                // Note: FDX TitlePage parsing is complex, skipping for now as per simplicity request, 
+
+    
+
+                // relying on simple Title tag if present or just defaults.
+
+    
 
         
 
     
 
-        async downloadFDX() {
+                this.applySettings();
 
-            await this.storageManager.updateBackupTimestamp(this.activeScriptId);
+    
 
-            let xml = `<?xml version="1.0" encoding="UTF-8" standalone="no" ?>\n<FinalDraft DocumentType="Script" Template="No" Version="1">\n<Content>\n`;
-
-            this.editor.querySelectorAll('.script-line').forEach(block => {
-                const type = this.editorHandler.getBlockType(block);
-                const fdxType = constants.FDX_MAP[type] || 'Action';
-                let rawText = block.textContent;
                 
-                if (type === constants.ELEMENT_TYPES.PARENTHETICAL) {
-                    if (!rawText.startsWith('(')) rawText = '(' + rawText;
-                    if (!rawText.endsWith(')')) rawText = rawText + ')';
-                }
-                
-                const text = this.escapeXML(rawText);
-                xml += `<Paragraph Type="${fdxType}">\n<Text>${text}</Text>\n</Paragraph>\n`;
-            });
 
-            xml += `</Content>\n</FinalDraft>`;
+    
 
-            const blob = new Blob([xml], {type: 'text/xml'});
+                paragraphs.forEach(p => {
 
-            const a = document.createElement('a');
+    
 
-            a.href = URL.createObjectURL(blob);
+                    const type = p.getAttribute("Type");
 
-            a.download = `${this.meta.title || 'script'}.fdx`;
+    
 
-            a.click();
+                    const number = p.getAttribute("Number"); // Read Scene Number
 
-        }
+    
+
+                    let text = Array.from(p.getElementsByTagName("Text")).map(t => t.textContent).join('');
+
+    
+
+                    if (!text && p.textContent) text = p.textContent;
+
+    
+
+                    
+
+    
+
+                    const dzType = constants.FDX_REVERSE_MAP[type] || constants.ELEMENT_TYPES.ACTION;
+
+    
+
+                    const block = this.editorHandler.createBlock(dzType, text);
+
+    
+
+                    
+
+    
+
+                    if (dzType === constants.ELEMENT_TYPES.SLUG && number) {
+
+    
+
+                        // Save Scene Number
+
+    
+
+                        if (!this.sceneMeta[block.dataset.lineId]) this.sceneMeta[block.dataset.lineId] = {};
+
+    
+
+                        this.sceneMeta[block.dataset.lineId].number = number;
+
+    
+
+                    }
+
+    
 
         
 
-        async downloadFountain() {
+    
 
-            await this.storageManager.updateBackupTimestamp(this.activeScriptId);
-
-            let fountain = [];
-
-            const title = this.meta.title || "Untitled";
-
-            const author = this.meta.author || "Unknown";
-
-            fountain.push(`Title: ${title}\nAuthor: ${author}\n`);
+                    if (dzType === constants.ELEMENT_TYPES.CHARACTER) {
 
     
 
-            const blocks = this.editor.querySelectorAll('.script-line');
-
-            for (let i = 0; i < blocks.length; i++) {
-
-                const block = blocks[i];
-
-                const text = block.textContent;
-
-                const type = this.editorHandler.getBlockType(block);
-
-                let prevType = null;
-
-                if (i > 0) {
-
-                    prevType = this.editorHandler.getBlockType(blocks[i-1]);
-
-                }
+                        const clean = this.editorHandler.getCleanCharacterName(text);
 
     
 
-                if (type === constants.ELEMENT_TYPES.SLUG) {
+                        if (clean.length > 1) this.characters.add(clean);
 
-                    if (i > 0) fountain.push('');
-
-                    fountain.push(text.toUpperCase());
-
-                } else if (type === constants.ELEMENT_TYPES.ACTION) {
-
-                    if (prevType && ![constants.ELEMENT_TYPES.ACTION, constants.ELEMENT_TYPES.SLUG].includes(prevType)) {
-
-                         fountain.push('');
+    
 
                     }
 
-                    fountain.push(text);
+    
 
-                } else if (type === constants.ELEMENT_TYPES.CHARACTER) {
+                });
 
-                     if (prevType && ![constants.ELEMENT_TYPES.ACTION, constants.ELEMENT_TYPES.SLUG].includes(prevType)) {
+    
 
-                         fountain.push('');
+                this.sidebarManager.updateSceneList();
 
-                    }
+    
 
-                    fountain.push(text.toUpperCase());
+                await this.save();
 
-                } else if (type === constants.ELEMENT_TYPES.DIALOGUE) {
-                    fountain.push(text);
-                } else if (type === constants.ELEMENT_TYPES.PARENTHETICAL) {
-                    let pText = text;
-                    if (!pText.startsWith('(')) pText = '(' + pText;
-                    if (!pText.endsWith(')')) pText = pText + ')';
-                    fountain.push(pText);
-                } else if (type === constants.ELEMENT_TYPES.TRANSITION) {
+    
 
-                    fountain.push('');
+                this.saveState(true);
 
-                    fountain.push(`> ${text.toUpperCase()}`);
-
-                }
+    
 
             }
 
+        
+
     
 
-            const fountainText = fountain.join('\n');
+            async downloadFDX() {
+
+        
+
+    
+
+                await this.storageManager.updateBackupTimestamp(this.activeScriptId);
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                // 1. Calculate Scene Stats (Headless Pagination)
+
+        
+
+    
+
+                // We render to a hidden container to get page numbers and lengths
+
+        
+
+    
+
+                const hiddenContainer = document.createElement('div');
+
+        
+
+    
+
+                hiddenContainer.style.position = 'absolute';
+
+        
+
+    
+
+                hiddenContainer.style.visibility = 'hidden';
+
+        
+
+    
+
+                hiddenContainer.style.width = '8.5in'; // US Letter standard
+
+        
+
+    
+
+                document.body.appendChild(hiddenContainer);
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                const sceneNumberMap = {};
+
+        
+
+    
+
+                Object.keys(this.sceneMeta).forEach(id => {
+
+        
+
+    
+
+                    if (this.sceneMeta[id].number) sceneNumberMap[id] = this.sceneMeta[id].number;
+
+        
+
+    
+
+                });
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                // We assume PageRenderer is stateless enough to reuse or strictly instantiated
+
+        
+
+    
+
+                // PageRenderer uses the DOM, so it needs the container.
+
+        
+
+    
+
+                this.pageRenderer.render(Array.from(this.editor.querySelectorAll('.script-line')), hiddenContainer, {
+
+        
+
+    
+
+                    showSceneNumbers: true,
+
+        
+
+    
+
+                    sceneNumberMap: sceneNumberMap
+
+        
+
+    
+
+                });
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                // Now extract stats from the rendered pages
+
+        
+
+    
+
+                // Iterate pages -> content-wrapper -> children
+
+        
+
+    
+
+                // We need to map original Line IDs to (Page, Length)
+
+        
+
+    
+
+                // This is tricky because `render` clones nodes.
+
+        
+
+    
+
+                // But `render` puts `dataset.lineId` on clones.
+
+        
+
+    
+
+                
+
+        
+
+    
+
+                const sceneStats = {}; // { lineId: { page: 1, length: "5/8" } }
+
+        
+
+    
+
+                const pages = hiddenContainer.querySelectorAll('.page');
+
+        
+
+    
+
+                
+
+        
+
+    
+
+                // Helper to calc length in eighths (approximate based on height)
+
+        
+
+    
+
+                // We scan the DOM to find Scene Headings and measure distance to next Heading.
+
+        
+
+    
+
+                // Since we are iterating pages, we can track "Current Scene" and accumulate height.
+
+        
+
+    
+
+                
+
+        
+
+    
+
+                let currentSceneId = null;
+
+        
+
+    
+
+                let currentSceneHeight = 0;
+
+        
+
+    
+
+                let currentSceneStartPage = 1;
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                pages.forEach((page, pageIndex) => {
+
+        
+
+    
+
+                    const pageNum = pageIndex + 1;
+
+        
+
+    
+
+                    const content = page.querySelector('.content-wrapper');
+
+        
+
+    
+
+                    if (!content) return;
+
+        
+
+    
+
+                    
+
+        
+
+    
+
+                    Array.from(content.children).forEach(node => {
+
+        
+
+    
+
+                        if (node.classList.contains(constants.ELEMENT_TYPES.SLUG)) {
+
+        
+
+    
+
+                            // Finish previous scene
+
+        
+
+    
+
+                            if (currentSceneId) {
+
+        
+
+    
+
+                                 const eighths = Math.max(1, Math.round((currentSceneHeight / this.CONTENT_HEIGHT_PX) * 8));
+
+        
+
+    
+
+                                 if (!sceneStats[currentSceneId]) sceneStats[currentSceneId] = { page: currentSceneStartPage, length: `${eighths}/8` };
+
+        
+
+    
+
+                                 else {
+
+        
+
+    
+
+                                     // If already exists? shouldn't happen unless we re-encounter?
+
+        
+
+    
+
+                                     // Wait, logic: Finish previous means saving it.
+
+        
+
+    
+
+                                 }
+
+        
+
+    
+
+                            }
+
+        
+
+    
+
+                            
+
+        
+
+    
+
+                            // Start new scene
+
+        
+
+    
+
+                            currentSceneId = node.dataset.lineId;
+
+        
+
+    
+
+                            currentSceneHeight = 0;
+
+        
+
+    
+
+                            currentSceneStartPage = pageNum;
+
+        
+
+    
+
+                            
+
+        
+
+    
+
+                            // Add header height? Slug height.
+
+        
+
+    
+
+                            currentSceneHeight += node.offsetHeight;
+
+        
+
+    
+
+                        } else {
+
+        
+
+    
+
+                            if (currentSceneId) {
+
+        
+
+    
+
+                                currentSceneHeight += node.offsetHeight;
+
+        
+
+    
+
+                            }
+
+        
+
+    
+
+                        }
+
+        
+
+    
+
+                    });
+
+        
+
+    
+
+                });
+
+        
+
+    
+
+                
+
+        
+
+    
+
+                // Finish last scene
+
+        
+
+    
+
+                if (currentSceneId) {
+
+        
+
+    
+
+                     const eighths = Math.max(1, Math.round((currentSceneHeight / this.CONTENT_HEIGHT_PX) * 8));
+
+        
+
+    
+
+                     sceneStats[currentSceneId] = { page: currentSceneStartPage, length: `${eighths}/8` };
+
+        
+
+    
+
+                }
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                document.body.removeChild(hiddenContainer);
+
+        
+
+    
+
+        
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                // 2. Build SmartType Lists
+
+        
+
+    
+
+                const characters = new Set();
+
+        
+
+    
+
+                const locations = new Set(); // INT. ROOM
+
+        
+
+    
+
+                const times = new Set(); // DAY
+
+        
+
+    
+
+                const extensions = new Set(); // (V.O.)
+
+        
+
+    
+
+                
+
+        
+
+    
+
+                this.editor.querySelectorAll('.script-line').forEach(block => {
+
+        
+
+    
+
+                    const type = this.editorHandler.getBlockType(block);
+
+        
+
+    
+
+                    const text = block.textContent.trim();
+
+        
+
+    
+
+                    
+
+        
+
+    
+
+                    if (type === constants.ELEMENT_TYPES.CHARACTER) {
+
+        
+
+    
+
+                        const clean = this.editorHandler.getCleanCharacterName(text);
+
+        
+
+    
+
+                        if (clean) characters.add(clean);
+
+        
+
+    
+
+                        
+
+        
+
+    
+
+                        const extMatch = text.match(/\((.*?)\)/);
+
+        
+
+    
+
+                        if (extMatch) extensions.add(extMatch[1]);
+
+        
+
+    
+
+                    } else if (type === constants.ELEMENT_TYPES.SLUG) {
+
+        
+
+    
+
+                        // Split INT. HOUSE - DAY
+
+        
+
+    
+
+                        const parts = text.split('-');
+
+        
+
+    
+
+                        if (parts.length > 0) locations.add(parts[0].trim());
+
+        
+
+    
+
+                        if (parts.length > 1) times.add(parts[parts.length - 1].trim());
+
+        
+
+    
+
+                    }
+
+        
+
+    
+
+                });
+
+        
+
+    
+
+        
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                // 3. Generate XML
+
+        
+
+    
+
+                let xml = `<?xml version="1.0" encoding="UTF-8" standalone="no" ?>\n<FinalDraft DocumentType="Script" Template="No" Version="1">\n<Content>\n`;
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                this.editor.querySelectorAll('.script-line').forEach(block => {
+
+        
+
+    
+
+                    const type = this.editorHandler.getBlockType(block);
+
+        
+
+    
+
+                    const fdxType = constants.FDX_MAP[type] || 'Action';
+
+        
+
+    
+
+                    const text = this.escapeXML(block.textContent);
+
+        
+
+    
+
+                    const id = block.dataset.lineId;
+
+        
+
+    
+
+                    
+
+        
+
+    
+
+                    let sceneProps = '';
+
+        
+
+    
+
+                    if (type === constants.ELEMENT_TYPES.SLUG) {
+
+        
+
+    
+
+                        const stats = sceneStats[id] || { page: 1, length: "1/8" };
+
+        
+
+    
+
+                        // Calculate Scene Number: Manual OR Auto?
+
+        
+
+    
+
+                        // We need the chronological index if manual is missing.
+
+        
+
+    
+
+                        // But we are iterating sequentially, so we can track it.
+
+        
+
+    
+
+                        // However, `downloadFDX` is async.
+
+        
+
+    
+
+                        // Simpler: Use the map we built earlier `sceneNumberMap`.
+
+        
+
+    
+
+                        // If not in map, we need to track auto index.
+
+        
+
+    
+
+                        // Actually, let's reuse the logic:
+
+        
+
+    
+
+                        // We need a counter that only increments if NO manual number is present? 
+
+        
+
+    
+
+                        // No, usually auto-counter increments always, but visual is overridden.
+
+        
+
+    
+
+                        // Wait, user said: "Scene 15 is edited by user as 15A, next scene stays 16".
+
+        
+
+    
+
+                        // This implies the underlying index stays 15, next is 16.
+
+        
+
+    
+
+                        // So if we have manual number, we use it. If not, we use the auto index.
+
+        
+
+    
+
+                    }
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                    // We need a loop counter for the auto-number
+
+        
+
+    
+
+                    // Let's restart iteration or track it
+
+        
+
+    
+
+                });
+
+        
+
+    
+
+                
+
+        
+
+    
+
+                // Re-loop for XML generation with proper counters
+
+        
+
+    
+
+                let autoSceneIndex = 1;
+
+        
+
+    
+
+                
+
+        
+
+    
+
+                this.editor.querySelectorAll('.script-line').forEach(block => {
+
+        
+
+    
+
+                    const type = this.editorHandler.getBlockType(block);
+
+        
+
+    
+
+                    const fdxType = constants.FDX_MAP[type] || 'Action';
+
+        
+
+    
+
+                    const text = this.escapeXML(block.textContent);
+
+        
+
+    
+
+                    const id = block.dataset.lineId;
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                    let openTag = `<Paragraph Type="${fdxType}">`;
+
+        
+
+    
+
+                    
+
+        
+
+    
+
+                    if (type === constants.ELEMENT_TYPES.SLUG) {
+
+        
+
+    
+
+                        const stats = sceneStats[id] || { page: 1, length: "1/8" };
+
+        
+
+    
+
+                        const num = sceneNumberMap[id] || autoSceneIndex;
+
+        
+
+    
+
+                        
+
+        
+
+    
+
+                        // Add SceneProperties
+
+        
+
+    
+
+                        openTag = `<Paragraph Type="${fdxType}" Number="${num}">`;
+
+        
+
+    
+
+                        openTag += `<SceneProperties Length="${stats.length}" Page="${stats.page}" Title="">\n</SceneProperties>`;
+
+        
+
+    
+
+                        
+
+        
+
+    
+
+                        autoSceneIndex++;
+
+        
+
+    
+
+                    }
+
+        
+
+    
+
+                    
+
+        
+
+    
+
+                    xml += `${openTag}\n<Text>${text}</Text>\n</Paragraph>\n`;
+
+        
+
+    
+
+                });
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                xml += `</Content>\n`;
+
+        
+
+    
+
+                
+
+        
+
+    
+
+                // 4. Metadata Blocks
+
+        
+
+    
+
+                // Title Page
+
+        
+
+    
+
+                xml += `<TitlePage>\n<Content>\n`;
+
+        
+
+    
+
+                xml += `<Paragraph Alignment="Center"><Text>Title: ${this.escapeXML(this.meta.title)}</Text></Paragraph>\n`;
+
+        
+
+    
+
+                xml += `<Paragraph Alignment="Center"><Text>Author: ${this.escapeXML(this.meta.author)}</Text></Paragraph>\n`;
+
+        
+
+    
+
+                xml += `<Paragraph Alignment="Center"><Text>Contact: ${this.escapeXML(this.meta.contact)}</Text></Paragraph>\n`;
+
+        
+
+    
+
+                xml += `</Content>\n</TitlePage>\n`;
+
+        
+
+    
+
+                
+
+        
+
+    
+
+                // SmartType
+
+        
+
+    
+
+                xml += `<SmartType>\n`;
+
+        
+
+    
+
+                const addList = (name, set) => {
+
+        
+
+    
+
+                    xml += `<${name}>\n`;
+
+        
+
+    
+
+                    set.forEach(item => xml += `<${name.slice(0, -1)}>${this.escapeXML(item)}</${name.slice(0, -1)}>\n`);
+
+        
+
+    
+
+                    xml += `</${name}>\n`;
+
+        
+
+    
+
+                };
+
+        
+
+    
+
+                addList('Characters', characters);
+
+        
+
+    
+
+                addList('Locations', locations); // Approx map to FDX Locations
+
+        
+
+    
+
+                addList('Times', times);
+
+        
+
+    
+
+                addList('Extensions', extensions);
+
+        
+
+    
+
+                xml += `</SmartType>\n`;
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                xml += `</FinalDraft>`;
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                const blob = new Blob([xml], {type: 'text/xml'});
+
+        
+
+    
+
+                const a = document.createElement('a');
+
+        
+
+    
+
+                a.href = URL.createObjectURL(blob);
+
+        
+
+    
+
+                a.download = `${this.meta.title || 'script'}.fdx`;
+
+        
+
+    
+
+                a.click();
+
+        
+
+    
+
+            }
+
+        
+
+    async downloadFountain() {
+        try {
+            await this.storageManager.updateBackupTimestamp(this.activeScriptId);
+            
+            const data = this.exportToJSONStructure();
+            if (!this.fountainParser) {
+                console.error("FountainParser not initialized");
+                alert("Internal Error: Fountain Parser not loaded.");
+                return;
+            }
+            const fountainText = this.fountainParser.generate(data);
 
             const blob = new Blob([fountainText], {type: 'text/plain;charset=utf-8'});
-
             const a = document.createElement('a');
-
             a.href = URL.createObjectURL(blob);
-
             a.download = `${this.meta.title || 'script'}.fountain`;
-
             a.click();
-
+        } catch (e) {
+            console.error("Download Fountain Error:", e);
+            alert("Failed to generate Fountain file.");
         }
+    }
 
-    
+    async downloadText() {
+        await this.storageManager.updateBackupTimestamp(this.activeScriptId);
+        
+        // Text export is essentially Fountain but with .txt extension
+        const data = this.exportToJSONStructure();
+        const textData = this.fountainParser.generate(data);
 
-        async downloadText() {
+        const blob = new Blob([textData], {type: 'text/plain;charset=utf-8'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${this.meta.title || 'script'}.txt`;
+        a.click();
+    }
 
-            await this.storageManager.updateBackupTimestamp(this.activeScriptId);
-
-            
-
-            let txtfile = [];
-
-    
-
-            const blocks = this.editor.querySelectorAll('.script-line');
-
-            for (let i = 0; i < blocks.length; i++) {
-
-                const block = blocks[i];
-
-                const text = block.textContent;
-
-                const type = this.editorHandler.getBlockType(block);
-
-                let prevType = null;
-
-                if (i > 0) {
-
-                    prevType = this.editorHandler.getBlockType(blocks[i-1]);
-
-                }
-
-    
-
-                if (type === constants.ELEMENT_TYPES.SLUG) {
-
-                    if (i > 0) txtfile.push('');
-
-                    txtfile.push(text.toUpperCase());
-
-                } else if (type === constants.ELEMENT_TYPES.ACTION) {
-
-                    if (prevType && ![constants.ELEMENT_TYPES.ACTION, constants.ELEMENT_TYPES.SLUG].includes(prevType)) {
-
-                         txtfile.push('');
-
-                    }
-
-                    txtfile.push(text);
-
-                } else if (type === constants.ELEMENT_TYPES.CHARACTER) {
-
-                     if (prevType && ![constants.ELEMENT_TYPES.ACTION, constants.ELEMENT_TYPES.SLUG].includes(prevType)) {
-
-                         txtfile.push('');
-
-                    }
-
-                    txtfile.push(text.toUpperCase());
-
-                } else if (type === constants.ELEMENT_TYPES.DIALOGUE) {
-
-                    txtfile.push(text);
-
-                } else if (type === constants.ELEMENT_TYPES.PARENTHETICAL) {
-
-                    txtfile.push(text);
-
-                } else if (type === constants.ELEMENT_TYPES.TRANSITION) {
-
-                    txtfile.push('');
-
-                    txtfile.push(`> ${text.toUpperCase()}`);
-
-                }
-
-            }
-
-    
-
-            const txtfajlstring = txtfile.join('\n');
-
-            const blob = new Blob([txtfajlstring], {type: 'text/plain;charset=utf-8'});
-
-            const a = document.createElement('a');
-
-            a.href = URL.createObjectURL(blob);
-
-            a.download = `${this.meta.title || 'script'}.txt`;
-
-            a.click();
-
-        }
-
-    
-
-        async populateOpenMenu(container) {
+    async populateOpenMenu(container) {
 
             if (!container) {
 
