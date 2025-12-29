@@ -364,7 +364,10 @@ export class SFSS {
         document.getElementById('download-fountain-btn').addEventListener('click', () => this.downloadFountain());
         document.getElementById('download-text-btn').addEventListener('click', () => this.downloadText());
         document.getElementById('print-btn').addEventListener('click', () => this.printScript());
-        document.getElementById('reports-menu-btn').addEventListener('click', () => this.reportsManager.open());
+        document.getElementById('reports-menu-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            this.reportsManager.open();
+        });
         document.getElementById('settings-btn').addEventListener('click', (e) => { e.preventDefault(); this.openSettings(); });
         document.getElementById('undo-btn').addEventListener('click', () => this.undo());
         document.getElementById('redo-btn').addEventListener('click', () => this.redo());
@@ -497,6 +500,10 @@ export class SFSS {
                 btn.classList.add('active');
                 const target = btn.dataset.tab;
                 document.getElementById(target).classList.remove('hidden');
+
+                if (target === 'help-changelog') {
+                    this.loadChangelog();
+                }
             });
         });
 
@@ -525,6 +532,30 @@ export class SFSS {
         window.addEventListener('popstate', (e) => {
             this.handleBackOrEscape(true);
         });
+    }
+
+    async loadChangelog() {
+        const container = document.getElementById('help-changelog');
+        if (container.dataset.loaded === 'true') return;
+
+        try {
+            const response = await fetch('changelog.html');
+            if (response.ok) {
+                const html = await response.text();
+                const versionHeader = container.querySelector('h3');
+                
+                container.innerHTML = '';
+                if (versionHeader) container.appendChild(versionHeader);
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.innerHTML = html;
+                container.appendChild(contentDiv);
+                
+                container.dataset.loaded = 'true';
+            }
+        } catch (e) {
+            console.error("Failed to load changelog", e);
+        }
     }
 
     handleBackOrEscape(isPopState = false) {
@@ -1173,8 +1204,10 @@ export class SFSS {
     }
 
     closeSettings() {
-        document.getElementById('settings-modal').classList.toggle('hidden');
+        document.getElementById('settings-modal').classList.add('hidden');
     }
+
+
     
     async saveSettingsFromModal() {
         localStorage.setItem('sfss_keymap', JSON.stringify(this.keymap));
@@ -2475,95 +2508,23 @@ export class SFSS {
 
     
 
-            async importFDX(xmlText) {
+                async importFDX(xmlText) {
 
     
 
-                const parser = new DOMParser();
+                    const parser = new DOMParser();
 
     
 
-                const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+                    const xmlDoc = parser.parseFromString(xmlText, "text/xml");
 
     
 
-                const mainContent = xmlDoc.querySelector('FinalDraft > Content');
+                    const mainContent = xmlDoc.querySelector('FinalDraft > Content');
 
     
 
-                if (!mainContent) { alert("No script content found in FDX."); return; }
-
-    
-
-                
-
-    
-
-                const paragraphs = mainContent.querySelectorAll("Paragraph");
-
-    
-
-                this.editor.innerHTML = '';
-
-    
-
-                this.characters.clear();
-
-    
-
-                this.sceneMeta = {}; // Reset scene meta
-
-    
-
-                
-
-    
-
-                this.meta.title = xmlDoc.querySelector('Title') ? xmlDoc.querySelector('Title').textContent : ''; 
-
-    
-
-                // Try to get Author/Contact from TitlePage if possible (basic check)
-
-    
-
-                // Note: FDX TitlePage parsing is complex, skipping for now as per simplicity request, 
-
-    
-
-                // relying on simple Title tag if present or just defaults.
-
-    
-
-        
-
-    
-
-                this.applySettings();
-
-    
-
-                
-
-    
-
-                paragraphs.forEach(p => {
-
-    
-
-                    const type = p.getAttribute("Type");
-
-    
-
-                    const number = p.getAttribute("Number"); // Read Scene Number
-
-    
-
-                    let text = Array.from(p.getElementsByTagName("Text")).map(t => t.textContent).join('');
-
-    
-
-                    if (!text && p.textContent) text = p.textContent;
+                    if (!mainContent) { alert("No script content found in FDX."); return; }
 
     
 
@@ -2571,11 +2532,19 @@ export class SFSS {
 
     
 
-                    const dzType = constants.FDX_REVERSE_MAP[type] || constants.ELEMENT_TYPES.ACTION;
+                    const paragraphs = mainContent.querySelectorAll("Paragraph");
 
     
 
-                    const block = this.editorHandler.createBlock(dzType, text);
+                    this.editor.innerHTML = '';
+
+    
+
+                    this.characters.clear();
+
+    
+
+                    this.sceneMeta = {}; // Reset scene meta
 
     
 
@@ -2583,63 +2552,367 @@ export class SFSS {
 
     
 
-                    if (dzType === constants.ELEMENT_TYPES.SLUG && number) {
+                    this.meta.title = xmlDoc.querySelector('Title') ? xmlDoc.querySelector('Title').textContent : ''; 
 
     
 
-                        // Save Scene Number
+                    // Try to get Author/Contact from TitlePage if possible (basic check)
 
     
 
-                        if (!this.sceneMeta[block.dataset.lineId]) this.sceneMeta[block.dataset.lineId] = {};
+                    // Note: FDX TitlePage parsing is complex, skipping for now as per simplicity request, 
 
     
 
-                        this.sceneMeta[block.dataset.lineId].number = number;
+                    // relying on simple Title tag if present or just defaults.
 
     
 
-                    }
+            
 
     
 
-        
+                    this.applySettings();
 
     
 
-                    if (dzType === constants.ELEMENT_TYPES.CHARACTER) {
+                    
 
     
 
-                        const clean = this.editorHandler.getCleanCharacterName(text);
+                    paragraphs.forEach(p => {
 
     
 
-                        if (clean.length > 1) this.characters.add(clean);
+                        const type = p.getAttribute("Type");
 
     
 
-                    }
+                        const number = p.getAttribute("Number"); // Read Scene Number
 
     
 
-                });
+                        let text = Array.from(p.getElementsByTagName("Text")).map(t => t.textContent).join('');
 
     
 
-                this.sidebarManager.updateSceneList();
+                        if (!text && p.textContent) text = p.textContent;
 
     
 
-                await this.save();
+                        
 
     
 
-                this.saveState(true);
+                        const dzType = constants.FDX_REVERSE_MAP[type] || constants.ELEMENT_TYPES.ACTION;
 
     
 
-            }
+                        const block = this.editorHandler.createBlock(dzType, text);
+
+    
+
+                        
+
+    
+
+                                                                        if (dzType === constants.ELEMENT_TYPES.SLUG) {
+
+    
+
+                        
+
+    
+
+                                                    
+
+    
+
+                        
+
+    
+
+                                                                            // Check Scene Properties
+
+    
+
+                        
+
+    
+
+                                                    
+
+    
+
+                        
+
+    
+
+                                                                            const props = p.querySelector('SceneProperties');
+
+    
+
+                        
+
+    
+
+                                                    
+
+    
+
+                        
+
+    
+
+                                                                            if (props || number) {
+
+    
+
+                        
+
+    
+
+                                                    
+
+    
+
+                        
+
+    
+
+                                                                                 if (!this.sceneMeta[block.dataset.lineId]) this.sceneMeta[block.dataset.lineId] = {};
+
+    
+
+                        
+
+    
+
+                                                    
+
+    
+
+                        
+
+    
+
+                                                                                 if (number) this.sceneMeta[block.dataset.lineId].number = number;
+
+    
+
+                        
+
+    
+
+                                                    
+
+    
+
+                        
+
+    
+
+                                                                                 if (props) {
+
+    
+
+                        
+
+    
+
+                                                    
+
+    
+
+                        
+
+    
+
+                                                                                     const summaryEl = props.querySelector('Summary');
+
+    
+
+                        
+
+    
+
+                                                                                     let summary = '';
+
+    
+
+                        
+
+    
+
+                                                                                     if (summaryEl) {
+
+    
+
+                        
+
+    
+
+                                                                                         // Extract text from all Paragraphs within Summary
+
+    
+
+                        
+
+    
+
+                                                                                         summary = Array.from(summaryEl.querySelectorAll('Paragraph')).map(para => {
+
+    
+
+                        
+
+    
+
+                                                                                             return Array.from(para.querySelectorAll('Text')).map(t => t.textContent).join('');
+
+    
+
+                        
+
+    
+
+                                                                                         }).join('\n');
+
+    
+
+                        
+
+    
+
+                                                                                     }
+
+    
+
+                        
+
+    
+
+                                                                                     
+
+    
+
+                        
+
+    
+
+                                                                                     const title = props.getAttribute('Title');
+
+    
+
+                        
+
+    
+
+                                                    
+
+    
+
+                        
+
+    
+
+                                                                                     if (summary) this.sceneMeta[block.dataset.lineId].description = summary;
+
+    
+
+                        
+
+    
+
+                                                                                     else if (title) this.sceneMeta[block.dataset.lineId].description = title;
+
+    
+
+                        
+
+    
+
+                                                    
+
+    
+
+                        
+
+    
+
+                                                                                 }
+
+    
+
+                        
+
+    
+
+                                                    
+
+    
+
+                        
+
+    
+
+                                                                            }
+
+    
+
+                        
+
+    
+
+                                                    
+
+    
+
+                        
+
+    
+
+                                                                        }
+
+    
+
+            
+
+    
+
+                        if (dzType === constants.ELEMENT_TYPES.CHARACTER) {
+
+    
+
+                            const clean = this.editorHandler.getCleanCharacterName(text);
+
+    
+
+                            if (clean.length > 1) this.characters.add(clean);
+
+    
+
+                        }
+
+    
+
+                    });
+
+    
+
+                    this.sidebarManager.updateSceneList();
+
+    
+
+                    await this.save();
+
+    
+
+                    this.saveState(true);
+
+    
+
+                }
 
         
 
@@ -3515,85 +3788,727 @@ export class SFSS {
 
     
 
-                    let openTag = `<Paragraph Type="${fdxType}">`;
+                                let openTag = `<Paragraph Type="${fdxType}">`;
 
         
 
     
 
-                    
+        
 
         
 
     
 
-                    if (type === constants.ELEMENT_TYPES.SLUG) {
+                                
 
         
 
     
 
-                        const stats = sceneStats[id] || { page: 1, length: "1/8" };
+        
 
         
 
     
 
-                        const num = sceneNumberMap[id] || autoSceneIndex;
+                                if (type === constants.ELEMENT_TYPES.SLUG) {
 
         
 
     
 
-                        
+        
 
         
 
     
 
-                        // Add SceneProperties
+                                    const stats = sceneStats[id] || { page: 1, length: "1/8" };
 
         
 
     
 
-                        openTag = `<Paragraph Type="${fdxType}" Number="${num}">`;
+        
 
         
 
     
 
-                        openTag += `<SceneProperties Length="${stats.length}" Page="${stats.page}" Title="">\n</SceneProperties>`;
+                                    const num = sceneNumberMap[id] || autoSceneIndex;
 
         
 
     
 
-                        
+        
 
         
 
     
 
-                        autoSceneIndex++;
+                                    const metaDesc = this.sceneMeta[id] && this.sceneMeta[id].description ? this.escapeXML(this.sceneMeta[id].description) : '';
 
         
 
     
 
-                    }
+        
 
         
 
     
 
-                    
+                                    
 
         
 
     
 
-                    xml += `${openTag}\n<Text>${text}</Text>\n</Paragraph>\n`;
+        
+
+        
+
+    
+
+                                                                                                            // Add SceneProperties
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                            
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                                            openTag = `<Paragraph Type="${fdxType}" Number="${num}">`;
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                            
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                                            openTag += `<SceneProperties Length="${stats.length}" Page="${stats.page}" Title="">\n`;
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                                            
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                                            if (metaDesc) {
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                                                openTag += `<Summary>\n`;
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                                                const descLines = this.sceneMeta[id].description.split('\n');
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                                                descLines.forEach(line => {
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                                                    openTag += `<Paragraph Alignment="Left" FirstIndent="0.00" Leading="Regular" LeftIndent="0.00" RightIndent="1.39" SpaceBefore="0" Spacing="1" StartsNewPage="No">\n`;
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                                                    openTag += `<Text AdornmentStyle="0" Background="#FFFFFFFFFFFF" Color="#000000000000" Font="Courier Final Draft" RevisionID="0" Size="12" Style="">${this.escapeXML(line)}</Text>\n`;
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                                                    openTag += `</Paragraph>\n`;
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                                                });
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                                                openTag += `</Summary>\n`;
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                                            }
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                                            
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                                            openTag += `</SceneProperties>`;
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                            
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                                            
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                            
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                    
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                                                                                            autoSceneIndex++;
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                }
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                
+
+        
+
+    
+
+        
+
+        
+
+    
+
+                                xml += `${openTag}\n<Text>${text}</Text>\n</Paragraph>\n`;
 
         
 

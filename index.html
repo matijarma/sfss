@@ -41,8 +41,8 @@
             } catch (e) { console.log('Theme detection failed', e); }
 
             // Your Version Logic
-            //const staticversion = "" + "28-12-25_" + "public-" + "1252";
-            const staticversion = Math.round(Math.random()*1000000);
+            const staticversion = "" + "29-12-25_" + "public-" + "1301";
+            //const staticversion = Math.round(Math.random()*1000000);
             const queryString = self.location.search;
             const params = new URLSearchParams(queryString);
             window.cacheverzija = params.get('v') ? params.get('v') : staticversion; 
@@ -524,7 +524,7 @@
                 <button class="tab-btn active" data-tab="help-about">About</button>
                 <button class="tab-btn" data-tab="help-shortcuts">Shortcuts</button>
                 <button class="tab-btn" data-tab="help-changelog">Changelog</button>
-                <button class="tab-btn" data-tab="help-licenses">Licenses</button>
+                <button class="tab-btn" data-tab="help-licenses">Credits and licenses</button>
             </div>
 
             <!-- Tab Content: About -->
@@ -578,6 +578,14 @@
 
             <!-- Tab Content: Licenses -->
             <div id="help-licenses" class="tab-content hidden">
+                <h3>Credits</h3>
+                <p>Created by <strong>Matija Radeljak</strong>, film producer and IT enthusiast working on empowering and decentralizing the film industry and its producers and artists.</p>
+                <p>Special thanks to:</p>
+                <ul>
+                    <li>The <a href="https://fountain.io" target="_blank">Fountain</a> syntax project for the open standard.</li>
+                    <li><a href="https://www.finaldraft.com" target="_blank">Final Draft</a> for setting the industry standard.</li>
+                </ul>
+
                 <h3>SFSS License</h3>
                 <p>This application is released under the MIT License. You are free to use, modify, and distribute it for personal or commercial use.</p>
                 

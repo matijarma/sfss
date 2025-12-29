@@ -56,7 +56,14 @@ body {
     overflow: hidden;
     transition: background 0.3s, color 0.3s;
 }
-
+a {
+    color: var(--accent);
+    text-decoration: underline;
+    cursor: pointer;
+}
+a:hover{
+    text-decoration: none;
+}
 .hidden {
     display: none !important;
 }

@@ -458,3 +458,4 @@ The "Source of Truth" relies on respecting the specific parsing priority of Foun
 | **Boneyard** | /\* Hidden \*/ | (None) or \<ScriptNote\> | Often excluded or converted to Note. |
 
 This specification provides the necessary architectural blueprint to implement the open and save functions for a modern screenwriting application.
+
