@@ -65,34 +65,74 @@ export class PageRenderer {
         };
 
         let i = 0;
+        let sceneIndex = 1; // Chronological counter
+
         while (i < sourceNodes.length) {
-            // 1. Identify the logical block (e.g., Character + Parenthetical + Dialogue, or Scene Heading + Action)
+            // 1. Identify the logical block
             let { blockNodes, type, nextIndex } = this.getNextLogicalBlock(sourceNodes, i);
             
+            // Handle Scene Numbers logic
+            if (type === constants.ELEMENT_TYPES.SLUG && options.showSceneNumbers) {
+                // Determine number to show: Manual (from map) or Auto (sceneIndex)
+                const slugNode = blockNodes[0];
+                const id = slugNode.dataset.lineId;
+                let displayNum = sceneIndex;
+                
+                if (options.sceneNumberMap && options.sceneNumberMap[id]) {
+                    displayNum = options.sceneNumberMap[id];
+                }
+                
+                // We need to visually attach this number. 
+                // The CSS relies on .script-line::before or similar? 
+                // Or we can inject a span.
+                // SFSS usually uses CSS counters or ::before. 
+                // To support manual numbers, we should probably set a data attribute on the node clone.
+                blockNodes[0].dataset.sceneNumber = displayNum;
+                // And ensure CSS uses attr(data-scene-number) if available, or we inject a span.
+                // Let's modify the node content slightly for the print view or rely on CSS.
+                // Best approach: Add a specific span if not present.
+                // But `blockNodes` are clones? No, `blockNodes` are references to source. 
+                // We clone them in `appendBlock`. We should modify the clone there?
+                // `appendBlock` takes nodes. We can modify them before appending.
+                
+                sceneIndex++;
+            }
+
             // 2. Measure the block
-            // We need to clone to measure because we might modify it (split)
             let blockHeight = this.measureBlockHeight(blockNodes, contentWrapper);
             let blockLines = Math.ceil(blockHeight / this.lineHeightPx);
+            
+            // ... (rest of logic)
 
             // 3. Check fit
             let linesRemaining = this.maxLinesPerPage - currentLines;
+            
+            const extraAttrs = {};
+            if (type === constants.ELEMENT_TYPES.SLUG && options.showSceneNumbers) {
+                // Determine number to show: Manual (from map) or Auto (sceneIndex)
+                const slugNode = blockNodes[0];
+                const id = slugNode.dataset.lineId;
+                let displayNum = sceneIndex;
+                if (options.sceneNumberMap && options.sceneNumberMap[id]) {
+                    displayNum = options.sceneNumberMap[id];
+                }
+                extraAttrs.sceneNumber = displayNum;
+                sceneIndex++;
+            }
 
             if (blockLines <= linesRemaining) {
                 // IT FITS
-                // Special check: Scene Heading cannot be the last line of the page.
-                // It needs at least 1 line of context after it.
                 if (type === constants.ELEMENT_TYPES.SLUG) {
                     if (linesRemaining - blockLines < 1) {
-                         // Not enough space for context after slug, push to next page
                          createNewPage();
-                         this.appendBlock(contentWrapper, blockNodes);
+                         this.appendBlock(contentWrapper, blockNodes, extraAttrs);
                          currentLines += blockLines;
                     } else {
-                        this.appendBlock(contentWrapper, blockNodes);
+                        this.appendBlock(contentWrapper, blockNodes, extraAttrs);
                         currentLines += blockLines;
                     }
                 } else {
-                    this.appendBlock(contentWrapper, blockNodes);
+                    this.appendBlock(contentWrapper, blockNodes, extraAttrs);
                     currentLines += blockLines;
                 }
                 i = nextIndex;
@@ -103,10 +143,8 @@ export class PageRenderer {
             
             // Case A: Scene Heading
             if (type === constants.ELEMENT_TYPES.SLUG) {
-                // Never split a slug, push to next page
                 createNewPage();
-                // Check if it fits on new page (it should, unless > 54 lines which is impossible)
-                this.appendBlock(contentWrapper, blockNodes);
+                this.appendBlock(contentWrapper, blockNodes, extraAttrs);
                 currentLines += blockLines;
                 i = nextIndex;
                 continue;
@@ -292,8 +330,24 @@ export class PageRenderer {
         return { blockNodes, type, nextIndex };
     }
 
-    appendBlock(container, nodes) {
-        nodes.forEach(node => container.appendChild(node.cloneNode(true)));
+    appendBlock(container, nodes, extraAttrs = {}) {
+        nodes.forEach(node => {
+            const clone = node.cloneNode(true);
+            if (extraAttrs.sceneNumber && this.getType(node) === constants.ELEMENT_TYPES.SLUG) {
+                clone.setAttribute('data-scene-number-display', extraAttrs.sceneNumber);
+                // Create the visual element for the number
+                const numSpan = document.createElement('span');
+                numSpan.className = 'scene-number-left';
+                numSpan.textContent = `#${extraAttrs.sceneNumber}`;
+                clone.prepend(numSpan);
+                
+                const numSpanRight = document.createElement('span');
+                numSpanRight.className = 'scene-number-right';
+                numSpanRight.textContent = `#${extraAttrs.sceneNumber}`;
+                clone.appendChild(numSpanRight);
+            }
+            container.appendChild(clone);
+        });
     }
 
     measureBlockHeight(nodes, container) {
