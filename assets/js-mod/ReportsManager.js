@@ -165,13 +165,31 @@ export class ReportsManager {
         return string.replace(/[.*+?^${}()|[\\]/g, '\\$&');
     }
 
+    _getSourceBlocks() {
+        if (this.app.treatmentManager.isActive && this.app.scriptData?.blocks) {
+            // If in treatment mode, create DOM nodes in memory from scriptData
+            const fragment = document.createDocumentFragment();
+            this.app.scriptData.blocks.forEach(blockData => {
+                const div = document.createElement('div');
+                div.className = `script-line ${blockData.type}`;
+                div.dataset.lineId = blockData.id;
+                div.textContent = blockData.text;
+                fragment.appendChild(div);
+            });
+            return Array.from(fragment.children);
+        } else {
+            // Otherwise, use the live editor DOM
+            return Array.from(this.app.editor.querySelectorAll('.script-line'));
+        }
+    }
+
     getScenesWithGeometrics() {
         const renderer = new PageRenderer();
         const dummyContainer = document.createElement('div');
         Object.assign(dummyContainer.style, { position: 'absolute', left: '-9999px', width: '8.5in' });
         document.body.appendChild(dummyContainer);
         
-        const sourceBlocks = Array.from(this.app.editor.querySelectorAll('.script-line'));
+        const sourceBlocks = this._getSourceBlocks();
         renderer.render(sourceBlocks, dummyContainer, { showSceneNumbers: true });
         
         const totalPages = dummyContainer.querySelectorAll('.page').length;
@@ -220,7 +238,7 @@ export class ReportsManager {
             characters: {} 
         };
 
-        const sourceBlocks = Array.from(this.app.editor.querySelectorAll('.script-line'));
+        const sourceBlocks = this._getSourceBlocks();
         
         const allChars = Array.from(this.app.characters).filter(c => c.length > 0);
         const charRegex = allChars.length > 0 
@@ -351,7 +369,7 @@ export class ReportsManager {
             monologues: []
         };
 
-        const sourceBlocks = Array.from(this.app.editor.querySelectorAll('.script-line'));
+        const sourceBlocks = this._getSourceBlocks();
         let currentScene = null;
         let lastSpeaker = null;
         let globalSceneIndex = 0;

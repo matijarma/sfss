@@ -41,8 +41,9 @@
             } catch (e) { console.log('Theme detection failed', e); }
 
             // Your Version Logic
-            const staticversion = "" + "29-12-25_" + "public-" + "1301";
+            const staticversion = "" + "31-12-25_" + "public-" + "1303";
             //const staticversion = Math.round(Math.random()*1000000);
+
             const queryString = self.location.search;
             const params = new URLSearchParams(queryString);
             window.cacheverzija = params.get('v') ? params.get('v') : staticversion; 
@@ -112,7 +113,7 @@
 
     <header id="toolbar">
         <button id="mobile-menu-btn" class="btn-icon">
-           T <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
         </button>
         
         <h1>
@@ -153,7 +154,7 @@
 
                     <div class="nested-dropdown-group">
                         <a href="#" class="dropdown-item">
-                            <i class="fas fa-file-export mr-1 fa-fw"></i> Backup
+                            <i class="fas fa-file-export mr-1 fa-fw"></i> Backup&nbsp;
                             <i class="fas fa-caret-right ml-auto"></i>
                             <span id="backup-warning" class="hidden" style="font-size:0.7rem; color:var(--scene-color-3-light);">!</span>
                         </a>
@@ -322,7 +323,7 @@
                     
                     <div id="mobile-backup-menu-container">
                         <a href="#" id="mobile-backup-menu-toggle" class="dropdown-item">
-                            <span><i class="fas fa-file-export mr-1"></i> Backup <span id="mobile-backup-warning" class="hidden text-warning font-small">!</span></span>
+                            <span><i class="fas fa-file-export mr-1"></i> Backup <span id="mobile-backup-warning" class="hidden text-warning font-small">!</span></span>&nbsp;
                             <i class="fas fa-chevron-down menu-icon-small"></i>
                         </a>
                         <div id="mobile-backup-menu" class="hidden menu-padding-left">
@@ -443,7 +444,7 @@
     </div>
 </div>
 
-<div id="icon-picker-menu" class="floating-menu icon-picker-grid"></div>
+<div id="icon-picker-menu" class="floating-menu icon-picker-grid" style="display: none"></div>
 
 <div id="reports-modal" class="modal-overlay hidden">
     <div class="modal-window popup-max-width-lg">

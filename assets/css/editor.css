@@ -92,7 +92,7 @@
 
 .show-scene-numbers .sc-slug::before,
 .show-scene-numbers .sc-slug::after {
-    content: counter(scene);
+    content: attr(data-scene-number-display);
     position: absolute;
     font-family: 'Courier Prime', monospace;
     font-weight: normal;
@@ -118,6 +118,14 @@
     color: var(--text-main);
     font-weight: bold;
 }
+
+/* Scene Color Implementations */
+.scene-color-1, .scene-color-1 i { color: var(--scene-color-1) !important; }
+.scene-color-2, .scene-color-2 i { color: var(--scene-color-2) !important; }
+.scene-color-3, .scene-color-3 i { color: var(--scene-color-3) !important; }
+.scene-color-4, .scene-color-4 i { color: var(--scene-color-4) !important; }
+.scene-color-5, .scene-color-5 i { color: var(--scene-color-5) !important; }
+
 
 /* EDITOR ICONS */
 .editor-music-icon {

@@ -15,6 +15,7 @@ const APP_SHELL_URLS = [
   'assets/css/reports.css',
   'assets/css/editor.css',
   'assets/css/print.css',
+  'assets/css/treatment.css',
   'assets/fontawesome/css/all.css',
   'assets/googlefonts.css',
   // JS
@@ -28,6 +29,10 @@ const APP_SHELL_URLS = [
   'assets/js-mod/ScrollbarManager.js',
   'assets/js-mod/StorageManager.js',
   'assets/js-mod/ReportsManager.js',
+  'assets/js-mod/TreatmentRenderer.js',
+  'assets/js-mod/IOManager.js',
+  'assets/js-mod/SettingsManager.js',
+  'assets/js-mod/TreatmentManager.js',
   // Images/Icons
   'assets/images/icon-64.png',
   'assets/images/icon-512.png',

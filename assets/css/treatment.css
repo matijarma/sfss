@@ -678,3 +678,10 @@ body.mode-switching #main-area {
 .treatment-header-simple-slug:focus {
     background-color: var(--scene-hover);
 }
+
+/* Scene Color Implementations for Treatment Mode */
+.treatment-scene-number.scene-color-1, .treatment-header-icon.scene-color-1 i { color: var(--scene-color-1) !important; }
+.treatment-scene-number.scene-color-2, .treatment-header-icon.scene-color-2 i { color: var(--scene-color-2) !important; }
+.treatment-scene-number.scene-color-3, .treatment-header-icon.scene-color-3 i { color: var(--scene-color-3) !important; }
+.treatment-scene-number.scene-color-4, .treatment-header-icon.scene-color-4 i { color: var(--scene-color-4) !important; }
+.treatment-scene-number.scene-color-5, .treatment-header-icon.scene-color-5 i { color: var(--scene-color-5) !important; }

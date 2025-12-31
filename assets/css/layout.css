@@ -169,7 +169,7 @@ html, body {
 #scene-list {
     flex: 1;
     overflow-y: scroll;
-    width: calc(100% + 12px);
+    width: calc(100%+12px);
 }
 
 .sidebar-stats {

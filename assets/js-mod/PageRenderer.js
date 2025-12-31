@@ -65,60 +65,30 @@ export class PageRenderer {
         };
 
         let i = 0;
-        let sceneIndex = 1; // Chronological counter
+        let sceneChronologicalIndex = 0;
 
         while (i < sourceNodes.length) {
             // 1. Identify the logical block
             let { blockNodes, type, nextIndex } = this.getNextLogicalBlock(sourceNodes, i);
             
-            // Handle Scene Numbers logic
-            if (type === constants.ELEMENT_TYPES.SLUG && options.showSceneNumbers) {
-                // Determine number to show: Manual (from map) or Auto (sceneIndex)
-                const slugNode = blockNodes[0];
-                const id = slugNode.dataset.lineId;
-                let displayNum = sceneIndex;
-                
-                if (options.sceneNumberMap && options.sceneNumberMap[id]) {
-                    displayNum = options.sceneNumberMap[id];
-                }
-                
-                // We need to visually attach this number. 
-                // The CSS relies on .script-line::before or similar? 
-                // Or we can inject a span.
-                // SFSS usually uses CSS counters or ::before. 
-                // To support manual numbers, we should probably set a data attribute on the node clone.
-                blockNodes[0].dataset.sceneNumber = displayNum;
-                // And ensure CSS uses attr(data-scene-number) if available, or we inject a span.
-                // Let's modify the node content slightly for the print view or rely on CSS.
-                // Best approach: Add a specific span if not present.
-                // But `blockNodes` are clones? No, `blockNodes` are references to source. 
-                // We clone them in `appendBlock`. We should modify the clone there?
-                // `appendBlock` takes nodes. We can modify them before appending.
-                
-                sceneIndex++;
-            }
-
             // 2. Measure the block
             let blockHeight = this.measureBlockHeight(blockNodes, contentWrapper);
             let blockLines = Math.ceil(blockHeight / this.lineHeightPx);
             
-            // ... (rest of logic)
-
-            // 3. Check fit
-            let linesRemaining = this.maxLinesPerPage - currentLines;
-            
+            // 3. Prepare extra attributes (like scene numbers)
             const extraAttrs = {};
-            if (type === constants.ELEMENT_TYPES.SLUG && options.showSceneNumbers) {
-                // Determine number to show: Manual (from map) or Auto (sceneIndex)
-                const slugNode = blockNodes[0];
-                const id = slugNode.dataset.lineId;
-                let displayNum = sceneIndex;
-                if (options.sceneNumberMap && options.sceneNumberMap[id]) {
-                    displayNum = options.sceneNumberMap[id];
+            if (type === constants.ELEMENT_TYPES.SLUG) {
+                sceneChronologicalIndex++;
+                if (options.showSceneNumbers) {
+                    const slugNode = blockNodes[0];
+                    const id = slugNode.dataset.lineId;
+                    // Use custom number from map if it exists, otherwise fall back to chronological index
+                    extraAttrs.sceneNumber = options.sceneNumberMap?.[id] || sceneChronologicalIndex;
                 }
-                extraAttrs.sceneNumber = displayNum;
-                sceneIndex++;
             }
+
+            // 4. Check fit
+            let linesRemaining = this.maxLinesPerPage - currentLines;
 
             if (blockLines <= linesRemaining) {
                 // IT FITS
@@ -335,16 +305,8 @@ export class PageRenderer {
             const clone = node.cloneNode(true);
             if (extraAttrs.sceneNumber && this.getType(node) === constants.ELEMENT_TYPES.SLUG) {
                 clone.setAttribute('data-scene-number-display', extraAttrs.sceneNumber);
-                // Create the visual element for the number
-                const numSpan = document.createElement('span');
-                numSpan.className = 'scene-number-left';
-                numSpan.textContent = `#${extraAttrs.sceneNumber}`;
-                clone.prepend(numSpan);
-                
-                const numSpanRight = document.createElement('span');
-                numSpanRight.className = 'scene-number-right';
-                numSpanRight.textContent = `#${extraAttrs.sceneNumber}`;
-                clone.appendChild(numSpanRight);
+                // Removed explicit span injection as requested.
+                // Numbering is handled by CSS ::before/::after content: attr(data-scene-number-display)
             }
             container.appendChild(clone);
         });

@@ -29,12 +29,15 @@ The application is built on a modular class-based architecture, orchestrated by 
 
 | Class | Description |
 | :--- | :--- |
-| **`SFSS.js`** | **Main Controller**. Initializes sub-modules, handles global state, event binding, and high-level orchestration (Save/Load, Mode Switching). |
+| **`SFSS.js`** | **Main Controller**. Orchestrates sub-modules and handles global state. Delegated file I/O, Settings, and Treatment logic to specific managers. |
 | **`EditorHandler.js`** | Manages the `contenteditable` editor. Handles text input, element types (Slug, Action, Dialogue), and keyboard shortcuts (Enter/Tab logic). |
 | **`PageRenderer.js`** | **Critical**. The "Formatting Engine". Calculates virtual pagination based on strict physical dimensions (US Letter/A4) to simulate print output in the browser. |
 | **`StorageManager.js`** | Handles data persistence. Manages CRUD operations for scripts in `IndexedDB` and handles Auto-Save/Backup logic. |
 | **`SidebarManager.js`** | Controls the navigation sidebar, scene list, and script metadata UI. |
 | **`TreatmentRenderer.js`**| Renders the "Treatment Mode" (Kanban-style scene cards) for planning and outlining. |
+| **`TreatmentManager.js`** | Handles business logic for Treatment Mode (adding scenes, moving cards, editing data), separating logic from the renderer. |
+| **`IOManager.js`** | Handles all File I/O operations (Import/Export JSON, FDX, Fountain) and file downloads. |
+| **`SettingsManager.js`** | Manages application settings, keymap configuration, themes, and persistence of user preferences. |
 | **`ReportsManager.js`** | Generates statistical reports (Scene counts, Character interactions) and visualizations. |
 | **`MediaPlayer.js`** | Integrates YouTube IFrame API for the soundtrack feature attached to scenes. |
 | **`CollaborationManager.js`**| Manages P2P connections, data synchronization, and media streams using Trystero. |

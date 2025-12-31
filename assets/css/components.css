@@ -489,12 +489,13 @@ span#scene-settings-popup-header-title {
 
 .scene-grid-layout {
     display: grid;
-    grid-template-columns: clamp(2vw,20px,4vw) 4% auto auto;
+    grid-template-columns: clamp(3vw,20px,4vw) 4% auto auto;
     align-items: center;
     gap: 6px;
     width: 100%;
     padding: 0.2rem 0;
 }
+
 
 .scene-grid-icon {
     min-height: 1rem;
@@ -505,12 +506,20 @@ span#scene-settings-popup-header-title {
     justify-content: center;
     gap: 0;
 }
-
+span.scene-item-icon-container {
+    margin-right: 0.5rem;
+}
+.scene-item-main > div > span.mr-1 {
+    font-size: 1.2rem;
+    font-weight: bold;
+}
 .scene-grid-number {
     text-align: right;
     opacity: 0.5;
     white-space: nowrap;
     margin: 0 0.3rem;
+    font-size: 1rem;
+    justify-content: flex-end;
 }
 
 .scene-grid-title {
@@ -533,8 +542,7 @@ span#scene-settings-popup-header-title {
     border: none;
     color: var(--text-meta);
     opacity: 0;
-    padding: 0;
-    margin-right: 0.4rem;
+    padding: 0 4px;
     cursor: pointer;
     transition: opacity 0.2s ease-in-out;
 }
@@ -557,7 +565,10 @@ button#script-meta-btn {
     opacity: 1;
     color: var(--accent);
 }
-
+.scene-grid-layout > * {
+    align-items: center;
+    display: flex;
+}
 div#music-player {
     display: flex;
     flex-direction: column;

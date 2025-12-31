@@ -120,6 +120,10 @@ export class TreatmentRenderer {
             this.app.isDirty = true;
             this.app.sidebarManager.updateSidebarHeader(); // Sync header
         });
+        titleInput.addEventListener('blur', () => {
+            this.app.saveState(true);
+            this.app.populateOpenMenu();
+        });
 
         // Author Input
         const authorInput = document.createElement('input');
@@ -161,6 +165,24 @@ export class TreatmentRenderer {
         block.dataset.sceneId = slug.id;
         block.dataset.index = index;
 
+        block.addEventListener('click', (e) => {
+            // Do not act if clicking on an editable element or a button
+            if (e.target.isContentEditable || e.target.closest('button') || e.target.closest('.treatment-add-btn') || e.target.closest('.treatment-reorder-controls')) {
+                return;
+            }
+
+            // Only update the settings modal if it is ALREADY open
+            const popup = document.getElementById('scene-settings-popup');
+            if (!popup.classList.contains('hidden')) {
+                const mockSlug = { 
+                    dataset: { lineId: slug.id }, 
+                    textContent: slug.text, 
+                    isMock: true 
+                };
+                this.app.sidebarManager.openSceneSettings(mockSlug);
+            }
+        });
+
         // --- Reorder Controls (Left Margin) ---
         const controls = document.createElement('div');
         controls.className = 'treatment-reorder-controls';
@@ -169,13 +191,13 @@ export class TreatmentRenderer {
         upBtn.className = 'reorder-btn';
         upBtn.innerHTML = '<i class="fas fa-chevron-up"></i>';
         upBtn.disabled = index === 0;
-        upBtn.onclick = (e) => { e.stopPropagation(); this.app.moveScene(index, -1); };
+        upBtn.onclick = (e) => { e.stopPropagation(); this.app.treatmentManager.moveScene(index, -1); };
         
         const downBtn = document.createElement('button');
         downBtn.className = 'reorder-btn';
         downBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
         downBtn.disabled = index === total - 1;
-        downBtn.onclick = (e) => { e.stopPropagation(); this.app.moveScene(index, 1); };
+        downBtn.onclick = (e) => { e.stopPropagation(); this.app.treatmentManager.moveScene(index, 1); };
         
         controls.appendChild(upBtn);
         controls.appendChild(downBtn);
@@ -216,7 +238,29 @@ export class TreatmentRenderer {
             // 1. Scene Number (Left, Tall)
             const numberBox = document.createElement('div');
             numberBox.className = 'treatment-scene-number';
-            numberBox.textContent = index + 1;
+            if (meta.color) numberBox.classList.add(meta.color);
+            numberBox.contentEditable = true; // Make editable
+            numberBox.textContent = meta.number || (index + 1); // Use manual number if set
+            
+            const saveNumber = () => {
+                let val = numberBox.textContent.trim();
+                if (val === '' || val === (index + 1).toString()) val = null; // Reset if empty or matches auto
+                
+                if (!this.app.sceneMeta[slug.id]) this.app.sceneMeta[slug.id] = {};
+                this.app.sceneMeta[slug.id].number = val;
+                
+                // This will save the meta and trigger the global refresh
+                this.app.sidebarManager.saveSceneMeta(slug.id);
+            };
+
+            numberBox.addEventListener('blur', saveNumber);
+            numberBox.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    numberBox.blur();
+                }
+            });
+
             header.appendChild(numberBox);
             
             // Parse Slug
@@ -323,6 +367,7 @@ export class TreatmentRenderer {
             // 3. Icon Box (Right)
             const iconBox = document.createElement('div');
             iconBox.className = 'treatment-header-icon';
+            if (meta.color) iconBox.classList.add(meta.color);
             if (meta.icon) {
                 iconBox.innerHTML = '<i class="' + meta.icon + '"></i>';
             } else {
@@ -811,7 +856,7 @@ export class TreatmentRenderer {
         const finish = (value) => {
             const val = (value || input.value).trim().toUpperCase();
             if (val) {
-                 this.app.addCharacterInTreatment(scene.slug.id, val);
+                 this.app.treatmentManager.addCharacter(scene.slug.id, val);
             }
             close();
         };
@@ -937,9 +982,9 @@ export class TreatmentRenderer {
 
         const selectOption = (opt) => {
             if (opt === constants.ELEMENT_TYPES.TRANSITION) {
-                this.app.addTransitionInTreatment(sceneId);
+                this.app.treatmentManager.addTransition(sceneId);
             } else {
-                this.app.addSceneHeadingInTreatment(sceneId);
+                this.app.treatmentManager.addSceneHeading(sceneId);
             }
             closeMenu();
         };

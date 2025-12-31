@@ -114,7 +114,12 @@ export class SidebarManager {
         let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
         
         const dragMouseDown = (e) => {
+            // If the target or its parent is contenteditable, or it's a button/input, do not start drag.
+            if (e.target.closest('[contenteditable="true"]') || e.target.closest('button, input, textarea, select')) {
+                return;
+            }
             if (document.body.classList.contains('mobile-view')) return;
+            
             e = e || window.event;
             e.preventDefault();
             pos3 = e.clientX;
@@ -250,8 +255,32 @@ export class SidebarManager {
         const isDifferentScene = popup.dataset.sceneId !== sceneId;
     
         this.highlightSidebarScene(sceneId);
-    
-        const { eighths, speakingCharacters, detailedStats } = this._getSceneStats(slug);
+        
+        // Stats Logic:
+        // If real DOM slug, calculate live.
+        // If mock slug (Treatment Mode), use cached stats or placeholders.
+        let eighths = 0;
+        let speakingCharacters = new Set();
+        let detailedStats = {
+            'sc-action': { count: 0, words: 0, chars: 0 },
+            'sc-character': { count: 0, words: 0, chars: 0 },
+            'sc-dialogue': { count: 0, words: 0, chars: 0 },
+            'sc-parenthetical': { count: 0, words: 0, chars: 0 },
+        };
+
+        if (!slug.isMock) {
+            const stats = this._getSceneStats(slug);
+            eighths = stats.eighths;
+            speakingCharacters = stats.speakingCharacters;
+            detailedStats = stats.detailedStats;
+        } else {
+            // Try to load cached eighths
+            eighths = this.app.sceneMeta[sceneId]?.cachedEighths || 0;
+            // For characters, we could parse the treatment "Characters: " block if we wanted, 
+            // but `this.app.scriptData` might be available to scan. 
+            // For now, empty stats in Treatment Mode is acceptable or simpler to just show "N/A"
+        }
+
         const pages = Math.floor(eighths / 8);
         const remainingEights = eighths % 8;
 
@@ -262,11 +291,27 @@ export class SidebarManager {
         
         // Scene Number Logic: Check meta first, else calculate
         const meta = this.app.sceneMeta[sceneId] || {};
-        const autoNumber = Array.from(this.app.editor.querySelectorAll('.sc-slug')).indexOf(slug) + 1;
-        const displaySceneNumber = meta.number || autoNumber;
+        
+        // Auto-number is tricky in Treatment Mode without full scan.
+        // If mock, we might pass index or just skip auto calculation.
+        // Let's rely on Sidebar loop to have set a 'cachedNumber' if we wanted perfect sync, 
+        // but for now, if mock, we default to "?" if no manual number.
+        let displaySceneNumber = meta.number;
+        if (!displaySceneNumber) {
+            if (!slug.isMock) {
+                displaySceneNumber = Array.from(this.app.editor.querySelectorAll('.sc-slug')).indexOf(slug) + 1;
+            } else {
+                // In treatment mode, we can find index in scriptData
+                if (this.app.scriptData && this.app.scriptData.blocks) {
+                    const slugs = this.app.scriptData.blocks.filter(b => b.type === 'sc-slug');
+                    const idx = slugs.findIndex(b => b.id === sceneId);
+                    if (idx !== -1) displaySceneNumber = idx + 1;
+                }
+            }
+        }
     
-        const iconHtml = meta.icon ? `<span class="scene-item-icon-container"><i class="${meta.icon} fa-fw"></i></span>` : '';
         const colorClass = meta.color || '';
+        const iconHtml = meta.icon ? `<span class="scene-item-icon-container ${colorClass}"><i class="${meta.icon} fa-fw"></i></span>` : '';
         header.className = 'draggable-popup-header ' + colorClass;
 
         let pageCountHtml = '';
@@ -288,8 +333,8 @@ export class SidebarManager {
         header.innerHTML = `
             <div class="scene-item-main scene-item-main-flex">
                 ${iconHtml}
-                <div class="truncate" title="${sceneTitle}">
-                    <span class="opacity-50 mr-1">#${displaySceneNumber}</span>
+                <div title="${sceneTitle}">
+                    <span class="opacity-50 mr-1 scene-number-editable ${colorClass}" contenteditable="true">${displaySceneNumber || ''}</span>
                     <span class="ml-1">${sceneTitle}</span>
                 </div>
             </div>
@@ -299,6 +344,26 @@ export class SidebarManager {
         
         // Re-bind the close button event listener as we just overwrote it
         header.querySelector('#scene-settings-close-btn').addEventListener('click', () => this.closeSceneSettings());
+
+        // Bind Scene Number Editing
+        const numSpan = header.querySelector('.scene-number-editable');
+        const saveNum = () => {
+            let val = numSpan.textContent.replace('#', '').trim();
+            if (val === '?' || val === '') val = null; 
+            
+            if (!this.app.sceneMeta[sceneId]) this.app.sceneMeta[sceneId] = {};
+            this.app.sceneMeta[sceneId].number = val;
+            
+            this.saveSceneMeta(sceneId); // Persist
+        };
+
+        numSpan.addEventListener('blur', saveNum);
+        numSpan.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                numSpan.blur();
+            }
+        });
 
         const popupBody = document.getElementById('scene-settings-popup-body');
         let statsHtml = Object.keys(detailedStats).map(type => `
@@ -313,10 +378,6 @@ export class SidebarManager {
             <div class="settings-section">
                 <div class="meta-grid">
                     <div class="col-span-full">
-                         <div style="display:flex; gap:10px; align-items:center; margin-bottom: 0.5rem;">
-                             <label class="settings-label" for="scene-number-input" style="width: auto; margin:0;"># No:</label>
-                             <input type="text" id="scene-number-input" class="settings-input" style="width: 60px; text-align:center;" value="${meta.number || ''}" placeholder="${autoNumber}">
-                         </div>
                         <label class="settings-label" for="scene-description-input"><i class="fas fa-align-left fa-fw"></i> Description:</label>
                         <textarea id="scene-description-input" class="settings-input" rows="2" placeholder="A brief summary of the scene.">${meta.description || ''}</textarea>
                     </div>
@@ -355,9 +416,9 @@ export class SidebarManager {
 
         this.renderTrackArea(sceneId);
         
-        document.getElementById('scene-description-input').addEventListener('input', () => this.saveSceneMeta(sceneId));
-        document.getElementById('scene-notes-input').addEventListener('input', () => this.saveSceneMeta(sceneId));
-        document.getElementById('scene-number-input').addEventListener('input', () => this.saveSceneMeta(sceneId));
+        document.getElementById('scene-description-input').addEventListener('blur', () => this.saveSceneMeta(sceneId));
+        document.getElementById('scene-notes-input').addEventListener('blur', () => this.saveSceneMeta(sceneId));
+        // Removed scene-number-input listener as it's gone
 
         this.renderSceneImages(sceneId);
         const addImgBtn = document.getElementById('add-image-btn');
@@ -523,12 +584,14 @@ export class SidebarManager {
         const descriptionInput = document.getElementById('scene-description-input');
         const notesInput = document.getElementById('scene-notes-input');
         const trackInput = document.getElementById('scene-track-input');
-        const numberInput = document.getElementById('scene-number-input');
+        // numberInput is gone, handled by contentEditable span logic directly updating this.app.sceneMeta before calling save
 
         const description = descriptionInput ? descriptionInput.value : this.app.sceneMeta[sceneId].description;
         const notes = notesInput ? notesInput.value : this.app.sceneMeta[sceneId].notes;
         const track = trackInput ? trackInput.value : this.app.sceneMeta[sceneId].track;
-        const number = numberInput ? numberInput.value.trim() : this.app.sceneMeta[sceneId].number;
+        
+        // Use existing number if not being set by this call context (which is fine, span logic sets it directly)
+        const number = this.app.sceneMeta[sceneId].number;
 
         // Note: this.app.sceneMeta[sceneId].images is managed separately now
         this.app.sceneMeta[sceneId] = { 
@@ -541,13 +604,13 @@ export class SidebarManager {
 
         localStorage.setItem('sfss_scene_meta', JSON.stringify(this.app.sceneMeta));
         this.app.isDirty = true;
-        if (updateList) {
-            this.updateSceneList();
-        }
+        
+        // Targeted refresh instead of full refresh
+        this.updateSceneList();
         if (this.app.treatmentModeActive) {
-            // Re-render Treatment View (now in editor)
             this.app.refreshTreatmentView();
         }
+        
         this.app.mediaPlayer.updatePlaylist();
     }
 
@@ -638,11 +701,6 @@ export class SidebarManager {
             
             // Stats logic needs to adapt or be skipped in data mode
             let pageCountHtml = '';
-            // We can't easily calc heights in data mode without DOM.
-            // Use stored stats if we implement storage, otherwise show nothing or placeholder.
-            // For now, let's skip strict page counts in Treatment Mode list update to avoid errors/0s.
-            // Or try to use last known stats if cached?
-            // SidebarManager doesn't cache stats per scene currently.
             
             if (!isDataMode) {
                 const { eighths } = this._getSceneStats(slug);
@@ -655,6 +713,9 @@ export class SidebarManager {
                             <span class="eights"><b>${remainingEights}</b>/8</span>
                         </div>
                     `;
+                    // Cache this for Treatment Mode usage
+                    if (!this.app.sceneMeta[lineId]) this.app.sceneMeta[lineId] = {};
+                    this.app.sceneMeta[lineId].cachedEighths = eighths;
                 } else {
                      pageCountHtml = `
                         <div class="scene-page-count">
@@ -663,9 +724,18 @@ export class SidebarManager {
                     `;
                 }
             } else {
-                // In Treatment Mode, we might not have accurate page counts.
-                // Just show placeholder or nothing? 
-                // Showing nothing is safer than showing "0/8".
+                // In Treatment Mode, try to use cached stats
+                const cached = this.app.sceneMeta[lineId]?.cachedEighths;
+                if (cached) {
+                    const pages = Math.floor(cached / 8);
+                    const remainingEights = cached % 8;
+                    pageCountHtml = `
+                        <div class="scene-page-count">
+                            ${pages > 0 ? `<span class="pages">${pages}</span>` : ''}
+                            <span class="eights"><b>${remainingEights}</b>/8</span>
+                        </div>
+                    `;
+                }
             }
             
             const iconHtml = meta.icon ? `<i class="${meta.icon} fa-fw"></i>` : '';
@@ -693,37 +763,32 @@ export class SidebarManager {
             if(iconContainer) iconContainer.onmouseenter = (e) => this.showIconPickerMenu(e.currentTarget, lineId);
             
             item.onclick = (e) => {
-                if (e.target.closest('.scene-config-btn')) return;
-
-                this.app.scrollToScene(lineId);
-
-                if (!document.getElementById('scene-settings-popup').classList.contains('hidden')) {
-                    // We need a DOM element for openSceneSettings...
-                    // In Treatment Mode, we have Treatment Blocks.
-                    // But openSceneSettings expects a script slug?
-                    // It uses it for stats.
-                    // If in Treatment Mode, maybe we pass the Treatment Block?
-                    // TreatmentRenderer creates blocks with dataset.sceneId.
-                    // Let's find that block.
-                    const block = this.app.editor.querySelector(`[data-scene-id="${lineId}"]`);
-                    if (block && this.app.treatmentModeActive) {
-                         // We can't really get script stats from the block easily.
-                         // Maybe disable stats in popup for now?
-                         // Or adapt openSceneSettings.
-                    } else if (!isDataMode) {
-                        this.openSceneSettings(slug);
-                    }
+                // If the config button was clicked, its own handler will take care of it.
+                if (e.target.closest('.scene-config-btn')) {
+                    return;
                 }
 
+                // Scroll to the scene in the main editor
+                this.app.scrollToScene(lineId);
+
+                // If the scene settings popup is already open, update it to this scene.
+                const popup = document.getElementById('scene-settings-popup');
+                if (!popup.classList.contains('hidden')) {
+                    const slugToOpen = isDataMode ? { dataset: { lineId }, textContent: text, isMock: true } : slug;
+                    this.openSceneSettings(slugToOpen);
+                }
+
+                // If on mobile, close the sidebar after selection.
                 if (document.body.classList.contains('mobile-view')) {
                     this.toggleMobileMenu();
                 }
             };
             
+            // Ensure the config button explicitly opens the settings.
             item.querySelector('.scene-config-btn').onclick = (e) => {
-                e.stopPropagation();
-                // Same issue as above.
-                if (!isDataMode) this.openSceneSettings(slug);
+                e.stopPropagation(); // Prevent the item's main click handler from firing.
+                const slugToOpen = isDataMode ? { dataset: { lineId }, textContent: text, isMock: true } : slug;
+                this.openSceneSettings(slugToOpen);
             };
 
             this.sceneList.appendChild(item);
@@ -815,10 +880,7 @@ export class SidebarManager {
         if (this.app.treatmentModeActive) {
             this.app.refreshTreatmentView();
         }
-        if (document.getElementById('scene-settings-popup').dataset.sceneId === sceneId) {
-            const slug = this.app.editor.querySelector(`[data-line-id="${sceneId}"]`);
-            if (slug) this.openSceneSettings(slug);
-        }
+        this.app.refreshSceneSettingsModal(sceneId);
     }
     
     saveSceneIcon(sceneId, iconClass) {
@@ -830,5 +892,6 @@ export class SidebarManager {
         if (this.app.treatmentModeActive) {
             this.app.refreshTreatmentView();
         }
+        this.app.refreshSceneSettingsModal(sceneId);
     }
 }

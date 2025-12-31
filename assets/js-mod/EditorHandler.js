@@ -75,6 +75,29 @@ export class EditorHandler {
         // based on the hidden editor's selection.
         if (this.app.pageViewActive) return;
 
+        if (this.app.treatmentModeActive) {
+             const sel = window.getSelection();
+             if (sel.rangeCount > 0) {
+                 const node = sel.getRangeAt(0).commonAncestorContainer;
+                 const block = node.nodeType === 3 ? node.parentNode.closest('.treatment-scene-block') : node.closest('.treatment-scene-block');
+                 
+                 if (block) {
+                     const sceneId = block.dataset.sceneId;
+                     const popup = document.getElementById('scene-settings-popup');
+                     if (!popup.classList.contains('hidden')) {
+                         if (popup.dataset.sceneId !== sceneId) {
+                             const slugData = this.app.scriptData.blocks.find(b => b.id === sceneId);
+                             if (slugData) {
+                                 const mockSlug = { dataset: { lineId: sceneId }, textContent: slugData.text, isMock: true };
+                                 this.app.sidebarManager.openSceneSettings(mockSlug);
+                             }
+                         }
+                     }
+                 }
+             }
+             return;
+        }
+
         const block = this.getCurrentBlock();
         if (block) {
             const currentType = this.getBlockType(block);

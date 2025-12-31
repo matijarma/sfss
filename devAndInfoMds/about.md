@@ -78,8 +78,10 @@ SFSS is a **Single Page Application (SPA)** built with Vanilla JavaScript (ES Mo
     *   `EditorHandler.js`: Manages the `contenteditable` editor logic.
     *   `PageRenderer.js`: Handles virtual pagination and rendering for print/PDF.
     *   `SidebarManager.js`: Manages scene data, drag-and-drop reordering, and assets.
+    *   `IOManager.js`: Handles file imports/exports (FDX, JSON, Fountain).
+    *   `SettingsManager.js`: Manages user preferences and keymaps.
     *   `ReportsManager.js`: Generates analytical data and visualizations.
-    *   `TreatmentRenderer.js`: Renders the card-based planning view.
+    *   `TreatmentRenderer.js` & `TreatmentManager.js`: Manage the card-based planning view and its logic.
 
 ---
 
