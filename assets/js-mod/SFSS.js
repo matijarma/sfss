@@ -26,6 +26,7 @@ import { FountainParser } from './FountainParser.js';
 import { SettingsManager } from './SettingsManager.js';
 import { TreatmentManager } from './TreatmentManager.js';
 import { IOManager } from './IOManager.js';
+import { PrintManager } from './PrintManager.js';
 
 export class SFSS {
     constructor() {
@@ -82,6 +83,7 @@ export class SFSS {
         this.settingsManager = new SettingsManager(this);
         this.treatmentManager = new TreatmentManager(this);
         this.ioManager = new IOManager(this);
+        this.printManager = new PrintManager(this);
 
         this.ELEMENT_TYPES = constants.ELEMENT_TYPES;
         this.TYPE_LABELS = constants.TYPE_LABELS;
@@ -371,7 +373,7 @@ export class SFSS {
         document.getElementById('download-fdx-btn').addEventListener('click', () => this.ioManager.downloadFDX());
         document.getElementById('download-fountain-btn').addEventListener('click', () => this.ioManager.downloadFountain());
         document.getElementById('download-text-btn').addEventListener('click', () => this.ioManager.downloadText());
-        document.getElementById('print-btn').addEventListener('click', () => this.ioManager.printScript());
+        document.getElementById('print-btn').addEventListener('click', () => this.printManager.open());
         document.getElementById('file-input').addEventListener('change', (e) => this.ioManager.uploadFile(e.target));
 
         document.getElementById('reports-menu-btn').addEventListener('click', (e) => {
@@ -832,6 +834,12 @@ export class SFSS {
         this.treatmentManager.refreshView();
     }
 
+    refreshScene(sceneId) {
+        if (this.treatmentManager.isActive) {
+            this.treatmentRenderer.refreshScene(sceneId);
+        }
+    }
+    
     toggleSidebar(forceCollapse, forceShow) {
         if (forceShow) {
             this.mainArea.classList.add('sidebar-manual-show');
@@ -1174,7 +1182,8 @@ export class SFSS {
             showPageNumbers: true,
             showDate: this.meta.showDate,
             headerText: this.getHeaderText(),
-            sceneNumberMap: sceneNumberMap
+            sceneNumberMap: sceneNumberMap,
+            hideFirstPageMeta: true
         };
         this.pageRenderer.render(scriptLines, this.pageViewContainer, options);
     }        

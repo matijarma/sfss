@@ -350,7 +350,8 @@ export class MobileApp {
         const options = {
             showSceneNumbers: true, // Always show on mobile page view for clarity, or can link to meta
             showPageNumbers: true,
-            headerText: this.getHeaderText()
+            headerText: this.getHeaderText(),
+            hideFirstPageMeta: true
         };
         
         this.pageRenderer.render(scriptLines, this.pageViewContainer, options);

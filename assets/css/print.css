@@ -2,31 +2,62 @@
 div#printingdiv { display: none }
 
 /* =========================================
-   PAGE VIEW (UI Feature) 
+   1. PAGE VIEW GEOMETRY (Standard Screenplay)
    ========================================= */
 
+/* Base Page Container */
 .page {
     position: relative;
     overflow: hidden;
-    background-color: var(--bg-paper); /* Respect Theme */
-    color: var(--text-main);           /* Respect Theme */
+    background-color: white; /* Force White for Page View context always */
+    color: black;            /* Force Black text */
     
     /* Default US Letter Dimensions */
     width: 8.5in;
     height: 11in;
     
-    /* Strict Padding (The "Page" container) */
+    /* Strict Screenplay Margins */
     padding-top: 1.0in;
     padding-bottom: 1.0in;
     padding-left: 1.5in;
     padding-right: 1.0in;
     
     box-sizing: border-box;
-    margin: 0 auto 2rem auto; /* UI Spacing between pages */
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    margin: 0 auto 2rem auto;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
-/* Content Wrapper */
+.page.facing-page {
+    padding-top: 1.0in;
+    padding-bottom: 1.0in;
+}
+
+.page.facing-odd {
+    padding-left: 1.7in;
+    padding-right: 0.85in;
+}
+
+.page.facing-even {
+    padding-left: 0.85in;
+    padding-right: 1.7in;
+}
+
+.treatment-print-page.facing-odd {
+    padding-left: 1.2in !important;
+    padding-right: 0.7in !important;
+}
+
+.treatment-print-page.facing-even {
+    padding-left: 0.7in !important;
+    padding-right: 1.2in !important;
+}
+
+.page.page--blank {
+    box-shadow: none;
+    background: white;
+}
+
+/* Content Wrapper - The grid for text */
 .page .content-wrapper {
     font-family: 'Courier Prime', 'Courier', monospace;
     font-size: 12pt;
@@ -34,7 +65,7 @@ div#printingdiv { display: none }
     width: 100%;
 }
 
-/* Base Script Line in Page View */
+/* Script Elements */
 .page .script-line {
     margin: 0;
     padding: 0;
@@ -44,85 +75,57 @@ div#printingdiv { display: none }
     width: 100%;
 }
 
-/* =========================================
-   ELEMENT GEOMETRY & SPACING (Page View)
-   ========================================= */
-
-/* Scene Heading: 2 blank lines before, 1 blank line after */
+/* Element Spacing & Indentation (Strict) */
 .page .sc-slug {
     font-weight: bold;
     text-transform: uppercase;
-    margin-top: 32px; /* 2 lines */
-    margin-bottom: 16px; /* 1 line */
+    margin-top: 32px; /* 2 blank lines before */
+    margin-bottom: 16px; /* 1 blank line after */
     width: 100%;
 }
-/* First slug on page needs no top margin */
-.page .content-wrapper > .sc-slug:first-child {
-    margin-top: 0;
+.page .content-wrapper > .sc-slug:first-child { margin-top: 0; }
+
+.page .sc-action { margin-bottom: 16px; width: 100%; }
+
+.page .sc-character { 
+    text-transform: uppercase; 
+    margin-left: 2.2in; 
+    width: auto; 
+    margin-top: 0; margin-bottom: 0; 
 }
 
-/* Tighten Dialogue Blocks (Character/Parenthetical/Dialogue) */
-/* Character and Parenthetical have margin-bottom: 0 by default (see above). 
-   Dialogue needs margin-bottom: 0 ONLY if followed by Parenthetical or Dialogue (continuation). 
-   If followed by Character, it implies a new speech, so we keep the default 16px margin. */
-.page .sc-dialogue:has(+ :is(.sc-parenthetical, .sc-dialogue)) {
-    margin-bottom: 0;
+.page .sc-dialogue { 
+    margin-left: 1.0in; 
+    width: 3.5in; 
+    margin-bottom: 16px; 
 }
+/* Remove bottom margin if followed by Parenthetical or more Dialogue */
+.page .sc-dialogue:has(+ :is(.sc-parenthetical, .sc-dialogue)) { margin-bottom: 0; }
 
-/* Action: 1 blank line after */
-.page .sc-action {
-    margin-bottom: 16px; /* 1 line */
-    width: 100%;
-}
-
-/* Character: No margin top/bottom (Tight with Dialogue) */
-.page .sc-character {
-    text-transform: uppercase;
-    margin-left: 2.2in;
-    width: auto;
-    margin-top: 0; 
-    margin-bottom: 0;
-}
-
-/* Dialogue: 1 blank line after block */
-.page .sc-dialogue {
-    margin-left: 1.0in;
-    width: 3.5in;
-    margin-bottom: 16px; /* 1 line */
-}
-
-/* Parenthetical: Tight with Dialogue */
-.page .sc-parenthetical {
-    margin-left: 1.6in;
-    width: 2.4in;
+.page .sc-parenthetical { 
+    margin-left: 1.6in; 
+    width: 2.4in; 
     margin-bottom: 0; 
 }
 .page .sc-parenthetical::before { content: '('; }
 .page .sc-parenthetical::after { content: ')'; }
 
-/* Transition: 1 blank line before and after */
-.page .sc-transition {
-    text-align: right;
-    margin-left: auto;
-    margin-top: 16px; /* 1 line */
-    margin-bottom: 16px; /* 1 line */
-    width: auto;
+.page .sc-transition { 
+    text-align: right; 
+    margin-left: auto; 
+    margin-top: 16px; 
+    margin-bottom: 16px; 
+    width: auto; 
 }
 
-/* Tighten up Character/Parenthetical/Dialogue blocks */
-/* If a Character is followed by Parens or Dialogue, remove bottom margin? 
-   Actually, we set margin-bottom: 0 on Character/Parenthetical above.
-   We only need to ensure the Dialogue has the bottom margin.
-*/
-
-/* Page Numbers (UI) */
+/* Page Numbers */
 .page .page-number {
     position: absolute;
     top: 0.5in;
     right: 0.5in;
     font-family: 'Courier Prime', monospace;
     font-size: 12pt;
-    color: var(--text-meta);
+    color: #333;
     pointer-events: none;
     display: block !important;
     z-index: 10;
@@ -131,87 +134,578 @@ div#printingdiv { display: none }
 .page .page-header {
     position: absolute;
     top: 0.5in;
-    left: 0.5in;
-    text-align: left;
+    left: 1.5in; /* Align with text margin */
+    right: 1.0in;
+    text-align: right;
     pointer-events: none;
-    color: var(--text-meta);
-    font-size: 0.6rem;
+    color: #888;
+    font-size: 12pt;
+    font-family: 'Courier Prime', monospace;
 }
-.page:first-child .page-number, .page:first-child .page-header {
+
+.page.page--suppress-meta .page-number, 
+.page.page--suppress-meta .page-header {
     display: none !important;
 }
 
+/* Watermark */
+.print-watermark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    font-size: 80pt;
+    font-family: 'Courier Prime', sans-serif;
+    color: rgba(0,0,0,0.05); /* Very faint grey */
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 5;
+    text-transform: uppercase;
+}
+
 /* =========================================
-   PRINT MEDIA QUERY (The Actual Print Output)
+   2. PREVIEW CONTAINER (Modal Specifics)
    ========================================= */
+
+#print-preview-container {
+    padding: 40px;
+    transition: transform 0.2s ease-out;
+    /* Force Light Theme Variables for Preview */
+    --bg-body: #e5e5e5;
+    --bg-paper: #ffffff;
+    --text-main: #000000;
+    --text-meta: #666666;
+    color: black;
+}
+
+#print-preview-container.mode-switching {
+    animation: previewModeSwap 0.26s ease;
+}
+
+@keyframes previewModeSwap {
+    0% { opacity: 0; transform: translateY(8px) scale(0.99); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Ensure no dark mode bleed */
+#print-preview-container .page,
+#print-preview-container .print-sheet,
+#print-preview-container .treatment-print-page {
+    background-color: white !important;
+    color: black !important;
+}
+
+/* Preview wrapper */
+.print-sheet {
+    margin-bottom: 30px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+/* =========================================
+   3. TREATMENT MODE PRINT LAYOUT
+   ========================================= */
+
+.treatment-print-page {
+    width: 8.5in;
+    height: 11in;
+    padding: 0.75in 0.85in !important;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35in;
+    background: #ffffff;
+    page-break-after: always;
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: #0f172a;
+    border: 1px solid #d9e0ea;
+    box-shadow: 0 10px 22px rgba(0,0,0,0.18);
+}
+
+.treatment-print-page.landscape {
+    width: 11in;
+    height: 8.5in;
+}
+
+.booklet-treatment {
+    font-size: 0.95rem;
+    box-shadow: none;
+    border: 1px solid #d9e0ea;
+}
+
+.booklet-treatment .scene-title {
+    font-size: 0.85rem;
+}
+
+.treatment-cover {
+    justify-content: center;
+    gap: 0.5in;
+}
+
+.cover-hero {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25in;
+    align-items: flex-start;
+}
+
+.cover-label {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+    color: #475569;
+    font-size: 0.75rem;
+}
+
+.cover-title {
+    font-family: 'Courier Prime', monospace;
+    font-size: 1.6rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.2;
+}
+
+.cover-author {
+    font-size: 1rem;
+    color: #334155;
+    font-weight: 600;
+}
+
+.cover-contact {
+    font-size: 0.85rem;
+    color: #475569;
+    line-height: 1.5;
+}
+
+.cover-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.4rem;
+}
+
+.treatment-index .index-grid {
+    display: grid;
+    gap: 0.2rem;
+    margin-top: 0.3in;
+}
+
+.index-row {
+    display: grid;
+    grid-template-columns: 0.4fr 1.4fr 0.8fr;
+    gap: 0.4rem;
+    align-items: center;
+    padding: 0.3rem 0.35rem;
+    border-bottom: 1px dashed #e2e8f0;
+}
+
+.index-num {
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.index-title {
+    font-family: 'Courier Prime', monospace;
+    letter-spacing: 0.05em;
+    font-size: 0.88rem;
+    text-transform: uppercase;
+}
+
+.index-meta {
+    text-align: right;
+    color: #475569;
+    font-size: 0.8rem;
+}
+
+.booklet-treatment .index-row {
+    grid-template-columns: 0.5fr 1.2fr 0.8fr;
+    font-size: 0.85rem;
+}
+
+.treatment-doc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 0.25in;
+    gap: 1rem;
+}
+
+.doc-title-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    letter-spacing: 0.04em;
+}
+
+.doc-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.doc-title {
+    font-family: 'Courier Prime', monospace;
+    font-size: 1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    word-break: break-word;
+}
+
+.doc-submeta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.15rem;
+    color: #475569;
+    font-size: 0.85rem;
+}
+
+.treatment-scene-hero {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.6rem;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 0.2in;
+}
+
+.scene-hero-left {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-start;
+    flex: 1;
+}
+
+.scene-number-pill {
+    min-width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+}
+
+.scene-hero-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    flex: 1;
+}
+
+.scene-title {
+    font-family: 'Courier Prime', monospace;
+    letter-spacing: 0.08em;
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    word-break: break-word;
+}
+
+.scene-subline {
+    text-transform: uppercase;
+    color: #475569;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    word-break: break-word;
+}
+
+.scene-hero-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.25rem;
+    min-width: 3rem;
+}
+
+.scene-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.meta-chip {
+    display: inline-flex;
+    gap: 0.3rem;
+    align-items: center;
+    padding: 0.35rem 0.55rem;
+    background: #eef2f6;
+    border: 1px solid #d8e0ec;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    color: #0f172a;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.meta-chip .chip-label {
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #475569;
+    font-size: 0.68rem;
+}
+
+.meta-chip .chip-value {
+    font-weight: 600;
+}
+
+.thumbs-panel .thumb-grid {
+    display: grid;
+    gap: 0.25rem;
+    align-items: start;
+    justify-items: start;
+    overflow: hidden;
+}
+
+.thumb {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.thumb-page {
+    background: white;
+    box-shadow: none !important;
+}
+
+.stats-list {
+    margin: 0;
+    padding-left: 1rem;
+    color: #0f172a;
+}
+
+.stats-list li {
+    margin-bottom: 0.2rem;
+    line-height: 1.4;
+}
+
+.notepad {
+    width: 100%;
+    background-image: linear-gradient(to bottom, transparent 95%, #e2e8f0 95%);
+    background-repeat: repeat-y;
+}
+
+.treatment-body-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3in;
+    width: 100%;
+    min-height: 0;
+    flex: 1;
+}
+
+.treatment-body-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+    gap: 0.35in;
+    align-items: start;
+    width: 100%;
+    min-height: 0;
+}
+
+.treatment-body-grid.single-column {
+    grid-template-columns: 1fr;
+}
+
+.treatment-body-grid.visual-spread {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.1fr);
+}
+
+.booklet-treatment .treatment-body-grid {
+    grid-template-columns: 1fr !important;
+}
+
+.treatment-column {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.scene-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 0.6rem 0.7rem;
+}
+
+.section-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #475569;
+    font-weight: 700;
+}
+
+.section-body {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    color: #0f172a;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+.section-body.mono {
+    font-family: 'Courier Prime', monospace;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 6px;
+    padding: 0.5rem 0.6rem;
+}
+
+.treatment-placeholder {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+    padding: 0.65rem 0.75rem;
+    background: #f8fafc;
+}
+
+.images-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.35rem;
+    max-height: 6in;
+    overflow: hidden;
+}
+
+.images-grid img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.compact-stats .section-title {
+    font-size: 0.7rem;
+}
+
+.treatment-body-grid.visual-spread {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.1fr);
+}
+
+@media (max-width: 1000px) {
+    .treatment-body-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* =========================================
+   4. BOOKLET / IMPOSITION
+   ========================================= */
+.booklet-spread {
+    display: flex;
+    width: 11in;
+    height: 8.5in;
+    background: white;
+}
+.booklet-page-slot {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-right: 1px dashed #ddd;
+}
+.booklet-page-slot:last-child { border-right: none; }
+
+.booklet-scaler {
+    transform-origin: center;
+    box-shadow: 0 0 5px rgba(0,0,0,0.1);
+}
+
+/* =========================================
+   5. PRINT MEDIA QUERY (Final Output)
+   ========================================= */
+
 @media print {
+    /* RESET GLOBAL STYLES */
     :root {
-        --bg-body: white;
-        --bg-paper: white;
-        --text-main: black;
-        --text-meta: black;
+        --bg-body: white !important;
+        --bg-paper: white !important;
+        --text-main: black !important;
+        --text-meta: #555 !important;
     }
-
-    #print-title-page { display: block !important; height: 100vh; position: relative; page-break-after: always; text-align: center; padding-top: 3in; }
-    
-    #print-title-page #tp-title { margin-bottom: 2in; }
-    #print-title-page div:nth-of-type(2) { margin-bottom: 0.5in; }
-    #print-title-page #tp-author { margin-bottom: 4in; }
-    
-    #tp-contact {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        text-align: left;
-        font-size: 0.8rem;
-        line-height: 1.25;
-        width: 100%;
-    }
-
-    /* Hide UI elements */
-    #toolbar, #sidebar, #show-sidebar-btn, .loader-overlay, #mobile-menu-btn, .btn-icon, .btn-text { display: none !important; }
-    #editor-wrapper { padding: 0; margin: 0; }
     
     body {
-        margin: 0;
-        background: white;
-        color: black;
+        background-color: white !important;
+        color: black !important;
+        height: auto !important;
+        overflow: visible !important;
+        margin: 0 !important;
     }
 
-    #app-container, #main-area, #scroll-area {
-        display: block;
-        height: auto;
-        overflow: visible;
-        background: white;
+    /* Hide UI */
+    #sidebar, #toolbar, #mobile-menu-btn, #show-sidebar-btn, .loader-overlay, .modal-overlay {
+        display: none !important;
     }
 
-    /* Ensure Page View is visible */
-    #editor-container { display: none; }
-    #page-view-container { display: block !important; }
-
-    .page {
-        margin: 0;
-        border: none;
-        box-shadow: none;
-        page-break-after: always;
+    /* Show Print Container */
+    body.printing-from-modal #printingdiv {
+        display: block !important;
+        position: absolute;
+        top: 0;
+        left: 0;
         width: 100%;
-        height: auto;
-        padding: 0; /* @page handles margins */
-        background-color: white;
-        color: black;
+        margin: 0;
+        padding: 0;
+    }
+
+    body.printing-from-modal > *:not(#printingdiv) {
+        display: none !important;
+    }
+
+    /* Unwrap Pages */
+    .print-sheet {
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+        page-break-after: always;
+        break-after: page;
+    }
+
+    /* Strict Page Reset */
+    .page:not(.thumb-page) {
+        margin: 0 !important;
+        box-shadow: none !important;
+        width: 100% !important; /* Let @page handle size */
+        page-break-after: always;
+        break-after: page;
+    }
+
+    /* Treatment Overrides */
+    .treatment-print-page {
+        box-shadow: none !important;
+        border: none !important;
+    }
+    .treatment-print-page:not(.booklet-treatment) {
+        padding: 0.65in !important;
     }
     
-    /* In print, the browser's @page margins apply. 
-       If we keep our element margins (e.g. margin-left: 2.2in), they add to the @page margins. 
-       Correct.
-    */
+    /* Ensure thumbnails don't break pages or inherit undesired page-level print styles */
+    .thumb-page {
+        page-break-after: auto !important;
+        break-after: auto !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+    }
     
-    /* Page Setup */
-    @page {
-        size: letter;
-        margin-top: 1.0in;
-        margin-bottom: 1.0in;
-        margin-left: 1.5in;
-        margin-right: 1.0in;
+    .treatment-body-grid,
+    .scene-section,
+    .treatment-scene-hero,
+    .treatment-doc-header {
+        break-inside: avoid;
+        page-break-inside: avoid;
     }
 }

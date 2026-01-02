@@ -608,7 +608,7 @@ export class SidebarManager {
         // Targeted refresh instead of full refresh
         this.updateSceneList();
         if (this.app.treatmentModeActive) {
-            this.app.refreshTreatmentView();
+            this.app.refreshScene(sceneId);
         }
         
         this.app.mediaPlayer.updatePlaylist();

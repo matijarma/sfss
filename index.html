@@ -41,8 +41,8 @@
             } catch (e) { console.log('Theme detection failed', e); }
 
             // Your Version Logic
-            const staticversion = "" + "31-12-25_" + "public-" + "1303";
-            //const staticversion = Math.round(Math.random()*1000000);
+            //const staticversion = "" + "31-12-25_" + "public-" + "1303";
+            const staticversion = Math.round(Math.random()*1000000);
 
             const queryString = self.location.search;
             const params = new URLSearchParams(queryString);
@@ -509,6 +509,140 @@
                 <input type="checkbox" id="welcome-startup-toggle" checked>
                 <span class="slider round"></span>
             </label>
+        </div>
+    </div>
+</div>
+
+<div id="print-prep-modal" class="modal-overlay hidden">
+    <div class="modal-window popup-max-width-lg" style="height: 90vh; max-height: 90vh; display: flex; flex-direction: column;">
+        <div class="modal-header">
+            <span>Prepare & Print</span>
+            <button id="print-prep-close-btn" class="btn-text">✕</button>
+        </div>
+        <div class="modal-body p-0" style="overflow: hidden; padding: 0; display: flex; flex-direction: row; flex: 1;">
+            <!-- LEFT PANEL: CONTROLS -->
+            <div id="print-controls" class="p-2 border-right-light" style="width: 300px; overflow-y: auto; flex-shrink: 0; background: var(--bg-body); border-right: 1px solid var(--border-color);">
+                
+                <div class="toggle-group w-full flex-justify-center mb-2" style="width: 100%; display: flex; justify-content: center;">
+                    <button class="toggle-btn active" data-mode="script">Screenplay</button>
+                    <button class="toggle-btn" data-mode="treatment">Treatment</button>
+                </div>
+
+                <div id="print-config-script" class="flex-col gap-1">
+                    <div class="settings-section">
+                        <h3 class="text-xs uppercase font-bold text-meta mb-1">Layout</h3>
+                        <div class="flex-justify-between-center">
+                            <label class="settings-checkbox-row mb-0">
+                                <input type="checkbox" class="print-config-input" data-section="script" data-key="showTitlePage">
+                                Title Page
+                            </label>
+                            <button id="print-edit-meta-btn" class="btn-text text-xs" title="Edit Title, Author, etc."><i class="fas fa-edit"></i> Edit Info</button>
+                        </div>
+                        <div class="flex-justify-between-center mt-1">
+                            <span class="text-sm">Format:</span>
+                            <select class="print-config-input settings-input text-sm" style="width: auto;" data-section="script" data-key="layout">
+                                <option value="normal">Normal</option>
+                                <option value="facing">Double-Sided (Facing)</option>
+                                <option value="booklet">Booklet (Imposed)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="settings-section border-top-light pt-1 mt-1">
+                        <h3 class="text-xs uppercase font-bold text-meta mb-1">Elements</h3>
+                        <label class="settings-checkbox-row">
+                            <input type="checkbox" class="print-config-input" data-section="script" data-key="showSceneNumbers">
+                            Scene Numbers
+                        </label>
+                        <label class="settings-checkbox-row">
+                            <input type="checkbox" class="print-config-input" data-section="script" data-key="showPageNumbers" checked>
+                            Page Numbers
+                        </label>
+                        <label class="settings-checkbox-row">
+                            <input type="checkbox" class="print-config-input" data-section="script" data-key="showDate">
+                            Date in Header
+                        </label>
+                    </div>
+                    
+                    <div class="settings-section border-top-light pt-1 mt-1">
+                        <h3 class="text-xs uppercase font-bold text-meta mb-1">Extras</h3>
+                        <div class="flex-col gap-1">
+                            <label class="text-xs">Watermark</label>
+                            <input type="text" class="print-config-input settings-input" data-section="script" data-key="watermark" placeholder="e.g. DRAFT">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="print-config-treatment" class="flex-col gap-1 hidden">
+                    <div class="settings-section">
+                        <h3 class="text-xs uppercase font-bold text-meta mb-1">Layout</h3>
+                        <div class="flex-justify-between-center mt-1">
+                            <span class="text-sm">Orientation:</span>
+                            <select class="print-config-select settings-input text-sm" style="width: auto;" data-section="treatment" data-key="orientation">
+                                <option value="portrait">Portrait</option>
+                                <option value="landscape">Landscape</option>
+                            </select>
+                        </div>
+                        <div class="flex-justify-between-center mt-1">
+                            <span class="text-sm">Format:</span>
+                            <select class="print-config-select settings-input text-sm" style="width: auto;" data-section="treatment" data-key="layout">
+                                <option value="normal">Normal</option>
+                                <option value="facing">Facing Pages (Double-Sided)</option>
+                                <option value="booklet">Booklet (Imposed)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="settings-section border-top-light pt-1 mt-1">
+                        <h3 class="text-xs uppercase font-bold text-meta mb-1">Content</h3>
+                        <label class="settings-checkbox-row">
+                            <input type="checkbox" class="print-config-input" data-section="treatment" data-key="showMeta" checked>
+                            Synopsis / Notes
+                        </label>
+                        <label class="settings-checkbox-row">
+                            <input type="checkbox" class="print-config-input" data-section="treatment" data-key="showStats" checked>
+                            Stats (Duration/Words)
+                        </label>
+                        <label class="settings-checkbox-row">
+                            <input type="checkbox" class="print-config-input" data-section="treatment" data-key="showCharacters" checked>
+                            Characters List
+                        </label>
+                        <label class="settings-checkbox-row">
+                            <input type="checkbox" class="print-config-input" data-section="treatment" data-key="showMusic" checked>
+                            Music Track Info
+                        </label>
+                    </div>
+
+                    <div class="settings-section border-top-light pt-1 mt-1">
+                        <h3 class="text-xs uppercase font-bold text-meta mb-1">Visuals</h3>
+                        <label class="settings-checkbox-row">
+                            <input type="checkbox" class="print-config-input" data-section="treatment" data-key="showImages" checked>
+                            Images
+                        </label>
+                        <label class="settings-checkbox-row">
+                            <input type="checkbox" class="print-config-input" data-section="treatment" data-key="showScript" checked>
+                            Script Thumbnails
+                        </label>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- RIGHT PANEL: PREVIEW -->
+            <div id="print-preview-pane" style="flex: 1; background-color: #525659; overflow: hidden; position: relative; display: flex; align-items: flex-start; justify-content: center; padding: 40px;">
+                <div id="print-preview-scroller" style="width: 100%; height: 100%; overflow-y: auto; display: flex; flex-direction: column; align-items: center;">
+                    <div id="print-preview-container" style="transform-origin: top center; transition: transform 0.2s; padding-bottom: 100px;">
+                        <!-- Pages generated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer flex-justify-between-center">
+            <div class="text-xs text-meta" id="print-stats"></div>
+            <div>
+                <button id="print-prep-cancel-btn" class="btn-text mr-1">Cancel</button>
+                <button id="print-prep-print-btn" class="modal-btn-primary"><i class="fas fa-print mr-1"></i> Print</button>
+            </div>
         </div>
     </div>
 </div>

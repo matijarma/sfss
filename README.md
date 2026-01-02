@@ -2,65 +2,67 @@
 
 **A professional, client-side Screenwriting Progressive Web App (PWA) designed for privacy, performance, and portability.**
 
-**Simple Free Screenwriting Software** or **SFSS** is a powerful, open-source tool that brings an industry-standard writing experience directly to your browser. Built with a "local-first" philosophy, it ensures total privacy and offline capability without reliance on external servers or subscriptions. All your work is saved directly to your device.
+**Simple Free Screenwriting Software** or **SFSS** brings an industry-standard writing experience directly to your browser. It is a *local-first* PWA: every script lives in your browser (IndexedDB + LocalStorage), with no servers, accounts, or dependencies beyond a modern browser.
 
 ## ✨ Core Features
 
-The application is a feature-complete writing studio built with three primary modes: **Write**, **Plan**, and **Analyze**.
+The application is a writing studio built around three primary modes: **Write** (editor), **Plan** (Treatment mode), and **Analyze** (Reports).
 
 -   ### 📝 **Writing & Editing**
-    -   **Industry Formatting:** A custom `PageRenderer.js` engine ensures 12pt Courier, correct margins, and standard element spacing.
-    -   **Contextual Shortcuts:** `Enter` and `Tab` keys intelligently predict the next logical element (e.g., Character → Dialogue).
-    -   **Page View:** A real-time preview of how your script will look on a printed page, with accurate pagination.
-    -   **Smart Autocomplete:** Remembers characters and provides suggestions.
-    -   **Customizable Keymap:** Remap `Enter` and `Tab` behavior for each screenplay element.
-    -   **File Handling:** Supports drag-and-drop and OS-level file opening for `.json`, `.fdx`, and `.fountain` files.
+    -   **Industry Formatting:** Custom `PageRenderer.js` virtual pagination targets 12pt Courier, standard margins, scene numbers, and print-oriented spacing.
+    -   **Contextual Shortcuts:** `Enter`/`Tab` transitions are configurable per element; cycling shortcut toggles element types in place.
+    -   **Page View:** Switchable paginated view mirrors printed pages; print uses the same geometry.
+    -   **Smart Autocomplete:** Character-name autocomplete + suffix suggestions; predictive “suggested character” hints.
+    -   **Customizable Keymap:** Per-element `Enter`/`Tab` mappings persisted to LocalStorage; theme toggle.
+    -   **File Handling:** Import/export `.json`, `.fdx`, `.fountain`, `.txt`; OS File Handling API supported when available.
 
 -   ### 📋 **Planning & Outlining (Treatment Mode)**
-    -   **Visual Scene Cards:** Organize your story with a drag-and-drop interface for scenes.
-    -   **Scene Metadata:** Add descriptions, notes, reference images, and color-coded tags to each scene card.
-    -   **Integrated Storyboarding:** Upload images to scene cards to create a visual storyboard.
-    -   **Soundtrack:** Link a YouTube track to a scene to build a working soundtrack for your script.
+    -   **Scene Cards:** Script is projected into a read-only, card-based view for high-level editing.
+    -   **Scene Metadata:** Descriptions, notes, scene numbers, colors, and icons live alongside each slug.
+    -   **Images & Tracks:** Attach reference images (stored in IndexedDB) and YouTube tracks per scene.
+    -   **Inline Edits:** Adjust scene descriptions and ordering without touching the formatted script.
 
 -   ### 📊 **Analysis & Reports**
-    -   **Script Dashboard:** Get a high-level overview with KPIs for page count, scene count, word count, and estimated runtime.
-    -   **Character Analysis:** Generate detailed reports on any character, including dialogue statistics, scene presence, and top interactions.
-    -   **Scene Chronology:** View a complete breakdown of all scenes, their length, and the characters within them.
-    -   **Data Visualization:** Reports include pie charts and tables for easy analysis of script breakdown (INT. vs EXT., DAY vs. NIGHT).
-    -   **Exportable:** Reports can be printed or saved to PDF.
+    -   **Script Dashboard:** KPIs for pages, scenes, words, runtime (eighths), and setting/time breakdown.
+    -   **Character Analysis:** Per-character reports (speaking/non-speaking scenes, words, interactions, monologues).
+    -   **Scene Chronology:** Scene list with length (eighths), starting page, and speaking/non-speaking badges.
+    -   **Lightweight Charts:** Conic-gradient pie slices and sortable tables inside the modal; export text or print to PDF.
 
 -   ### 🤝 **Real-Time Collaboration (Beta)**
-    -   **Peer-to-Peer:** Connect directly to a collaborator with no server in between, using WebRTC.
-    -   **End-to-End Encrypted:** All communication, including script data and video/audio chat, is fully encrypted.
-    -   **Baton Passing:** A simple "baton" system ensures only one person can write at a time, preventing conflicts.
-    -   **Integrated Video/Audio Chat:** Communicate with your writing partner directly within the app.
-    -   **Live Console:** A transparent console log shows connection status and security information, providing peace of mind.
+    -   **Peer-to-Peer:** Trystero-powered WebRTC rooms; host/guest joins via room id.
+    -   **Baton Passing:** Single-writer baton; guests without the baton are read-only. Mobile guests join as spectators.
+    -   **State Sync:** Host sends full snapshots plus live updates; heartbeat auto-disconnects on timeouts.
+    -   **Optional Media:** Webcam/mic streaming per session; simple toast/status UI.
 
 -   ### ⚙️ **General**
-    -   **100% Client-Side:** No database, no cloud logins. All work is saved locally via `IndexedDB`.
-    -   **PWA Ready:** Installable on Desktop (Windows, Mac, Linux) and Mobile (iOS, Android) for a native app experience.
-    -   **Full Offline Support:** Works completely offline once loaded.
-    -   **Import/Export:** Supports `.json` (native), `.fdx` (Final Draft), `.fountain`, and plain `.txt`.
-    -   **Light/Dark Mode:** Adapts to your system preference or can be toggled manually.
+    -   **Local-Only Data:** Scripts stored in IndexedDB with LocalStorage autosave and scene meta cache.
+    -   **PWA Ready:** Installable; works offline after first load via `sw.js`.
+    -   **Printing:** Print view shares pagination logic with Page View; title page can be toggled.
+    -   **Light/Dark Mode:** Respects system preference; stored setting overrides.
+
+## 📌 Current State & Limitations (Alpha)
+-   **Local-first only:** Scene images and YouTube track links live in the browser (IndexedDB/LocalStorage) and are **not exported** with `.fdx/.fountain/.txt`; backups should use `.json`.
+-   **Autosave model:** Content writes to LocalStorage immediately and is debounced into IndexedDB; power-loss between writes can leave LocalStorage ahead of IDB until the next save.
+-   **Collaboration (beta):** Host-only baton passing; guests without the baton are read-only and mobile peers join as spectators. No app-layer encryption beyond WebRTC DTLS-SRTP. Session ends when all peers leave.
+-   **Pagination heuristics:** `PageRenderer` enforces 12 pt Courier geometry but uses JS height measurement; complex orphan/widow cases may still need polish.
+-   **Media playback:** Scene music relies on YouTube oEmbed/iframe; it requires network access even though the rest of the app is offline-capable.
 
 ## 🚀 Getting Started
 
 SFSS is a static web application and requires no server or build process to run.
 
 1.  **Download:** Clone or download the repository.
-2.  **Run:** Open `index.html` in a modern web browser (Chrome, Firefox, Safari).
-3.  **Install (Optional):** Use the "Install" button in the app's menu (or the browser's PWA install prompt) to save it as a local application.
-manifest.json
+2.  **Run:** Open `index.html` in a modern web browser (Chrome, Firefox, Safari) or serve the folder with any static server.
+3.  **Install (Optional):** Use the in-app "Install" button or browser PWA prompt to install locally.
 ## 🛠️ Technical Deep Dive
 
 ### Technology Stack
-*   **Core Logic:** **Vanilla JavaScript (ES6+ Modules)**. The app is intentionally dependency-free for maximum performance and longevity.
-*   **P2P Networking:** **Trystero** (via `trystero.min.js`) for serverless WebRTC connections.
-*   **Styling:** **Modular CSS** with CSS Variables for theming. No pre-processors are used.
-*   **Storage:** `IndexedDB` for script and image data; `LocalStorage` for user settings.
-*   **PWA:** `sw.js` (Service Worker) for offline caching and `manifest-testing.json` for app installation.
+*   **Core Logic:** Vanilla JavaScript (ES modules). No bundler or external runtime deps beyond local vendor assets.
+*   **P2P Networking:** Trystero (`trystero.min.js`) for serverless WebRTC.
+*   **Styling:** Modular CSS with CSS variables for theming.
+*   **Storage:** IndexedDB for scripts/images; LocalStorage for autosave cache, meta, settings, and keymap.
+*   **PWA:** `sw.js` for offline caching and `manifest.json` for install metadata. File Handling API supported when the browser allows.
 *   **Icons & Fonts:** FontAwesome and Courier Prime (locally hosted).
-manifest.json
 ### Project Structure
 The codebase is organized into a modular, class-based architecture.
 
@@ -68,7 +70,7 @@ The codebase is organized into a modular, class-based architecture.
 /
 ├── index.html              # Main application entry point, contains all modal HTML.
 ├── sw.js                   # Service Worker for PWA offline caching.
-├── manifest-testing.json           # PWA manifest for app installation properties.
+├── manifest.json           # PWA manifest for app installation properties.
 ├── assets/
 │   ├── css/                # Style sheets, modularized by function.
 │   │   ├── base.css        # Core variables, resets, and loader.
@@ -85,10 +87,11 @@ The codebase is organized into a modular, class-based architecture.
 │   │   ├── PageRenderer.js # Virtual pagination engine for "Page View" and printing.
 │   │   ├── SidebarManager.js # Controls scene navigation, metadata, and assets.
 │   │   ├── StorageManager.js # Handles all IndexedDB/LocalStorage interactions.
-│   │   ├── ReportsManager.js # Generates script breakdowns and reports.
-│   │   ├── TreatmentRenderer.js# Renders the card-based "Treatment Mode".
-│   │   ├── MediaPlayer.js  # Manages the YouTube IFrame API player.
-│   │   ├── CollaborationManager.js # Handles P2P connection, data, and media streams.
+│   │   ├── ReportsManager.js # Generates script/character reports and simple charts.
+│   │   ├── TreatmentManager.js # Treatment mode logic; delegates rendering to TreatmentRenderer.
+│   │   ├── TreatmentRenderer.js# Renders the card-based Treatment mode.
+│   │   ├── MediaPlayer.js  # Manages the YouTube IFrame API player per scene.
+│   │   ├── CollaborationManager.js # Handles P2P connection, baton, and media streams.
 │   │   ├── CollabUI.js     # Manages the UI for the collaboration feature.
 │   │   ├── Constants.js    # Defines element types and other static configs.
 │   │   └── IDBHelper.js    # A wrapper for IndexedDB operations.
