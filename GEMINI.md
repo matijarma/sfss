@@ -40,6 +40,9 @@ The application is built on a modular class-based architecture, orchestrated by 
 | **`SettingsManager.js`** | Manages application settings, keymap configuration, themes, and persistence of user preferences. |
 | **`ReportsManager.js`** | Generates in-app script/character reports with lightweight charts and printable output. |
 | **`PrintManager.js`** | Routes scripts, treatments, and reports through the Print Prep modal (facing/booklet layouts, watermarks, scene/page mapping). |
+| **`IOManager.js`** | Import/export for JSON, FDX, Fountain, and text; hydrates scene numbers/meta. |
+| **`FountainParser.js`** | Parses/generates Fountain while preserving scene numbers and synopses. |
+| **`ScrollbarManager.js`** | Adds contextual scrollbar styling and auto-hide behavior. |
 | **`MediaPlayer.js`** | Integrates YouTube IFrame API for scene-level soundtrack playback. |
 | **`CollaborationManager.js`**| Manages P2P rooms, baton state, updates, and optional media streams using Trystero. |
 | **`CollabUI.js`**| Renders and manages UI components for real-time collaboration (modals, toasts, toolbar state). |
@@ -55,7 +58,7 @@ The application is built on a modular class-based architecture, orchestrated by 
 ### Current Implementation Notes
 - **Storage model:** Autosaves land in LocalStorage immediately and are later persisted to IndexedDB; scene images stay in IndexedDB only and are not embedded in exports.
 - **Collaboration:** Host starts a room id like `script-xxxxx`; baton-based single-writer model, guests without the baton are read-only (mobile always read-only). No extra encryption beyond WebRTC.
-- **Pagination:** `PageRenderer` enforces Courier 12 pt geometry with JS measurement; orphan/widow handling is heuristic and still in alpha.
+- **Pagination:** `PageRenderer` enforces Courier 12 pt geometry with JS measurement; orphan/widow handling is heuristic and still being refined.
 - **Media:** Scene music depends on YouTube IFrame API and oEmbed metadata; network is required for titles/artists.
 
 ## 4. Data Structures

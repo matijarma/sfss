@@ -8,7 +8,7 @@ SFSS is a professional, privacy-focused screenwriting application that runs enti
 *   **Local-First:** Your scripts never leave your device. Data is stored in your browser's `IndexedDB` and `LocalStorage`.
 *   **Offline-Capable:** Functions as a fully installable Progressive Web App (PWA) that works without an internet connection.
 *   **Zero-Distraction:** A clean, minimalist interface designed to keep you in the flow, handling formatting automatically.
-*   **Current Alpha Status:** Collaboration is baton-based and read-only for guests without the baton (mobile is spectator-only); scene images and YouTube track links remain local and are not included in exports.
+*   **Local-Only Assets:** Scene images and YouTube track links remain local (IndexedDB/LocalStorage) and are not included in exports; `.json` provides the most complete backup.
 
 ---
 
@@ -52,12 +52,12 @@ The sidebar acts as your production hub:
 *   **Soundtrack Integration:** Link **YouTube** tracks to scenes; the integrated player follows the playlist.
 *   **Organization:** Color-code scenes and assign semantic icons for quick visual reference.
 
-### 🤝 Real-Time Collaboration (Beta)
+### 🤝 Real-Time Collaboration
 Write with a partner in a serverless environment.
 *   **Peer-to-Peer Connection:** Connect directly via Trystero (WebRTC).
 *   **Baton Control:** Only one writer edits at a time; guests without the baton are read-only (mobile joins as spectator).
-*   **State Sync:** Host shares snapshots and deltas; heartbeat detects disconnects. Shareable `?room=` links auto-join peers.
-*   **Optional Video/Audio:** WebRTC media streaming with basic mic/cam toggles.
+*   **State Sync:** Host shares snapshots and deltas; heartbeat detects disconnects. Shareable `?room=` links auto-join peers with a clean takeover flow.
+*   **Optional Video/Audio:** WebRTC media streaming with basic mic/cam toggles and a HUD that follows the active scene.
 
 ### 💾 Import / Export
 *   **SFSS JSON (`.json`)**: Full project backup including metadata (images remain local in IndexedDB).
@@ -77,14 +77,17 @@ SFSS is a **Single Page Application (SPA)** built with Vanilla JavaScript (ES Mo
     *   **Scripts:** Stored in IndexedDB for capacity; LocalStorage keeps autosave shadow copies for fast boot.
     *   **Images:** Binary image data is stored in IndexedDB to bypass LocalStorage limits.
     *   **Settings/Meta:** User preferences and scene meta cache are saved in LocalStorage.
-*   **Modular Design:**
-    *   `EditorHandler.js`: Manages the `contenteditable` editor logic.
+*   **Modular Design (key modules):**
+    *   `SFSS.js`: Main controller orchestrating state, history, and sub-managers.
+    *   `EditorHandler.js`: Manages the `contenteditable` editor logic and shortcuts.
     *   `PageRenderer.js`: Handles virtual pagination and rendering for print/PDF.
+    *   `PrintManager.js`: Routes scripts, treatments, and reports through the Print Prep modal.
     *   `SidebarManager.js`: Manages scene data, stats, settings popup, and assets.
-    *   `IOManager.js`: Handles file imports/exports (FDX, JSON, Fountain).
+    *   `IOManager.js`: Handles file imports/exports (FDX, JSON, Fountain, Text).
     *   `SettingsManager.js`: Manages user preferences and keymaps.
     *   `ReportsManager.js`: Generates analytical data and visualizations.
     *   `TreatmentRenderer.js` & `TreatmentManager.js`: Manage the card-based planning view and its logic.
+    *   `CollaborationManager.js` & `CollabUI.js`: Handle peer-to-peer sessions, baton flow, and the collaboration HUD.
 
 ---
 

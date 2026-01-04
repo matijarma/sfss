@@ -29,11 +29,11 @@ The application is a writing studio built around three primary modes: **Write** 
     -   **Scene Chronology:** Scene list with length (eighths), starting page, and speaking/non-speaking badges.
     -   **Lightweight Charts:** Conic-gradient pie slices and sortable tables inside the modal; export text or print to PDF, or send to the Print Prep modal as a report package.
 
--   ### 🤝 **Real-Time Collaboration (Beta)**
-    -   **Peer-to-Peer:** Trystero-powered WebRTC rooms; host/guest joins via room id.
-    -   **Baton Passing:** Single-writer baton; guests without the baton are read-only. Mobile guests join as spectators.
-    -   **State Sync:** Host sends full snapshots plus live updates; heartbeat auto-disconnects on timeouts. Query-string `?room=` auto-joins shared links.
-    -   **Optional Media:** Webcam/mic streaming per session; simple toast/status UI.
+-   ### 🤝 **Real-Time Collaboration**
+    -   **Peer-to-Peer:** Trystero-powered WebRTC rooms; invite by sharing a `?room=` link or room id.
+    -   **Baton Passing:** Single-writer baton; guests without the baton are read-only. Mobile guests join as spectators by design.
+    -   **State Sync:** Host sends full snapshots plus live updates; heartbeat auto-disconnects on timeouts and reclaims the editor cleanly.
+    -   **Optional Media:** Webcam/mic streaming per session; HUD shows active media and click-to-join scene scroll.
 
 -   ### ⚙️ **General**
     -   **Local-Only Data:** Scripts stored in IndexedDB with LocalStorage autosave and scene meta cache.
@@ -42,10 +42,10 @@ The application is a writing studio built around three primary modes: **Write** 
     -   **Light/Dark Mode:** Respects system preference; stored setting overrides.
     -   **Assets:** Scene images and YouTube track metadata stay local (IndexedDB) and are not embedded in exports.
 
-## 📌 Current State & Limitations (Alpha)
+## 📌 Current State & Limitations
 -   **Local-first only:** Scene images and YouTube track links live in the browser (IndexedDB/LocalStorage) and are **not exported** with `.fdx/.fountain/.txt`; backups should use `.json`.
 -   **Autosave model:** Content writes to LocalStorage immediately and is debounced into IndexedDB; power-loss between writes can leave LocalStorage ahead of IDB until the next save.
--   **Collaboration (beta):** Host-only baton passing; guests without the baton are read-only and mobile peers join as spectators. No app-layer encryption beyond WebRTC DTLS-SRTP. Session ends when all peers leave.
+-   **Collaboration:** Host-only baton passing; guests without the baton are read-only and mobile peers join as spectators. No app-layer encryption beyond WebRTC DTLS-SRTP. Session ends when all peers leave.
 -   **Pagination heuristics:** `PageRenderer` enforces 12 pt Courier geometry but uses JS height measurement; complex orphan/widow cases may still need polish.
 -   **Media playback:** Scene music relies on YouTube oEmbed/iframe; it requires network access even though the rest of the app is offline-capable.
 
@@ -68,42 +68,49 @@ SFSS is a static web application and requires no server or build process to run.
 ### Project Structure
 The codebase is organized into a modular, class-based architecture.
 
-```
+``` #
 /
-├── index.html              # Main application entry point, contains all modal HTML.
-├── sw.js                   # Service Worker for PWA offline caching.
-├── manifest.json           # PWA manifest for app installation properties.
+├── index.html                       # Main application entry point, contains all modal HTML.
+├── sw.js                            # Service Worker for PWA offline caching.
+├── manifest.json                    # PWA manifest for app installation properties.
 ├── assets/
-│   ├── css/                # Style sheets, modularized by function.
-│   │   ├── base.css        # Core variables, resets, and loader.
-│   │   ├── layout.css      # Main application layout (toolbar, sidebar, editor).
-│   │   ├── components.css  # Styles for reusable UI components (modals, buttons, etc.).
-│   │   ├── editor.css      # Formatting for the main contenteditable editor.
-│   │   ├── print.css       # Page geometry and @media print rules.
-│   │   ├── reports.css     # Styles for the Reports Manager modal.
-│   │   └── treatment.css   # Styles for the Treatment Mode (scene cards).
+│   ├── css/                         # Style sheets, modularized by function.
+│   │   ├── base.css                 # Core variables, resets, and loader.
+│   │   ├── layout.css               # Main application layout (toolbar, sidebar, editor).
+│   │   ├── components.css           # Styles for reusable UI components (modals, buttons, etc.).
+│   │   ├── editor.css               # Formatting for the main contenteditable editor.
+│   │   ├── collab.css               # Collaboration HUD/top bar styles.
+│   │   ├── print.css                # Page geometry and @media print rules.
+│   │   ├── reports.css              # Styles for the Reports Manager modal.
+│   │   └── treatment.css            # Styles for the Treatment Mode (scene cards).
 │   │
-│   ├── js-mod/             # Core JavaScript source modules (ES6 Classes).
-│   │   ├── SFSS.js         # Main controller, event bus, and state manager.
-│   │   ├── EditorHandler.js# Manages all contenteditable logic and keyboard shortcuts.
-│   │   ├── PageRenderer.js # Virtual pagination engine for "Page View" and printing.
-│   │   ├── SidebarManager.js # Controls scene navigation, metadata, and assets.
-│   │   ├── StorageManager.js # Handles all IndexedDB/LocalStorage interactions.
-│   │   ├── ReportsManager.js # Generates script/character reports and simple charts.
-│   │   ├── TreatmentManager.js # Treatment mode logic; delegates rendering to TreatmentRenderer.
-│   │   ├── TreatmentRenderer.js# Renders the card-based Treatment mode.
-│   │   ├── MediaPlayer.js  # Manages the YouTube IFrame API player per scene.
-│   │   ├── CollaborationManager.js # Handles P2P connection, baton, and media streams.
-│   │   ├── CollabUI.js     # Manages the UI for the collaboration feature.
-│   │   ├── Constants.js    # Defines element types and other static configs.
-│   │   └── IDBHelper.js    # A wrapper for IndexedDB operations.
+│   ├── js-mod/                      # Core JavaScript source modules (ES6 Classes).
+│   │   ├── SFSS.js                  # Main controller, event bus, and state manager.
+│   │   ├── EditorHandler.js         # Manages all contenteditable logic and keyboard shortcuts.
+│   │   ├── PageRenderer.js          # Virtual pagination engine for "Page View" and printing.
+│   │   ├── SidebarManager.js        # Controls scene navigation, metadata, and assets.
+│   │   ├── StorageManager.js        # Handles all IndexedDB/LocalStorage interactions.
+│   │   ├── ReportsManager.js        # Generates script/character reports and simple charts.
+│   │   ├── PrintManager.js          # Print Prep modal for script/treatment/report output.
+│   │   ├── TreatmentManager.js      # Treatment mode logic; delegates rendering to TreatmentRenderer.
+│   │   ├── TreatmentRenderer.js     # Renders the card-based Treatment mode.
+│   │   ├── MediaPlayer.js           # Manages the YouTube IFrame API player per scene.
+│   │   ├── CollaborationManager.js  # Handles P2P connection, baton, and media streams.
+│   │   ├── CollabUI.js              # Manages the UI for the collaboration feature.
+│   │   ├── IOManager.js             # Import/export for JSON/FDX/Fountain/Text.
+│   │   ├── SettingsManager.js       # Keymaps, theme, and preferences.
+│   │   ├── FountainParser.js        # Fountain parsing/generation.
+│   │   ├── ScrollbarManager.js      # Styled scrollbar helper.
+│   │   ├── MobileApp.js             # Mobile bootstrap/runtime.
+│   │   ├── Constants.js             # Defines element types and other static configs.
+│   │   └── IDBHelper.js             # A wrapper for IndexedDB operations.
 │   │
-│   ├── script.js           # Main script bootstrapper, loads SFSS.js.
-│   ├── trystero.min.js     # WebRTC helper library for P2P networking.
-│   ├── fontawesome/        # Font Awesome library (local).
-│   └── googlefonts/        # Courier Prime font files (local).
+│   ├── script.js                    # Main script bootstrapper, loads SFSS.js.
+│   ├── trystero.min.js              # WebRTC helper library for P2P networking.
+│   ├── fontawesome/                 # Font Awesome library (local).
+│   └── googlefonts/                 # Courier Prime font files (local).
 │
-└── README.md               # This file.
+└── README.md                        # This file.
 ```
 
 ## 📄 License
