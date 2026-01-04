@@ -27,6 +27,7 @@ SFSS features a custom pagination and formatting engine (`PageRenderer.js`) tune
 *   **Smart Autocomplete:** Character suggestions, suffix completions, and "next speaker" hints.
 *   **Focus Controls:** Sidebar auto-hide, dropdown/horizontal type selectors, and page-view toggle.
 *   **Dark Mode:** Built-in high-contrast dark theme for late-night writing sessions.
+*   **Print Prep Modal:** One-stop modal for printing scripts, treatments, or reports with facing/booklet layouts, watermarks, and scene-aware pagination.
 
 ### 📋 Treatment & Planning Mode
 A dedicated **Treatment Mode** allows you to outline and structure your story before writing the script:
@@ -35,6 +36,7 @@ A dedicated **Treatment Mode** allows you to outline and structure your story be
 *   **Assets:** Attach reference images and YouTube tracks to scenes (stored locally).
 *   **Seamless Switching:** Toggle between the Script Editor and Treatment view; changes stay in sync.
 *   **Export Scope:** Image binaries and track metadata stay local; use `.json` for the most faithful backup.
+*   **Reorder & Insert:** Drag scenes to reorder, insert transitions/headings inline, and keep manual scene numbers and colors/icons intact.
 
 ### 📊 Advanced Reports & Analytics
 Gain insights into your screenplay with the built-in **Reports Manager**:
@@ -54,7 +56,7 @@ The sidebar acts as your production hub:
 Write with a partner in a serverless environment.
 *   **Peer-to-Peer Connection:** Connect directly via Trystero (WebRTC).
 *   **Baton Control:** Only one writer edits at a time; guests without the baton are read-only (mobile joins as spectator).
-*   **State Sync:** Host shares snapshots and deltas; heartbeat detects disconnects.
+*   **State Sync:** Host shares snapshots and deltas; heartbeat detects disconnects. Shareable `?room=` links auto-join peers.
 *   **Optional Video/Audio:** WebRTC media streaming with basic mic/cam toggles.
 
 ### 💾 Import / Export

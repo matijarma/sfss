@@ -14,31 +14,33 @@ The application is a writing studio built around three primary modes: **Write** 
     -   **Page View:** Switchable paginated view mirrors printed pages; print uses the same geometry.
     -   **Smart Autocomplete:** Character-name autocomplete + suffix suggestions; predictive “suggested character” hints.
     -   **Customizable Keymap:** Per-element `Enter`/`Tab` mappings persisted to LocalStorage; theme toggle.
+    -   **Print Prep:** Unified print modal outputs script, treatment, or report layouts (facing/booklet/single) with watermarks, title pages, and page ranges mapped back to scenes.
     -   **File Handling:** Import/export `.json`, `.fdx`, `.fountain`, `.txt`; OS File Handling API supported when available.
 
 -   ### 📋 **Planning & Outlining (Treatment Mode)**
     -   **Scene Cards:** Script is projected into a read-only, card-based view for high-level editing.
     -   **Scene Metadata:** Descriptions, notes, scene numbers, colors, and icons live alongside each slug.
     -   **Images & Tracks:** Attach reference images (stored in IndexedDB) and YouTube tracks per scene.
-    -   **Inline Edits:** Adjust scene descriptions and ordering without touching the formatted script.
+    -   **Inline Edits:** Adjust scene descriptions and ordering without touching the formatted script; drag scenes to reorder or insert transitions/scene headings inline.
 
 -   ### 📊 **Analysis & Reports**
     -   **Script Dashboard:** KPIs for pages, scenes, words, runtime (eighths), and setting/time breakdown.
     -   **Character Analysis:** Per-character reports (speaking/non-speaking scenes, words, interactions, monologues).
     -   **Scene Chronology:** Scene list with length (eighths), starting page, and speaking/non-speaking badges.
-    -   **Lightweight Charts:** Conic-gradient pie slices and sortable tables inside the modal; export text or print to PDF.
+    -   **Lightweight Charts:** Conic-gradient pie slices and sortable tables inside the modal; export text or print to PDF, or send to the Print Prep modal as a report package.
 
 -   ### 🤝 **Real-Time Collaboration (Beta)**
     -   **Peer-to-Peer:** Trystero-powered WebRTC rooms; host/guest joins via room id.
     -   **Baton Passing:** Single-writer baton; guests without the baton are read-only. Mobile guests join as spectators.
-    -   **State Sync:** Host sends full snapshots plus live updates; heartbeat auto-disconnects on timeouts.
+    -   **State Sync:** Host sends full snapshots plus live updates; heartbeat auto-disconnects on timeouts. Query-string `?room=` auto-joins shared links.
     -   **Optional Media:** Webcam/mic streaming per session; simple toast/status UI.
 
 -   ### ⚙️ **General**
     -   **Local-Only Data:** Scripts stored in IndexedDB with LocalStorage autosave and scene meta cache.
-    -   **PWA Ready:** Installable; works offline after first load via `sw.js`.
-    -   **Printing:** Print view shares pagination logic with Page View; title page can be toggled.
+    -   **PWA Ready:** Installable; works offline after first load via `sw.js`; mobile welcome screen helps pick recent scripts.
+    -   **Printing:** Print view shares pagination logic with Page View; title page can be toggled, and a dedicated print modal handles script/treatment/report output.
     -   **Light/Dark Mode:** Respects system preference; stored setting overrides.
+    -   **Assets:** Scene images and YouTube track metadata stay local (IndexedDB) and are not embedded in exports.
 
 ## 📌 Current State & Limitations (Alpha)
 -   **Local-first only:** Scene images and YouTube track links live in the browser (IndexedDB/LocalStorage) and are **not exported** with `.fdx/.fountain/.txt`; backups should use `.json`.

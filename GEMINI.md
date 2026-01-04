@@ -39,11 +39,18 @@ The application is built on a modular class-based architecture, orchestrated by 
 | **`IOManager.js`** | Handles all File I/O operations (Import/Export JSON, FDX, Fountain) and file downloads. |
 | **`SettingsManager.js`** | Manages application settings, keymap configuration, themes, and persistence of user preferences. |
 | **`ReportsManager.js`** | Generates in-app script/character reports with lightweight charts and printable output. |
+| **`PrintManager.js`** | Routes scripts, treatments, and reports through the Print Prep modal (facing/booklet layouts, watermarks, scene/page mapping). |
 | **`MediaPlayer.js`** | Integrates YouTube IFrame API for scene-level soundtrack playback. |
 | **`CollaborationManager.js`**| Manages P2P rooms, baton state, updates, and optional media streams using Trystero. |
 | **`CollabUI.js`**| Renders and manages UI components for real-time collaboration (modals, toasts, toolbar state). |
 | **`Constants.js`** | Defines static configuration, element types (`sc-slug`, `sc-action`, etc.), and format mappings (FDX/Fountain). |
 | **`IDBHelper.js`** | specific wrapper for `IndexedDB` promises. |
+| **`MobileApp.js`** | Mobile-first bootstrap for sandboxed page view, scaled pagination, and mobile menus. |
+
+### Print & Export Flow
+* **Print Prep Modal (`PrintManager.js`)**: Generates script, treatment, or report pages with facing/booklet options, title pages, watermarks, and scene-to-page mapping for treatment cards and report excerpts.
+* **Exports (`IOManager.js`)**: JSON/FDX/Fountain/Text with scene numbers, synopses, and SmartType metadata; autosave timestamps update backup status.
+* **Pagination (`PageRenderer.js`)**: Shared between page view, print preview, and Print Prep; enforces strict Courier geometry (6 lines per inch).
 
 ### Current Implementation Notes
 - **Storage model:** Autosaves land in LocalStorage immediately and are later persisted to IndexedDB; scene images stay in IndexedDB only and are not embedded in exports.
@@ -102,3 +109,4 @@ Since this is a Vanilla JS project, there is no build step.
 *   **Separation of Concerns:** Keep UI logic in `SidebarManager`/`EditorHandler` and data logic in `SFSS`/`StorageManager`.
 *   **Accessibility:** Ensure `aria-labels` and keyboard navigation are maintained.
 *   **Dependencies:** The project aims to be self-contained. The only external runtime dependency is **Trystero.js** for WebRTC functionality. Do not add npm packages.
+*   **Local Assets Stay Local:** Scene images and YouTube track metadata live in IndexedDB and are not bundled into exports; use `.json` for best fidelity.
