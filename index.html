@@ -41,7 +41,7 @@
             } catch (e) { console.log('Theme detection failed', e); }
 
             // Your Version Logic
-            //const staticversion = "" + "31-12-25_" + "public-" + "1303";
+            //const staticversion = "" + "01-01-26_" + "public-" + "1403";
             const staticversion = Math.round(Math.random()*1000000);
 
             const queryString = self.location.search;
@@ -526,19 +526,20 @@
                 <div class="toggle-group w-full flex-justify-center mb-2" style="width: 100%; display: flex; justify-content: center;">
                     <button class="toggle-btn active" data-mode="script">Screenplay</button>
                     <button class="toggle-btn" data-mode="treatment">Treatment</button>
+                    <button class="toggle-btn" data-mode="report">Reports</button>
                 </div>
 
                 <div id="print-config-script" class="flex-col gap-1">
                     <div class="settings-section">
                         <h3 class="text-xs uppercase font-bold text-meta mb-1">Layout</h3>
-                        <div class="flex-justify-between-center">
+                        <div class="prepprinttoggles">
                             <label class="settings-checkbox-row mb-0">
                                 <input type="checkbox" class="print-config-input" data-section="script" data-key="showTitlePage">
                                 Title Page
                             </label>
                             <button id="print-edit-meta-btn" class="btn-text text-xs" title="Edit Title, Author, etc."><i class="fas fa-edit"></i> Edit Info</button>
                         </div>
-                        <div class="flex-justify-between-center mt-1">
+                        <div class="prepprinttoggles mt-1">
                             <span class="text-sm">Format:</span>
                             <select class="print-config-input settings-input text-sm" style="width: auto;" data-section="script" data-key="layout">
                                 <option value="normal">Normal</option>
@@ -576,20 +577,32 @@
                 <div id="print-config-treatment" class="flex-col gap-1 hidden">
                     <div class="settings-section">
                         <h3 class="text-xs uppercase font-bold text-meta mb-1">Layout</h3>
-                        <div class="flex-justify-between-center mt-1">
-                            <span class="text-sm">Orientation:</span>
-                            <select class="print-config-select settings-input text-sm" style="width: auto;" data-section="treatment" data-key="orientation">
-                                <option value="portrait">Portrait</option>
-                                <option value="landscape">Landscape</option>
-                            </select>
-                        </div>
-                        <div class="flex-justify-between-center mt-1">
-                            <span class="text-sm">Format:</span>
-                            <select class="print-config-select settings-input text-sm" style="width: auto;" data-section="treatment" data-key="layout">
-                                <option value="normal">Normal</option>
-                                <option value="facing">Facing Pages (Double-Sided)</option>
-                                <option value="booklet">Booklet (Imposed)</option>
-                            </select>
+                        <div class="flex-col gap-1">
+                            <div class="prepprinttoggles">
+                                <span class="text-sm">Orientation:</span>
+                                <div class="toggle-group">
+                                    <button class="toggle-btn print-toggle" data-section="treatment" data-key="orientation" data-value="portrait">Portrait</button>
+                                    <button class="toggle-btn print-toggle" data-section="treatment" data-key="orientation" data-value="landscape">Landscape</button>
+                                </div>
+                                <input type="hidden" class="print-config-input" data-section="treatment" data-key="orientation" value="portrait">
+                            </div>
+                            <div class="prepprinttoggles">
+                                <span class="text-sm">Format:</span>
+                                <div class="toggle-group">
+                                    <button class="toggle-btn print-toggle" data-section="treatment" data-key="layout" data-value="normal">Normal</button>
+                                    <button class="toggle-btn print-toggle" data-section="treatment" data-key="layout" data-value="facing">Facing</button>
+                                    <button class="toggle-btn print-toggle" data-section="treatment" data-key="layout" data-value="booklet">Booklet</button>
+                                </div>
+                                <input type="hidden" class="print-config-input" data-section="treatment" data-key="layout" value="normal">
+                            </div>
+                            <div class="prepprinttoggles">
+                                <span class="text-sm">Sides:</span>
+                                <div class="toggle-group">
+                                    <button class="toggle-btn print-toggle" data-section="treatment" data-key="sides" data-value="single">Single</button>
+                                    <button class="toggle-btn print-toggle" data-section="treatment" data-key="sides" data-value="double">Double</button>
+                                </div>
+                                <input type="hidden" class="print-config-input" data-section="treatment" data-key="sides" value="single">
+                            </div>
                         </div>
                     </div>
 
@@ -626,6 +639,39 @@
                     </div>
                 </div>
 
+                <div id="print-config-report" class="flex-col gap-1 hidden">
+                    <div class="settings-section">
+                        <h3 class="text-xs uppercase font-bold text-meta mb-1">Report Type</h3>
+                        <div class="prepprinttoggles">
+                            <span class="text-sm">Kind:</span>
+                            <div class="toggle-group">
+                                <button class="toggle-btn print-toggle" data-section="report" data-key="type" data-value="script">Script</button>
+                                <button class="toggle-btn print-toggle" data-section="report" data-key="type" data-value="character">Character</button>
+                            </div>
+                            <input type="hidden" class="print-config-input" data-section="report" data-key="type" value="script">
+                        </div>
+                        <div class="flex-col gap-05 mt-1" id="print-report-character-row">
+                            <label class="text-xs">Character</label>
+                            <select class="print-config-select settings-input" data-section="report" data-key="character"></select>
+                        </div>
+                        <div class="prepprinttoggles mt-1">
+                            <button id="print-report-refresh-btn" class="btn-text text-xs"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>
+                            <span class="text-xs text-meta">Uses current script data</span>
+                        </div>
+                        <div class="flex-col gap-1 mt-2 hidden" id="print-report-character-mode-row">
+                            <label class="text-xs uppercase font-bold text-meta mb-1">Include</label>
+                            <label class="settings-checkbox-row">
+                                <input type="checkbox" class="print-config-input" data-section="report" data-key="includeDialogues" checked>
+                                Dialogues
+                            </label>
+                            <label class="settings-checkbox-row">
+                                <input type="checkbox" class="print-config-input" data-section="report" data-key="includeScenes">
+                                Scenes
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
             <!-- RIGHT PANEL: PREVIEW -->
@@ -637,7 +683,7 @@
                 </div>
             </div>
         </div>
-        <div class="modal-footer flex-justify-between-center">
+        <div class="modal-footer prepprinttoggles">
             <div class="text-xs text-meta" id="print-stats"></div>
             <div>
                 <button id="print-prep-cancel-btn" class="btn-text mr-1">Cancel</button>

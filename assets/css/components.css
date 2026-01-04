@@ -240,6 +240,14 @@ input:checked + .slider:before {
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
+.toggle-btn.disabled,
+.toggle-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+    color: var(--text-meta);
+}
+
 /* REPORT PLACEHOLDER */
 .report-placeholder {
     display: flex; 
@@ -360,6 +368,8 @@ input:checked + .slider:before {
     padding: 1rem;
     border-top: 1px solid var(--border-color);
     text-align: right;
+    display: flex;
+    align-items: flex-end;
 }
 
 .modal-btn-primary {
@@ -512,6 +522,13 @@ span.scene-item-icon-container {
 .scene-item-main > div > span.mr-1 {
     font-size: 1.2rem;
     font-weight: bold;
+    min-width: min-content;
+    text-align: right;
+    cursor: text;
+}
+.scene-item-main > div > span.mr-1:focus-visible {
+    border: 0;
+    padding: 2px;
 }
 .scene-grid-number {
     text-align: right;

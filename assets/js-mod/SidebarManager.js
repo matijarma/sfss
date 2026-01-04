@@ -291,24 +291,22 @@ export class SidebarManager {
         
         // Scene Number Logic: Check meta first, else calculate
         const meta = this.app.sceneMeta[sceneId] || {};
-        
-        // Auto-number is tricky in Treatment Mode without full scan.
-        // If mock, we might pass index or just skip auto calculation.
-        // Let's rely on Sidebar loop to have set a 'cachedNumber' if we wanted perfect sync, 
-        // but for now, if mock, we default to "?" if no manual number.
-        let displaySceneNumber = meta.number;
-        if (!displaySceneNumber) {
+        const computeDisplaySceneNumber = () => {
+            const currentMeta = this.app.sceneMeta[sceneId] || {};
+            if (currentMeta.number) return currentMeta.number;
+            
             if (!slug.isMock) {
-                displaySceneNumber = Array.from(this.app.editor.querySelectorAll('.sc-slug')).indexOf(slug) + 1;
-            } else {
-                // In treatment mode, we can find index in scriptData
-                if (this.app.scriptData && this.app.scriptData.blocks) {
-                    const slugs = this.app.scriptData.blocks.filter(b => b.type === 'sc-slug');
-                    const idx = slugs.findIndex(b => b.id === sceneId);
-                    if (idx !== -1) displaySceneNumber = idx + 1;
-                }
+                const slugs = Array.from(this.app.editor.querySelectorAll('.sc-slug'));
+                const idx = slugs.indexOf(slug);
+                if (idx !== -1) return idx + 1;
+            } else if (this.app.scriptData && this.app.scriptData.blocks) {
+                const slugs = this.app.scriptData.blocks.filter(b => b.type === 'sc-slug');
+                const idx = slugs.findIndex(b => b.id === sceneId);
+                if (idx !== -1) return idx + 1;
             }
-        }
+            return '';
+        };
+        const displaySceneNumber = computeDisplaySceneNumber();
     
         const colorClass = meta.color || '';
         const iconHtml = meta.icon ? `<span class="scene-item-icon-container ${colorClass}"><i class="${meta.icon} fa-fw"></i></span>` : '';
@@ -353,6 +351,9 @@ export class SidebarManager {
             
             if (!this.app.sceneMeta[sceneId]) this.app.sceneMeta[sceneId] = {};
             this.app.sceneMeta[sceneId].number = val;
+            
+            const normalizedDisplay = computeDisplaySceneNumber();
+            numSpan.textContent = normalizedDisplay || '';
             
             this.saveSceneMeta(sceneId); // Persist
         };
@@ -581,6 +582,7 @@ export class SidebarManager {
         if (!this.app.sceneMeta[sceneId]) {
             this.app.sceneMeta[sceneId] = {};
         }
+        const prevNumber = this.app.sceneMeta[sceneId].number ?? null;
         const descriptionInput = document.getElementById('scene-description-input');
         const notesInput = document.getElementById('scene-notes-input');
         const trackInput = document.getElementById('scene-track-input');
@@ -601,14 +603,25 @@ export class SidebarManager {
             track,
             number
         };
+        const newNumber = this.app.sceneMeta[sceneId].number ?? null;
+        const numberChanged = prevNumber !== newNumber;
 
         localStorage.setItem('sfss_scene_meta', JSON.stringify(this.app.sceneMeta));
         this.app.isDirty = true;
         
         // Targeted refresh instead of full refresh
-        this.updateSceneList();
+        if (updateList !== false) {
+            this.updateSceneList();
+        }
         if (this.app.treatmentModeActive) {
             this.app.refreshScene(sceneId);
+        }
+
+        if (numberChanged) {
+            this.app.updateSceneNumbersInEditor();
+            if (this.app.pageViewActive) {
+                this.app.paginate();
+            }
         }
         
         this.app.mediaPlayer.updatePlaylist();

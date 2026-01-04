@@ -251,7 +251,7 @@ export class SFSS {
 
         const status = document.createElement("div");
         status.id = "htmlverzija";
-        status.innerHTML ="V. "+window.cacheverzija;
+        status.innerHTML ="<a href='https://github.com/matijarma/sfss/' target='_blank' style='color:inherit;text-decoration:none'>V. "+window.cacheverzija+"</a>";
         document.body.appendChild(status);
 
         this.updateToolbarButtons();
@@ -533,6 +533,13 @@ export class SFSS {
 
         // Global Keys & Back Navigation
         window.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'p') {
+                e.preventDefault();
+                e.stopPropagation();
+                this.printManager.open();
+            }
+        });
+        window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 this.handleBackOrEscape();
             }
@@ -731,10 +738,29 @@ export class SFSS {
         const dropdown = document.getElementById(dropdownId);
         if (!container || !dropdown) return;
         let menuHideTimeout;
-        const show = () => { clearTimeout(menuHideTimeout); dropdown.classList.remove('hidden'); };
-        const hide = () => { menuHideTimeout = setTimeout(() => dropdown.classList.add('hidden'), 200); };
+        const hide = (immediate = false) => {
+            clearTimeout(menuHideTimeout);
+            if (immediate) {
+                dropdown.classList.add('hidden');
+            } else {
+                menuHideTimeout = setTimeout(() => dropdown.classList.add('hidden'), 120);
+            }
+        };
+        const show = () => { 
+            clearTimeout(menuHideTimeout); 
+            document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                if (menu !== dropdown) menu.classList.add('hidden');
+            });
+            dropdown.classList.remove('hidden'); 
+        };
         container.addEventListener('mouseenter', show);
-        container.addEventListener('mouseleave', hide);
+        container.addEventListener('mouseleave', () => hide(false));
+        dropdown.addEventListener('mouseenter', () => clearTimeout(menuHideTimeout));
+        dropdown.addEventListener('mouseleave', () => hide(false));
+        container.addEventListener('focusin', show);
+        container.addEventListener('focusout', (e) => {
+            if (!e.relatedTarget || !container.contains(e.relatedTarget)) hide(true);
+        });
     }
 
     scrollToScene(sceneId) {
