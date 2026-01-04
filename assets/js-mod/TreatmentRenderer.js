@@ -10,6 +10,75 @@ export class TreatmentRenderer {
         // Legacy entry point
     }
     
+    refreshScene(sceneId) {
+        if (!this.container) return;
+        const oldBlock = this.container.querySelector(`.treatment-scene-block[data-scene-id="${sceneId}"]`);
+        if (!oldBlock) return;
+
+        const index = parseInt(oldBlock.dataset.index, 10);
+        const total = this.container.children.length; // Approximate total based on DOM
+        
+        // Re-calculate data for this scene specifically
+        const sceneData = this._getSceneData(sceneId);
+        if (!sceneData) return; // Scene might have been deleted
+
+        const meta = this.app.sceneMeta[sceneId] || {};
+        const newBlock = this.createSceneBlock(sceneData, meta, index, total);
+        
+        this.container.replaceChild(newBlock, oldBlock);
+    }
+
+    _getSceneData(sceneId) {
+        if (!this.app.scriptData || !this.app.scriptData.blocks) return null;
+        const blocks = this.app.scriptData.blocks;
+        
+        const slugIndex = blocks.findIndex(b => b.id === sceneId);
+        if (slugIndex === -1) return null;
+        
+        const slug = blocks[slugIndex];
+        const scene = {
+            slug: slug,
+            startIndex: slugIndex,
+            content: [],
+            charsBlock: null,
+            linesCount: 1
+        };
+
+        // Scan forward until next slug
+        for (let i = slugIndex + 1; i < blocks.length; i++) {
+            const block = blocks[i];
+            if (block.type === constants.ELEMENT_TYPES.SLUG) break;
+            
+            // Re-use logic for line counts
+            let lines = 1;
+            if (block.type === constants.ELEMENT_TYPES.ACTION) lines += Math.floor(block.text.length / 60);
+            else if (block.type === constants.ELEMENT_TYPES.DIALOGUE) lines += Math.floor(block.text.length / 35);
+            
+            scene.linesCount += lines;
+
+            const isFirstContent = scene.content.length === 0;
+            if (isFirstContent && block.type === constants.ELEMENT_TYPES.ACTION && block.text.trim().startsWith('Characters:')) {
+                scene.charsBlock = block;
+            } else {
+                scene.content.push(block);
+            }
+        }
+        
+        // Recalculate duration string
+        const eighths = Math.ceil((scene.linesCount * 8) / 55);
+        let durationStr = '';
+        if (eighths < 8) {
+            durationStr = `${eighths}/8`;
+        } else {
+            const pgs = Math.floor(eighths / 8);
+            const rem = eighths % 8;
+            durationStr = rem > 0 ? `${pgs} ${rem}/8` : `${pgs}`;
+        }
+        scene.durationStr = durationStr;
+
+        return scene;
+    }
+
     renderFromData(blocks, container) {
         this.container = container;
         this.container.innerHTML = '';
@@ -808,7 +877,7 @@ export class TreatmentRenderer {
         }
         
         this.app.isDirty = true;
-        this.app.refreshTreatmentView();
+        this.refreshScene(scene.slug.id);
     }
 
     showCharacterInput(btn, container, scene) {

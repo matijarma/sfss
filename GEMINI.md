@@ -13,8 +13,8 @@
 *   **Language:** Vanilla JavaScript (ES6 Modules). No frameworks (React/Vue/Angular).
 *   **Styling:** Modular CSS (`assets/css/`). Uses CSS Variables for theming (Light/Dark).
 *   **P2P Networking:** **Trystero** for serverless, WebRTC-based peer-to-peer connections.
-*   **Storage:** `IndexedDB` (via `IDBHemanifest.json scripts; `LocalStorage` for preferences.
-*   **PWA:** `sw.js` (Service Worker), `manifest-testing.json`, and File Handling API support.
+*   **Storage:** IndexedDB (via `IDBHelper`) for scripts and scene images; LocalStorage for autosave cache, scene meta cache, and preferences.
+*   **PWA:** `sw.js` (Service Worker), `manifest.json`, and File Handling API support where available.
 *   **External Assets:** FontAwesome (local), Courier Prime font (local).
 
 ## 3. Architecture & Key Modules
@@ -32,18 +32,24 @@ The application is built on a modular class-based architecture, orchestrated by 
 | **`SFSS.js`** | **Main Controller**. Orchestrates sub-modules and handles global state. Delegated file I/O, Settings, and Treatment logic to specific managers. |
 | **`EditorHandler.js`** | Manages the `contenteditable` editor. Handles text input, element types (Slug, Action, Dialogue), and keyboard shortcuts (Enter/Tab logic). |
 | **`PageRenderer.js`** | **Critical**. The "Formatting Engine". Calculates virtual pagination based on strict physical dimensions (US Letter/A4) to simulate print output in the browser. |
-| **`StorageManager.js`** | Handles data persistence. Manages CRUD operations for scripts in `IndexedDB` and handles Auto-Save/Backup logic. |
-| **`SidebarManager.js`** | Controls the navigation sidebar, scene list, and script metadata UI. |
-| **`TreatmentRenderer.js`**| Renders the "Treatment Mode" (Kanban-style scene cards) for planning and outlining. |
-| **`TreatmentManager.js`** | Handles business logic for Treatment Mode (adding scenes, moving cards, editing data), separating logic from the renderer. |
+| **`StorageManager.js`** | Handles data persistence. Manages CRUD operations for scripts in IndexedDB with debounced autosave and LocalStorage cache. |
+| **`SidebarManager.js`** | Controls the navigation sidebar, scene list, script metadata UI, and scene assets (images/tracks). |
+| **`TreatmentRenderer.js`**| Renders the "Treatment Mode" (card-based scene view) for planning and outlining. |
+| **`TreatmentManager.js`** | Handles Treatment Mode lifecycle and inserts (toggle, description updates, transitions/scene headings). |
 | **`IOManager.js`** | Handles all File I/O operations (Import/Export JSON, FDX, Fountain) and file downloads. |
 | **`SettingsManager.js`** | Manages application settings, keymap configuration, themes, and persistence of user preferences. |
-| **`ReportsManager.js`** | Generates statistical reports (Scene counts, Character interactions) and visualizations. |
-| **`MediaPlayer.js`** | Integrates YouTube IFrame API for the soundtrack feature attached to scenes. |
-| **`CollaborationManager.js`**| Manages P2P connections, data synchronization, and media streams using Trystero. |
-| **`CollabUI.js`**| Renders and manages all UI components for the real-time collaboration feature. |
+| **`ReportsManager.js`** | Generates in-app script/character reports with lightweight charts and printable output. |
+| **`MediaPlayer.js`** | Integrates YouTube IFrame API for scene-level soundtrack playback. |
+| **`CollaborationManager.js`**| Manages P2P rooms, baton state, updates, and optional media streams using Trystero. |
+| **`CollabUI.js`**| Renders and manages UI components for real-time collaboration (modals, toasts, toolbar state). |
 | **`Constants.js`** | Defines static configuration, element types (`sc-slug`, `sc-action`, etc.), and format mappings (FDX/Fountain). |
 | **`IDBHelper.js`** | specific wrapper for `IndexedDB` promises. |
+
+### Current Implementation Notes
+- **Storage model:** Autosaves land in LocalStorage immediately and are later persisted to IndexedDB; scene images stay in IndexedDB only and are not embedded in exports.
+- **Collaboration:** Host starts a room id like `script-xxxxx`; baton-based single-writer model, guests without the baton are read-only (mobile always read-only). No extra encryption beyond WebRTC.
+- **Pagination:** `PageRenderer` enforces Courier 12 pt geometry with JS measurement; orphan/widow handling is heuristic and still in alpha.
+- **Media:** Scene music depends on YouTube IFrame API and oEmbed metadata; network is required for titles/artists.
 
 ## 4. Data Structures
 
@@ -87,7 +93,7 @@ The editor relies on specific CSS classes to style paragraphs:
 
 Since this is a Vanilla JS project, there is no build step.
 
-1.  **Run:** Serve the root directory using any static file server (e.g., `python3 -m http.server`, `php -S localhost:8000`, or VS Code Live Server).
+1.  **Run:** Open `index.html` directly or serve the root directory using any static file server (e.g., `python3 -m http.server`, `php -S localhost:8000`, or VS Code Live Server).
 2.  **Edit:** Modify files in `assets/js-mod/` or `assets/css/`.
 3.  **Test:** Refresh the browser. Ensure Hard Refresh (Ctrl+F5) if caching is aggressive due to Service Worker.
 

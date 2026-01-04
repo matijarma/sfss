@@ -26,6 +26,7 @@ import { FountainParser } from './FountainParser.js';
 import { SettingsManager } from './SettingsManager.js';
 import { TreatmentManager } from './TreatmentManager.js';
 import { IOManager } from './IOManager.js';
+import { PrintManager } from './PrintManager.js';
 
 export class SFSS {
     constructor() {
@@ -82,6 +83,7 @@ export class SFSS {
         this.settingsManager = new SettingsManager(this);
         this.treatmentManager = new TreatmentManager(this);
         this.ioManager = new IOManager(this);
+        this.printManager = new PrintManager(this);
 
         this.ELEMENT_TYPES = constants.ELEMENT_TYPES;
         this.TYPE_LABELS = constants.TYPE_LABELS;
@@ -249,7 +251,7 @@ export class SFSS {
 
         const status = document.createElement("div");
         status.id = "htmlverzija";
-        status.innerHTML ="V. "+window.cacheverzija;
+        status.innerHTML ="<a href='https://github.com/matijarma/sfss/' target='_blank' style='color:inherit;text-decoration:none'>V. "+window.cacheverzija+"</a>";
         document.body.appendChild(status);
 
         this.updateToolbarButtons();
@@ -371,7 +373,7 @@ export class SFSS {
         document.getElementById('download-fdx-btn').addEventListener('click', () => this.ioManager.downloadFDX());
         document.getElementById('download-fountain-btn').addEventListener('click', () => this.ioManager.downloadFountain());
         document.getElementById('download-text-btn').addEventListener('click', () => this.ioManager.downloadText());
-        document.getElementById('print-btn').addEventListener('click', () => this.ioManager.printScript());
+        document.getElementById('print-btn').addEventListener('click', () => this.printManager.open());
         document.getElementById('file-input').addEventListener('change', (e) => this.ioManager.uploadFile(e.target));
 
         document.getElementById('reports-menu-btn').addEventListener('click', (e) => {
@@ -530,6 +532,13 @@ export class SFSS {
         });
 
         // Global Keys & Back Navigation
+        window.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'p') {
+                e.preventDefault();
+                e.stopPropagation();
+                this.printManager.open();
+            }
+        });
         window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 this.handleBackOrEscape();
@@ -729,10 +738,29 @@ export class SFSS {
         const dropdown = document.getElementById(dropdownId);
         if (!container || !dropdown) return;
         let menuHideTimeout;
-        const show = () => { clearTimeout(menuHideTimeout); dropdown.classList.remove('hidden'); };
-        const hide = () => { menuHideTimeout = setTimeout(() => dropdown.classList.add('hidden'), 200); };
+        const hide = (immediate = false) => {
+            clearTimeout(menuHideTimeout);
+            if (immediate) {
+                dropdown.classList.add('hidden');
+            } else {
+                menuHideTimeout = setTimeout(() => dropdown.classList.add('hidden'), 120);
+            }
+        };
+        const show = () => { 
+            clearTimeout(menuHideTimeout); 
+            document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                if (menu !== dropdown) menu.classList.add('hidden');
+            });
+            dropdown.classList.remove('hidden'); 
+        };
         container.addEventListener('mouseenter', show);
-        container.addEventListener('mouseleave', hide);
+        container.addEventListener('mouseleave', () => hide(false));
+        dropdown.addEventListener('mouseenter', () => clearTimeout(menuHideTimeout));
+        dropdown.addEventListener('mouseleave', () => hide(false));
+        container.addEventListener('focusin', show);
+        container.addEventListener('focusout', (e) => {
+            if (!e.relatedTarget || !container.contains(e.relatedTarget)) hide(true);
+        });
     }
 
     scrollToScene(sceneId) {
@@ -832,6 +860,12 @@ export class SFSS {
         this.treatmentManager.refreshView();
     }
 
+    refreshScene(sceneId) {
+        if (this.treatmentManager.isActive) {
+            this.treatmentRenderer.refreshScene(sceneId);
+        }
+    }
+    
     toggleSidebar(forceCollapse, forceShow) {
         if (forceShow) {
             this.mainArea.classList.add('sidebar-manual-show');
@@ -1174,7 +1208,8 @@ export class SFSS {
             showPageNumbers: true,
             showDate: this.meta.showDate,
             headerText: this.getHeaderText(),
-            sceneNumberMap: sceneNumberMap
+            sceneNumberMap: sceneNumberMap,
+            hideFirstPageMeta: true
         };
         this.pageRenderer.render(scriptLines, this.pageViewContainer, options);
     }        

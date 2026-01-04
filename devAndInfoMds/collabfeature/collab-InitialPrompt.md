@@ -1,10 +1,10 @@
 # FEATURE SPEC: Decentralized P2P Collaboration (The "Baton" System)
 
 ## 1. Overview
-This feature enables two users to connect directly (P2P) to share a screenplay session.
-- **Architecture:** Local-First, Serverless (via `trystero` + BitTorrent trackers).
+This feature enables two users to connect directly (P2P) to share a screenplay session. Current implementation uses Trystero WebRTC rooms with a single-writer baton; mobile peers join as spectators (read-only).
+- **Architecture:** Local-First, Serverless (via `trystero` + BitTorrent trackers). Current app id is `sfss-collab-v1` and room ids are generated as `script-xxxxx`.
 - **Model:** Turn-Based (Token Passing). Only one user edits at a time.
-- **Security:** End-to-End Encrypted (DTLS-SRTP).
+- **Security:** WebRTC DTLS-SRTP on the transport; no additional app-level encryption layer.
 - **Network:** Uses `trystero` library (locally loaded from `assets/js-mod/trystero.min.js`).
 
 ## 2. Core Experience & UX
@@ -16,7 +16,7 @@ This feature enables two users to connect directly (P2P) to share a screenplay s
     - **Passive Mode:** When user is watching, the editor is `readOnly` (greyed out toolbar), and a "🔒 WATCHING" badge is visible.
     - **Video Chat:** A floating, draggable "Mini-Window" shows the peer's video. Includes Mic/Cam toggle buttons.
 - **LAN workaround:**
-    - It is expected that BitTorrent trystero mechanism to connect client will not work when both clients are on the same LAN. A passive "plan B" should exist for these situations, such as LAN multicast or different method to find and connect clients on LAN. This shouldn't be implemented now but the code should have a placeholder for this.
+    - Not implemented; Trystero defaults are used. Future work could add a LAN discovery fallback.
 - **More than 2 collaborators:**
     - For first implementation the feature should only support 2 collaborators, but in the future there's no reason to not allow the shared link at least pasively (read only) to work for a larger number of collaborators, so just make sure the code can take such an update in the future. 
 

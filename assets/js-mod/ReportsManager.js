@@ -717,6 +717,142 @@ export class ReportsManager {
         return txt;
     }
 
+    collectSceneBlocks() {
+        const data = this.app.scriptData || this.app.exportToJSONStructure() || {};
+        const blocks = data.blocks || [];
+        const scenes = [];
+        let current = null;
+        blocks.forEach(block => {
+            if (block.type === constants.ELEMENT_TYPES.SLUG) {
+                if (current) scenes.push(current);
+                current = { slug: block, slugText: block.text || 'UNTITLED', id: block.id || block.slugId || block.text, blocks: [] };
+            } else if (current) {
+                current.blocks.push(block);
+            }
+        });
+        if (current) scenes.push(current);
+        return scenes;
+    }
+
+    collectScenesForCharacter(targetChar) {
+        const scenes = this.collectSceneBlocks();
+        const target = (targetChar || '').trim().toUpperCase();
+        const cleanCharacter = (name = '') => name.replace(/\(.*?\)/g, '').trim().toUpperCase();
+        const ids = [];
+        scenes.forEach(scene => {
+            const hasChar = scene.blocks.some(b => b.type === constants.ELEMENT_TYPES.CHARACTER && cleanCharacter(b.text || '') === target);
+            if (hasChar) ids.push(scene.slug?.id || scene.id || scene.slugText);
+        });
+        return ids;
+    }
+
+    buildCharacterDialogues(targetChar) {
+        const scenes = this.collectSceneBlocks();
+        const targetUpper = (targetChar || '').toUpperCase();
+        const clusters = [];
+
+        const cleanCharacter = (name = '') => name.replace(/\(.*?\)/g, '').trim().toUpperCase();
+
+        scenes.forEach(scene => {
+            let activeSpeaker = null;
+            let currentCluster = [];
+            let clusterHasTarget = false;
+            const sceneClusters = [];
+            let nonTargetSinceTarget = false;
+
+            const flushCluster = () => {
+                if (!currentCluster.length) return;
+                if (clusterHasTarget) sceneClusters.push(currentCluster);
+                currentCluster = [];
+                clusterHasTarget = false;
+                nonTargetSinceTarget = false;
+            };
+
+            const dialogueTypes = new Set([
+                constants.ELEMENT_TYPES.CHARACTER,
+                constants.ELEMENT_TYPES.PARENTHETICAL,
+                constants.ELEMENT_TYPES.DIALOGUE
+            ]);
+
+            scene.blocks.forEach(block => {
+                if (block.type === constants.ELEMENT_TYPES.SLUG || block.type === constants.ELEMENT_TYPES.ACTION || block.type === constants.ELEMENT_TYPES.TRANSITION) {
+                    activeSpeaker = null;
+                    flushCluster();
+                    return;
+                }
+                if (!dialogueTypes.has(block.type)) return;
+
+                if (block.type === constants.ELEMENT_TYPES.CHARACTER) {
+                    activeSpeaker = cleanCharacter(block.text || '');
+                }
+                if (!activeSpeaker) return;
+
+                const isTarget = activeSpeaker === targetUpper;
+                if (isTarget && clusterHasTarget && nonTargetSinceTarget) {
+                    flushCluster();
+                }
+                if (isTarget) {
+                    clusterHasTarget = true;
+                    nonTargetSinceTarget = false;
+                } else if (clusterHasTarget) {
+                    nonTargetSinceTarget = true;
+                }
+
+                currentCluster.push({
+                    type: block.type,
+                    text: block.text || '',
+                    speaker: activeSpeaker,
+                    isTarget
+                });
+            });
+            flushCluster();
+
+            if (sceneClusters.length > 0) {
+                clusters.push({
+                    slug: (scene.slugText || 'UNTITLED').toUpperCase(),
+                    clusters: sceneClusters
+                });
+            }
+        });
+
+        return clusters;
+    }
+
+    renderCharacterDialogues(character, dialogueData = []) {
+        if (!dialogueData.length) return '<div class="report-section"><h3>Dialogues</h3><div class="report-error">No dialogue found for this character.</div></div>';
+        const escape = (str = '') => str.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const blocksToHtml = (blocks) => blocks.map(b => {
+            const cls = `script-line ${b.type} ${b.isTarget ? '' : 'counterpart-line'}`.trim();
+            const speakerLabel = b.type === constants.ELEMENT_TYPES.CHARACTER ? escape(b.speaker || '') : '';
+            const text = escape(b.text || '');
+            if (b.type === constants.ELEMENT_TYPES.CHARACTER) return `<div class="${cls}">${speakerLabel}</div>`;
+            if (b.type === constants.ELEMENT_TYPES.PARENTHETICAL) return `<div class="${cls}">(${text})</div>`;
+            return `<div class="${cls}">${text}</div>`;
+        }).join('');
+
+        const sceneHtml = dialogueData.map(scene => {
+            const clusters = scene.clusters.map((cluster, idx) => {
+                const separator = idx > 0 ? `<div class="dialogue-separator">* * *</div>` : '';
+                return `${separator}<div class="dialogue-cluster">${blocksToHtml(cluster)}</div>`;
+            }).join('');
+            return `
+                <div class="dialogue-excerpt">
+                    <div class="script-line sc-slug">${escape(scene.slug)}</div>
+                    ${clusters}
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="report-section">
+                <h3>Dialogues (${character})</h3>
+                <div class="dialogue-section-wrap">
+                    ${sceneHtml}
+                </div>
+            </div>
+        `;
+    }
+
     downloadTxt() {
         if (!this.currentReportData) return;
         const blob = new Blob([this.currentReportData], {type: 'text/plain;charset=utf-8'});
@@ -727,33 +863,42 @@ export class ReportsManager {
     }
 
     printReport() {
-        const content = this.outputArea.innerHTML;
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(`
-            <html>
-            <head>
-                <title>Report</title>
-                <style>
-                    body { font-family: 'Inter', sans-serif; padding: 2rem; color: #333; -webkit-print-color-adjust: exact; }
-                    .report-dashboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }
-                    .kpi-card { border: 1px solid #ccc; padding: 1rem; text-align: center; border-radius: 4px; }
-                    .kpi-value { font-size: 1.5rem; font-weight: bold; }
-                    .report-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-                    th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
-                    .text-right { text-align: right; }
-                    .text-center { text-align: center; }
-                    .badge { padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; border: 1px solid #eee; display: inline-block; margin-right: 4px; margin-bottom: 4px; }
-                    .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; display: inline-block; vertical-align: bottom; }
-                    .text-faded { color: #666; }
-                    .font-mono { font-family: monospace; }
-                </style>
-            </head>
-            <body>
-                ${content}
-                <script>window.onload = function() { window.print(); window.close(); }</script>
-            </body>
-            </html>
-        `);
-        printWindow.document.close();
+        const character = this.activeType === 'character' ? this.charSelect.value : '';
+        this.app.printManager.openReportMode({ type: this.activeType, character });
+        this.close();
+    }
+
+    buildPrintableReport(type = 'script', { character, includeDialogues, includeScenes } = {}) {
+        const reportType = type || 'script';
+        this.generateCharacterColors();
+
+        if (reportType === 'character') {
+            const characters = Array.from(this.app.characters || []).sort();
+            const targetChar = character || characters[0] || '';
+            if (!targetChar) {
+                return { title: 'Character Report', subtitle: '', html: '<div class="report-error">No characters found.</div>', message: 'No characters found.' };
+            }
+            const data = this.calculateCharacterStats(targetChar);
+            const dlgFlag = includeDialogues !== undefined ? !!includeDialogues : true;
+            const sceneFlag = includeScenes !== undefined ? !!includeScenes : false;
+            const dialogueData = dlgFlag ? this.buildCharacterDialogues(targetChar) : [];
+            const sceneIds = sceneFlag ? this.collectScenesForCharacter(targetChar) : [];
+            return {
+                title: `${targetChar} Report`,
+                subtitle: this.app.meta.title || 'Character Analysis',
+                html: this.renderCharacterReport(data),
+                dialogueData,
+                sceneIds,
+                includeDialogues: dlgFlag,
+                includeScenes: sceneFlag
+            };
+        }
+
+        const data = this.calculateScriptStats();
+        return {
+            title: 'Script Report',
+            subtitle: this.app.meta.title || 'Story Overview',
+            html: this.renderScriptReport(data)
+        };
     }
 }

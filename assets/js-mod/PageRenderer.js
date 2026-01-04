@@ -420,9 +420,12 @@ export class PageRenderer {
     createPage(container, options, pageNum) {
         const page = document.createElement('div');
         page.className = 'page';
+        if (options.showSceneNumbers) page.classList.add('show-scene-numbers');
+        page.dataset.pageNumber = pageNum;
+        const suppressMeta = options.hideFirstPageMeta && pageNum === 1;
         
         // Show header if explicit text is provided OR if showDate option is true
-        if (options.headerText || options.showDate) {
+        if ((options.headerText || options.showDate) && !suppressMeta) {
             const header = document.createElement('div');
             header.className = 'page-header';
             let text = options.headerText || '';
@@ -452,6 +455,10 @@ export class PageRenderer {
              num.textContent = `${pageNum}.`;
              num.style.display = 'block'; // Force visibility
              page.appendChild(num);
+        }
+
+        if (suppressMeta) {
+            page.classList.add('page--suppress-meta');
         }
 
         container.appendChild(page);

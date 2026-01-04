@@ -14,31 +14,41 @@ body.mode-switching #main-area {
 /* --- Main Block --- */
 .treatment-scene-block {
     position: relative;
-    margin-bottom: 2.5rem;
-    padding-left: 0; /* Space for margin controls handled by position:absolute */
+    margin-bottom: 2rem;
+    padding-left: 0; 
     font-family: 'Courier Prime', monospace;
     color: var(--text-main);
-    transition: opacity 0.2s;
+    transition: transform 0.2s, box-shadow 0.2s;
+    background: var(--bg-paper);
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.1);
+    border: 1px solid var(--border-color);
+}
+
+.treatment-scene-block:hover {
+    box-shadow: 0 5px 15px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.05);
+    z-index: 10;
 }
 
 .treatment-scene-block.dragging {
-    opacity: 0.5;
-    background: var(--bg-paper);
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    opacity: 0.8;
+    transform: scale(1.02);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
     z-index: 100;
+    cursor: grabbing;
 }
 
 /* --- Reorder Controls --- */
 .treatment-reorder-controls {
     position: absolute;
     left: -2.5rem;
-    top: 0;
+    top: 50%;
+    transform: translateY(-50%);
     display: flex;
     flex-direction: column;
-    gap: 0px;
+    gap: 0.5rem;
     opacity: 0;
     transition: opacity 0.2s;
-    height: 100%;
 }
 
 .treatment-scene-block:hover .treatment-reorder-controls {
@@ -46,52 +56,58 @@ body.mode-switching #main-area {
 }
 
 .reorder-btn {
-    background: none;
-    border: none;
+    background: var(--bg-paper);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    width: 2rem;
+    height: 2rem;
     color: var(--text-meta);
     cursor: pointer;
-    padding: 4px;
-    font-size: 1rem;
-    opacity: 0.5;
-    transition: opacity 0.2s, color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    transition: all 0.2s;
 }
 
 .reorder-btn:hover:not(:disabled) {
-    color: var(--text-main);
-    opacity: 1;
-    transform: scale(1.2);
+    color: var(--accent);
+    border-color: var(--accent);
+    transform: scale(1.1);
 }
 
 .reorder-btn:disabled {
     cursor: default;
-    opacity: 0.1;
+    opacity: 0.3;
+    background: transparent;
+    box-shadow: none;
+    border-color: transparent;
 }
 
 /* --- Header Layout --- */
 .treatment-header {
     display: flex;
     align-items: stretch;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    background-color: var(--bg-paper);
-    height: 3.6rem;
-    margin-bottom: 0.8rem;
-    overflow: hidden;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    border-bottom: 1px solid var(--border-color);
+    background-color: rgba(0,0,0,0.02); /* Very subtle tint */
+    min-height: 3.5rem;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
 }
 
-/* Scene Number: Tall box on the left */
+/* Scene Number: Clean, Bold */
 .treatment-scene-number {
-    width: 3.5rem;
+    width: 4rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.6rem;
-    font-weight: bold;
-    border-right: 1px solid var(--border-color);
-    background: var(--scene-hover);
-    color: var(--text-meta);
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: var(--text-meta); /* Muted but large */
     flex-shrink: 0;
+    border-right: 1px solid var(--border-color);
+    background: transparent;
 }
 
 /* Middle Column: Rows of cells */
@@ -113,10 +129,10 @@ body.mode-switching #main-area {
 
 /* Cells */
 .treatment-header-cell {
-    padding: 0 0.8rem;
+    padding: 0.5rem 0.8rem;
     display: flex;
     align-items: center;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 600;
     text-transform: uppercase;
     border-right: 1px solid var(--border-color);
@@ -125,22 +141,27 @@ body.mode-switching #main-area {
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--text-main);
+    background: transparent;
+    transition: background 0.2s;
 }
 
 .treatment-header-cell:focus {
-    background-color: var(--scene-hover);
+    background-color: var(--bg-body);
+    color: var(--accent);
 }
 
 /* Specific Cell Widths/Flex */
 .cell-intro {
-    width: 4rem; 
+    width: 4.5rem; 
     flex-shrink: 0;
-    font-weight: bold;
+    font-weight: 700;
+    color: var(--text-meta);
 }
 
 .cell-location {
     flex-grow: 1; 
-    border-right: none; 
+    border-right: none;
+    font-weight: 700;
 }
 
 .cell-time {
@@ -154,220 +175,186 @@ body.mode-switching #main-area {
     color: var(--text-meta);
     font-size: 0.75rem;
     border-right: none; 
-    background: rgba(0,0,0,0.02);
+    background: rgba(0,0,0,0.03);
 }
 
-/* Icon Box: Tall box on the right */
+/* Icon Box */
 .treatment-header-icon {
     width: 3.5rem; 
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     border-left: 1px solid var(--border-color);
     flex-shrink: 0;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: all 0.2s;
     color: var(--text-meta);
 }
 .treatment-header-icon:hover {
-    background-color: var(--scene-hover);
-    color: var(--text-main);
+    color: var(--accent);
+    background: rgba(0,0,0,0.02);
 }
 .treatment-icon-placeholder {
-    opacity: 0;
-    font-size: 0.9rem;
-    color: var(--border-color);
-    transition: opacity 0.2s;
+    opacity: 0.3;
 }
 
-.treatment-header-icon:hover .treatment-icon-placeholder {
-    opacity: 0.5;
+/* --- Content Body --- */
+.treatment-body-wrapper {
+    padding: 1rem;
 }
 
+.treatment-body {
+    font-size: 11pt;
+    line-height: 1.5;
+    color: var(--text-main);
+    white-space: pre-wrap;
+    outline: none;
+    min-height: 3em;
+    padding: 0.5rem;
+    border-radius: 4px;
+    border: 1px solid transparent; /* Prevent jump on focus */
+    transition: border-color 0.2s, background-color 0.2s;
+}
+
+.treatment-body:focus {
+    background-color: var(--bg-body);
+    border-color: var(--border-color);
+}
+
+.treatment-body[data-empty="true"]::before {
+    content: "Write synopsis here...";
+    color: var(--text-meta);
+    opacity: 0.4;
+    font-style: italic;
+    position: absolute;
+    pointer-events: none;
+}
 
 /* --- Sections (Images, Chars, Music) --- */
 .treatment-section-wrapper {
     position: relative;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.8rem;
     min-height: 1.5rem;
 }
 
-/* Add Buttons */
+/* Add Buttons - Clean & Accessible */
 .treatment-add-btn {
-    width: 1.4rem;
-    height: 1.4rem;
+    width: 1.8rem;
+    height: 1.8rem;
     border-radius: 50%;
     border: 1px solid var(--border-color);
-    background: var(--bg-paper);
+    background: var(--bg-body);
     color: var(--text-meta);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     opacity: 0;
-    transition: all 0.2s;
-    font-size: 0.7rem;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Bouncy */
+    font-size: 0.8rem;
     z-index: 20;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    aspect-ratio: 1/1;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
-/* Button in wrapper (Desktop) */
+/* Button position (Desktop) */
 .treatment-section-wrapper .treatment-add-btn {
     position: absolute;
-    left: -2.0rem; 
+    left: -2.5rem; 
     top: 0;
 }
 
 .treatment-scene-block:hover .treatment-add-btn {
-    opacity: 0.6;
+    opacity: 0.5; /* Subtle hint */
 }
-
-.treatment-add-btn:hover {
-    opacity: 1 !important;
+.treatment-scene-block:hover .treatment-add-btn:hover {
+    opacity: 1;
+    transform: scale(1.15);
     border-color: var(--accent);
     color: var(--accent);
-    transform: scale(1.1);
 }
 
-/* Controls Area (Desktop - Stack in margin) */
+/* Controls Area (Bottom/Side options) */
 .treatment-controls-area {
-    position: relative;
-    padding-left: 0;
-    margin-top: 0;
-    height: 0; /* Important: don't push content vertically on paper */
+    position: absolute;
+    right: 1rem;
+    bottom: 1rem;
     display: flex;
-    flex-direction: column;
     gap: 0.5rem;
-    overflow: visible;
-    z-index: 20;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none; /* Pass through when hidden */
 }
-
-.treatment-controls-area .treatment-add-btn {
-    position: relative;
-    left: -2.0rem; 
-    display: flex;
-    opacity: 0.4;
+.treatment-scene-block:hover .treatment-controls-area {
+    opacity: 1;
     pointer-events: auto;
 }
 
-/* Ensure delete button is visible on touch devices */
-@media (hover: none) {
-    .image-delete-btn {
-        opacity: 1 !important;
-        background: rgba(0,0,0,0.4); /* Slightly lighter bg for better visibility */
-    }
+/* Override: Use the Renderer's logic for Controls Area (it was stacking empty buttons) */
+div.treatment-controls-area {
+    position: relative;
+    right: auto; bottom: auto;
+    padding: 0 1rem 0.5rem 1rem;
+    height: auto;
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+    opacity: 1; /* Always visible if it has buttons? Or hover? */
+    pointer-events: auto;
+    border-bottom: 1px dashed var(--border-color);
+    margin-bottom: 0.5rem;
+}
+div.treatment-controls-area:empty {
+    display: none;
+    border: none;
+    margin: 0;
+    padding: 0;
+}
+div.treatment-controls-area .treatment-add-btn {
+    position: static;
+    opacity: 0.6;
+    width: auto;
+    height: auto;
+    padding: 0.3rem 0.8rem;
+    border-radius: 4px;
+    gap: 0.4rem;
+    aspect-ratio: auto;
+}
+div.treatment-controls-area .treatment-add-btn::after {
+    content: attr(data-label);
+    font-size: 0.7rem;
+    font-weight: 600;
 }
 
-/* Music */
+
+/* Music Row */
 .treatment-music-row {
     font-size: 0.85rem;
     display: inline-flex;
     align-items: center;
     border: 1px solid var(--border-color);
-    padding: 0.3rem 0.8rem;
-    background: var(--bg-paper);
-    margin-bottom: 0.5rem;
+    padding: 0.3rem 0.4rem 0.3rem 1rem;
+    background: var(--bg-body);
     border-radius: 99px;
     gap: 0.8rem;
     max-width: 100%;
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
-.treatment-music-play-btn {
-    background: var(--scene-hover);
-    border: 1px solid var(--border-color);
-    width: 1.8rem;
-    height: 1.8rem;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 0.7rem;
-    color: var(--text-meta);
-    flex-shrink: 0;
-    transition: all 0.2s;
-}
-.treatment-music-play-btn:hover {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
-}
-
-.treatment-music-info {
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex-grow: 1;
-    color: var(--text-main);
-}
-
-/* Image Grid - Flex Layout */
+/* Image Grid */
 .treatment-image-grid {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
     width: 100%;
+    margin-bottom: 0.5rem;
 }
-
 .treatment-image-item {
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border: 1px solid var(--border-color);
     overflow: hidden;
-    height: 200px; 
-    flex-grow: 1;
-    min-width: 150px; 
-    max-width: 100%;
-    position: relative;
-    background: var(--bg-body);
-    border-radius: 6px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
-
-.treatment-image-item .image-container {
-    width: 100%;
-    height: 100%;
-}
-.treatment-image-item .image-flipper {
-    width: 100%;
-    height: 100%;
-    padding-top: 0; 
-}
-.treatment-image-item .image-front, 
-.treatment-image-item .image-back {
-    border-radius: 6px;
-}
-
-.treatment-image-item img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transition: opacity 0.3s;
-    opacity: 1;
-    border-radius: 6px;
-}
-
-/* Single image case */
-.treatment-image-grid:has(> .treatment-image-item:only-child) .treatment-image-item {
-    flex-grow: 0;
-    width: auto;
-    max-width: 100%;
-    height: auto;
-    min-height: 200px; /* Ensure visibility */
-    max-height: 500px; 
-}
-.treatment-image-grid:has(> .treatment-image-item:only-child) {
-    justify-content: center; 
-}
-.treatment-image-grid:has(> .treatment-image-item:only-child) img {
-    width: auto;
-    max-width: 100%;
-    height: auto;
-    max-height: 500px;
-    display: block; /* Remove inline spacing */
-}
-
 
 /* Characters */
 .treatment-chars-row {
@@ -375,84 +362,27 @@ body.mode-switching #main-area {
     flex-wrap: wrap;
     gap: 0.5rem;
     align-items: center;
+    margin-bottom: 0.5rem;
 }
 
 .treatment-char-badge {
     border: 1px solid var(--border-color);
-    padding: 0.2rem 0.6rem;
-    font-size: 0.85rem;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8rem;
     font-weight: 600;
     text-transform: uppercase;
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    border-radius: 99px;
-    background: var(--bg-paper);
+    gap: 0.5rem;
+    border-radius: 6px;
+    background: var(--bg-body);
     color: var(--text-main);
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    transition: all 0.2s;
 }
-.treatment-char-badge .treatment-char-icon {
-    color: var(--text-meta);
-    font-size: 0.75rem;
-}
-
-.remove-char-btn {
-    cursor: pointer;
-    font-size: 0.7rem;
-    opacity: 0.4;
-    margin-left: 0.2rem;
-    color: var(--text-meta);
-}
-.remove-char-btn:hover {
-    opacity: 1;
-    color: #ef4444; 
-}
-
-.treatment-char-input {
-    font-family: 'Courier Prime', monospace;
-    font-size: 0.85rem;
-    padding: 0.2rem 0.6rem;
-    border: 1px dashed var(--text-meta);
-    background: transparent;
-    color: var(--text-main);
-    width: 200px;
-    text-transform: uppercase;
-    border-radius: 99px;
-}
-.treatment-char-input:focus {
-    border-style: solid;
+.treatment-char-badge:hover {
     border-color: var(--accent);
-    outline: none;
-    background: var(--bg-paper);
-}
-
-/* --- Body (Description) --- */
-.treatment-body-wrapper {
-    margin-top: 0.5rem;
-    position: relative;
-    padding: 0 0.5rem; 
-}
-
-.treatment-body {
-    font-size: 12pt;
-    line-height: 1.4;
-    color: var(--text-main);
-    white-space: pre-wrap;
-    outline: none;
-    min-height: 2em;
-    padding: 0.5rem;
-    border-radius: 4px;
-    transition: background-color 0.2s;
-}
-
-.treatment-body[data-empty="true"]::before {
-    content: "Synopsis";
-    color: var(--text-meta);
-    opacity: 0.5;
-    font-style: italic;
-    position: absolute;
-    pointer-events: none;
-    display: flex;
+    transform: translateY(-1px);
 }
 
 /* Transition Footer */
@@ -460,111 +390,85 @@ body.mode-switching #main-area {
     text-align: right;
     font-family: 'Courier Prime', monospace;
     font-weight: bold;
-    margin-top: 1rem;
+    margin: 0.5rem 1rem 1rem 1rem;
     color: var(--text-main);
-    padding-right: 1rem;
+    opacity: 0.8;
 }
 
 /* --- Mobile Adjustments --- */
 @media (max-width: 768px) {
     .treatment-scene-block {
-        margin-bottom: 3rem;
-        padding-bottom: 1rem;
-        border-bottom: 2px dashed var(--border-color); 
+        margin-bottom: 1.5rem;
+        padding-bottom: 0;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
 
+    /* Mobile Reorder: Bottom Bar */
     .treatment-reorder-controls {
         position: relative;
-        left: auto;
-        top: auto;
+        left: auto; top: auto;
+        transform: none;
         flex-direction: row;
         width: 100%;
         justify-content: flex-end;
         opacity: 1;
-        margin-bottom: 0.5rem;
-        height: auto;
+        padding: 0.5rem 1rem;
+        border-top: 1px dashed var(--border-color);
+        background: rgba(0,0,0,0.02);
+        margin-top: 0.5rem;
     }
     
     .reorder-btn {
-        opacity: 0.6;
-        padding: 0.5rem;
+        width: 2.5rem; height: 2.5rem;
+        border-radius: 4px;
     }
 
     .treatment-header {
-        height: auto; 
         flex-wrap: wrap; 
+        border-radius: 0;
     }
     
     .treatment-scene-number {
-        height: 3.6rem; 
+        border-bottom: 1px solid var(--border-color);
     }
 
     .treatment-header-main-column {
         min-width: 0; 
+        border-left: 1px solid var(--border-color);
     }
 
-    /* Controls Area (Mobile - Horizontal Line) */
-    .treatment-controls-area {
-        position: relative;
-        left: auto;
-        top: auto;
-        width: 100%;
-        height: auto;
-        display: flex;
-        flex-direction: row;
-        gap: 0.5rem;
-        margin-bottom: 0.5rem;
-        padding-left: 0.5rem;
-        margin-top: 0;
-    }
-    
-    .treatment-controls-area .treatment-add-btn {
-        position: static;
-        left: auto;
-        opacity: 1;
-        margin-bottom: 0;
-    }
-
-    /* Controls Area Hidden if Empty */
-    .treatment-controls-area:empty {
-        display: none;
-    }
-
-    /* Add Buttons Styles */
-    .treatment-add-btn {
-        position: static;
-        display: inline-flex;
-        opacity: 1;
-        width: auto;
-        height: auto;
-        padding: 0.3rem 0.6rem;
-        border-radius: 4px;
-        background: transparent;
-        border: 1px dashed var(--text-meta);
-        gap: 0.4rem;
-        aspect-ratio: initial;
-    }
-
-    /* Button inside wrapper (Mobile - End of block) */
-    .treatment-section-wrapper {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        margin-bottom: 0.5rem;
-    }
-    
-    .treatment-section-wrapper .treatment-add-btn {
-        position: static;
-        margin-left: auto; /* Push to right */
-        order: 99; /* Force to end */
-    }
-
-    .treatment-add-btn::after {
-        content: attr(data-label);
-        font-size: 0.7rem;
+    /* Controls Area Mobile */
+    div.treatment-controls-area {
+        justify-content: flex-start;
+        overflow-x: auto;
     }
 }
 
+/* Mobile Simplified Header */
+.treatment-header-simple-slug {
+    flex: 1;
+    font-size: 1.2rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    padding: 0 1rem;
+    display: flex;
+    align-items: center;
+    outline: none;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    border: none;
+    background: transparent;
+    height: 100%;
+}
+.treatment-header-simple-slug:focus {
+    background-color: var(--scene-hover);
+}
+
+/* --- DROPDOWNS & INPUTS (Restored) --- */
 .treatment-dropdown-menu {
     position: absolute;
     top: 100%;
@@ -572,7 +476,7 @@ body.mode-switching #main-area {
     width: 100%;
     min-width: 150px;
     background: var(--bg-paper);
-    border: 1px solid var(--text-main);
+    border: 1px solid var(--border-color);
     list-style: none;
     padding: 0;
     margin: 0;
@@ -594,7 +498,25 @@ body.mode-switching #main-area {
     color: white;
 }
 
-/* MOBILE TREATMENT META HEADER */
+.treatment-char-input {
+    font-family: 'Courier Prime', monospace;
+    font-size: 0.85rem;
+    padding: 0.2rem 0.6rem;
+    border: 1px dashed var(--text-meta);
+    background: transparent;
+    color: var(--text-main);
+    width: 200px;
+    text-transform: uppercase;
+    border-radius: 99px;
+}
+.treatment-char-input:focus {
+    border-style: solid;
+    border-color: var(--accent);
+    outline: none;
+    background: var(--bg-paper);
+}
+
+/* --- MOBILE META HEADER (Restored) --- */
 .treatment-mobile-meta {
     margin-bottom: 2rem;
     padding: 0 0.5rem;
@@ -658,28 +580,13 @@ body.mode-switching #main-area {
     padding: 0.5rem;
 }
 
-/* Mobile Simplified Header */
-.treatment-header-simple-slug {
-    flex: 1;
-    font-size: 1.2rem;
-    font-weight: bold;
-    text-transform: uppercase;
-    padding: 0 1rem;
-    display: flex;
-    align-items: center;
-    outline: none;
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    border: none;
-    background: transparent;
-    height: 100%;
-}
-.treatment-header-simple-slug:focus {
-    background-color: var(--scene-hover);
-}
-
-/* Scene Color Implementations for Treatment Mode */
+/* Scene Color Implementations */
+.treatment-scene-block:has(.scene-color-1) { border-left: 4px solid var(--scene-color-1); }
+.treatment-scene-block:has(.scene-color-2) { border-left: 4px solid var(--scene-color-2); }
+.treatment-scene-block:has(.scene-color-3) { border-left: 4px solid var(--scene-color-3); }
+.treatment-scene-block:has(.scene-color-4) { border-left: 4px solid var(--scene-color-4); }
+.treatment-scene-block:has(.scene-color-5) { border-left: 4px solid var(--scene-color-5); }
+/* And keep the icon/number colors */
 .treatment-scene-number.scene-color-1, .treatment-header-icon.scene-color-1 i { color: var(--scene-color-1) !important; }
 .treatment-scene-number.scene-color-2, .treatment-header-icon.scene-color-2 i { color: var(--scene-color-2) !important; }
 .treatment-scene-number.scene-color-3, .treatment-header-icon.scene-color-3 i { color: var(--scene-color-3) !important; }

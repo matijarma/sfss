@@ -142,6 +142,7 @@ export class TreatmentManager {
             id: `line-${Math.random().toString(36).substring(2, 11)}`
         });
         this.sfss.isDirty = true;
+        this.sfss.treatmentRenderer.refreshScene(slugId);
     }
 
     addSceneHeading(slugId) {
@@ -190,7 +191,7 @@ export class TreatmentManager {
         }
         this.sfss.editorHandler.commitCharacter(charName);
         this.sfss.isDirty = true;
-        this.sfss.treatmentRenderer.renderFromData(this.sfss.scriptData.blocks, this.sfss.editor);
+        this.sfss.treatmentRenderer.refreshScene(slugId);
     }
 
     moveScene(index, direction) {
