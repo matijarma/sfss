@@ -884,6 +884,7 @@ export class SFSS {
     }
 
     checkMobile() {
+        const scrollBookmark = this.getCurrentScrollElement();
         const wasMobile = document.body.classList.contains('mobile-view');
         const isMobile = window.innerWidth < 768; 
         if (isMobile) {
@@ -938,6 +939,9 @@ export class SFSS {
                 this.treatmentManager.refreshView();
                 this.updateToolbarButtons();
             }
+        }
+        if (scrollBookmark) {
+            setTimeout(() => this.restoreScrollToElement(scrollBookmark), 30);
         }
     }
 
@@ -1007,6 +1011,11 @@ export class SFSS {
         const target = root.querySelector(`[data-line-id="${lineId}"]`);
         if (target) {
             target.scrollIntoView({ behavior: 'auto', block: 'start' });
+            return;
+        }
+        // Fallback for Treatment mode where blocks use data-scene-id
+        if (this.treatmentManager.isActive) {
+            this.scrollToScene(lineId);
         }
     }
 
@@ -1189,7 +1198,7 @@ export class SFSS {
             document.getElementById('print-title-page').style.display = '';
             this.pageViewContainer.classList.add('hidden');
             if (topElementId) {
-                this.restoreScrollToElement(topElementId);
+                requestAnimationFrame(() => this.restoreScrollToElement(topElementId));
             }
         }
     }

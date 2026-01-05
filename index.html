@@ -41,7 +41,7 @@
             } catch (e) { console.log('Theme detection failed', e); }
 
             // Your Version Logic
-            const staticversion = "" + "04-01-26_" + "public-" + "1404";
+            const staticversion = "" + "05-01-26_" + "public-" + "1408";
             //const staticversion = Math.round(Math.random()*1000000);
 
             const queryString = self.location.search;
@@ -710,25 +710,43 @@
 
             <!-- Tab Content: About -->
             <div id="help-about" class="tab-content active">
-                <h3>Getting Started</h3>
-                <p><strong>SFSS (Simple Free Screenplay Software)</strong> is designed to get out of your way and let you write. It runs entirely in your browser and works offline.</p>
-                
-                <h3>Modes</h3>
+                <h3>SFSS at a Glance</h3>
+                <p><strong>SFSS (Simple Free Screenplay Software)</strong> is a local-first, offline-capable screenwriting PWA. No accounts, no servers—your words, images, and tracks stay on your device.</p>
+
+                <h4>Core Modes</h4>
                 <ul>
-                    <li><strong>Writing Mode:</strong> The standard continuous flow editor.</li>
-                    <li><strong>Page View:</strong> See exactly how your script looks on the page (Letter/A4).</li>
-                    <li><strong>Treatment Mode (Plan):</strong> A card-based view to organize scenes, add notes, images, and tracks.</li>
+                    <li><strong>Writing:</strong> Fast, context-aware editor with smart element switching and autocomplete.</li>
+                    <li><strong>Page View:</strong> True-to-page pagination for Letter/A4 with optional scene numbers and headers.</li>
+                    <li><strong>Treatment (Plan):</strong> Card view projected from your script—edit descriptions, pin images, add tracks, color/icons, and reorder scenes.</li>
+                    <li><strong>Reports:</strong> Scene stats, character breakdowns, and chronology views with printable summaries.</li>
+                    <li><strong>Print Prep:</strong> One print hub for script, treatment, or report layouts (normal/facing/booklet, single/double sided, watermarks).</li>
                 </ul>
 
-                <h3>Data & Privacy (Local-Only)</h3>
-                <p><strong>SFSS is not a "cloud" app.</strong> It is a client-side Progressive Web App (PWA) that runs entirely in your browser.</p>
+                <h4>Collaboration</h4>
+                <p>Peer-to-peer, end-to-end encrypted sessions powered by Trystero. Share a room link, pass the editing baton to avoid conflicts, and keep optional video/audio chat inside the app. Guests without the baton see live updates in real time.</p>
+
+                <h4>Data, Privacy, and Storage</h4>
                 <ul>
-                    <li><strong>Zero Data Transfer:</strong> Your scripts <strong>never</strong> leave your device. We do not see, store, or transmit your data. Zero bytes flow between you and any server after the initial page load.</li>
-                    <li><strong>Zero Tracking:</strong> We use <strong>zero cookies</strong> and <strong>zero analytics</strong>.</li>
-                    <li><strong>Offline Capable:</strong> Once loaded, the app works 100% offline.</li>
+                    <li><strong>Local only:</strong> Scripts, scene images, and settings live in your browser (IndexedDB + LocalStorage). Clearing browser data removes them—export backups regularly.</li>
+                    <li><strong>Offline by default:</strong> Works fully offline once loaded.</li>
+                    <li><strong>No tracking:</strong> No analytics, no cookies. The only network call is when you paste/play a YouTube track to fetch metadata and stream audio directly from YouTube.</li>
                 </ul>
-                <p><strong>The only exception:</strong> If you use the "Track/Music" feature to embed YouTube links, the app will communicate directly with YouTube's servers to fetch video metadata and play the audio. This happens <em>only</em> when you explicitly paste a link or play a track.</p>
-                <p><strong>Important:</strong> Since your data lives in your browser's storage (IndexedDB), <strong>clearing your browser data will delete your scripts!</strong> Always keep backups (`.json` or `.fdx`).</p>
+
+                <h4>Import / Export</h4>
+                <ul>
+                    <li><strong>Native backup:</strong> `.json` (includes all metadata; images remain in IndexedDB).</li>
+                    <li><strong>Final Draft (`.fdx`):</strong> Import and export for industry-standard interchange.</li>
+                    <li><strong>Fountain / Text:</strong> Lightweight plain text options for portability.</li>
+                </ul>
+
+                <h4>Quick Start</h4>
+                <ul>
+                    <li>Open or create a script from the File menu.</li>
+                    <li>Use <strong>Write / Plan</strong> toggle to switch between the editor and Treatment cards.</li>
+                    <li>Press <strong>Ctrl+S</strong> anytime; autosave is always on.</li>
+                    <li>Use <strong>Print</strong> to launch Print Prep for script, treatment, or reports.</li>
+                    <li>Invite a collaborator by sharing a room link from the Collab panel.</li>
+                </ul>
             </div>
 
             <!-- Tab Content: Shortcuts -->
@@ -759,13 +777,6 @@
 
             <!-- Tab Content: Licenses -->
             <div id="help-licenses" class="tab-content hidden">
-                <h3>Credits</h3>
-                <p>Created by <strong>Matija Radeljak</strong>, film producer and IT enthusiast working on empowering and decentralizing the film industry and its producers and artists.</p>
-                <p>Special thanks to:</p>
-                <ul>
-                    <li>The <a href="https://fountain.io" target="_blank">Fountain</a> syntax project for the open standard.</li>
-                    <li><a href="https://www.finaldraft.com" target="_blank">Final Draft</a> for setting the industry standard.</li>
-                </ul>
 
                 <h3>SFSS License</h3>
                 <p>This application is released under the MIT License. You are free to use, modify, and distribute it for personal or commercial use.</p>
@@ -781,6 +792,18 @@
                     <li>
                         <strong>YouTube IFrame Player API:</strong> The integrated media player uses the YouTube API. By using this feature, you agree to be bound by the <a href="https://www.youtube.com/t/terms" target="_blank">YouTube Terms of Service</a>.
                     </li>
+                    <li><strong>Trystero</strong> is a vanilla javascript pre-made free-to-use class that makes decentralized P2P communication features easy to implement. Thanks to <a href="https://github.com/dmotz/trystero" target="_blank">Trystero</a> building the collab feature was a breeze.</li>
+                </ul>
+                
+                <h3>Credits</h3>
+                <p>
+                    Created by <strong>Matija Radeljak</strong>, film producer and IT enthusiast working on empowering and decentralizing the film industry and its producers and artists.<br/>
+                    <a href="https://github.com/matijarma/sfss/" target="_blank">https://github.com/matijarma/sfss/</a>
+                </p>
+                <p>Special thanks to:</p>
+                <ul>
+                    <li>The <a href="https://fountain.io" target="_blank">Fountain</a> syntax project for the open standard.</li>
+                    <li><a href="https://www.finaldraft.com" target="_blank">Final Draft</a> for setting the industry standard.</li>
                 </ul>
             </div>
         </div>

@@ -501,7 +501,7 @@ export class TreatmentRenderer {
             const ids = meta.images || [];
             // We return a grid even if empty initially, to be filled by async renderImages
             const grid = document.createElement('div');
-            grid.className = 'treatment-image-grid';
+            grid.className = 'treatment-image-grid image-grid';
             if (ids.length > 1) grid.classList.add('masonry-style');
             this.renderImages(grid, ids); 
             return grid;
@@ -680,6 +680,7 @@ export class TreatmentRenderer {
 
     async renderImages(container, imageIds) {
         container.innerHTML = '';
+        const ids = Array.isArray(imageIds) ? imageIds : Object.values(imageIds || {});
         container.onclick = async (e) => {
             // Stop propagation to prevent block selection/drag interference
             e.stopPropagation();
@@ -727,8 +728,8 @@ export class TreatmentRenderer {
             }
         };
 
-        for (let i = 0; i < imageIds.length; i++) {
-            const id = imageIds[i];
+        for (let i = 0; i < ids.length; i++) {
+            const id = ids[i];
             const file = await this.app.sidebarManager.imageDB.get(id);
             if (file) {
                 const url = URL.createObjectURL(file);

@@ -17,6 +17,11 @@ export class MediaPlayer {
         this.initListeners();
     }
 
+    cleanAuthorName(name) {
+        if (!name) return name;
+        return name.replace(/\s*-\s*topic$/i, '').trim();
+    }
+
     initListeners() {
         this.prevBtn.addEventListener('click', () => this.playPrevTrack());
         this.playBtn.addEventListener('click', () => this.togglePlay());
@@ -104,6 +109,12 @@ export class MediaPlayer {
                             // No need to save here, as it's just hydrating. Main save is elsewhere.
                         }
                     }
+                    if (meta.trackArtist) {
+                        const cleaned = this.cleanAuthorName(meta.trackArtist);
+                        if (cleaned !== meta.trackArtist) {
+                            meta.trackArtist = cleaned;
+                        }
+                    }
                     return { 
                         videoId: videoId, 
                         sceneId: sceneId,
@@ -140,9 +151,10 @@ export class MediaPlayer {
             const response = await fetch(`https://www.youtube.com/oembed?url=http%3A//youtube.com/watch%3Fv%3D${videoId}&format=json`);
             if (!response.ok) return null;
             const data = await response.json();
+            const cleanAuthor = this.cleanAuthorName(data.author_name) || data.author_name;
             return {
                 title: data.title,
-                artist: data.author_name
+                artist: cleanAuthor
             };
         } catch (error) {
             console.error('Failed to fetch YouTube metadata:', error);
