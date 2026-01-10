@@ -41,8 +41,8 @@
             } catch (e) { console.log('Theme detection failed', e); }
 
             // Your Version Logic
-            const staticversion = "" + "05-01-26_" + "public-" + "1408";
-            //const staticversion = Math.round(Math.random()*1000000);
+            //const staticversion = "" + "05-01-26_" + "public-" + "1408";
+            const staticversion = Math.round(Math.random()*1000000);
 
             const queryString = self.location.search;
             const params = new URLSearchParams(queryString);

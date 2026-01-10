@@ -211,17 +211,19 @@ input:checked + .slider:before {
 
 /* TOGGLE GROUP (Reports) */
 .toggle-group {
-    display: inline-flex;
+    display: flex;
     background-color: var(--bg-body);
     padding: 4px;
     border-radius: 9999px;
     border: 1px solid var(--border-color);
+    flex-direction: row;
+    justify-content: space-between;
 }
 
 .toggle-btn {
     background: none;
     border: none;
-    padding: 6px 16px;
+    padding: 0.2rem 0.6rem;
     font-size: 0.85rem;
     font-weight: 600;
     color: var(--text-meta);

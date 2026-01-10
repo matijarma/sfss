@@ -1055,24 +1055,28 @@ div#printingdiv { display: none }
         border: none !important;
         page-break-after: always;
         break-after: page;
+        break-inside: avoid;
+    }
+
+    .booklet-spread,
+    .booklet-page-slot {
+        break-inside: avoid;
+        page-break-inside: avoid;
     }
 
     /* Strict Page Reset */
     .page:not(.thumb-page) {
         margin: 0 !important;
         box-shadow: none !important;
-        width: 100% !important; /* Let @page handle size */
         page-break-after: always;
         break-after: page;
+        break-inside: avoid;
     }
 
     /* Treatment Overrides */
     .treatment-print-page {
         box-shadow: none !important;
         border: none !important;
-    }
-    .treatment-print-page:not(.booklet-treatment) {
-        padding: 0.65in !important;
     }
     .report-print-page {
         box-shadow: none !important;

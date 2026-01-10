@@ -43,6 +43,7 @@ export class PrintManager {
         this.renderTimeout = null;
         this.tempImageUrls = [];
         this.globalThumbGeometry = null;
+        this.thumbGeometryLocked = false;
         this.measureSandbox = this.createMeasurementSandbox();
         this.lastPreview = null;
         this.bindEvents();
@@ -292,6 +293,7 @@ export class PrintManager {
         this.previewContainer.style.opacity = '0.5';
         this.previewContainer.dataset.mode = this.mode;
         this.globalThumbGeometry = null;
+        this.thumbGeometryLocked = false;
 
         // 1. Generate Logical Pages
         const { logicalPages, finalSheets } = await this.buildSheetsForMode(this.mode);
@@ -434,6 +436,7 @@ export class PrintManager {
     async generateTreatmentPages() {
         this.enforceTreatmentConstraints();
         this.globalThumbGeometry = null;
+        this.thumbGeometryLocked = false;
         const data = this.app.scriptData || this.app.exportToJSONStructure();
         if (!data.blocks) return [];
 
@@ -442,12 +445,34 @@ export class PrintManager {
         const scenePageMap = includeScript ? this.mapScenesToPages(data.blocks, scriptPages) : new Map();
         const scenes = this.buildTreatmentScenes(data.blocks, scenePageMap, includeScript);
 
+        const scenePayloads = [];
+        for (const scene of scenes) {
+            const galleryImgs = await this.loadSceneImages(scene.meta);
+            const sceneScriptPages = scenePageMap.get(scene.id) || [];
+            scenePayloads.push({ scene, images: galleryImgs, scriptPages: sceneScriptPages });
+        }
+
         const isLandscape = this.config.treatment.orientation === 'landscape';
         const profile = this.getTreatmentProfile(this.config.treatment.layout, isLandscape, this.config.treatment.sides);
         this.applyTreatmentVariables(profile);
 
+        // Pass 1: render to discover the smallest thumbnail geometry
+        const firstPassPages = await this.buildTreatmentDocument(scenePayloads, profile, scriptPages.length);
+        const thumbGeometry = this.globalThumbGeometry ? { ...this.globalThumbGeometry } : null;
+
+        // If no thumbs exist, return the first pass; otherwise lock and re-render for uniform sizing.
+        if (!thumbGeometry) return firstPassPages;
+
+        this.thumbGeometryLocked = true;
+        this.globalThumbGeometry = thumbGeometry;
+        return await this.buildTreatmentDocument(scenePayloads, profile, scriptPages.length);
+    }
+
+    async buildTreatmentDocument(scenePayloads, profile, totalScriptPages = 0) {
         const pages = [];
-        pages.push(this.createOverviewPage(scenes, profile, scriptPages.length));
+        const scenes = scenePayloads.map(entry => entry.scene);
+
+        pages.push(this.createOverviewPage(scenes, profile, totalScriptPages));
         if (profile.sides === 'double') {
             pages.push(this.createBlankTreatmentPage(profile));
         }
@@ -455,11 +480,14 @@ export class PrintManager {
             pages.push(this.createSecondaryTitlePage(profile));
         }
 
-        for (const scene of scenes) {
-            const galleryImgs = await this.loadSceneImages(scene.meta);
-            const sceneScriptPages = scenePageMap.get(scene.id) || [];
-            const scenePages = await this.buildStrictScenePages(scene, galleryImgs, sceneScriptPages, profile);
+        for (const entry of scenePayloads) {
+            const scenePages = await this.buildStrictScenePages(entry.scene, entry.images, entry.scriptPages, profile);
             pages.push(...scenePages);
+        }
+
+        if (profile.isBooklet) {
+            const addenda = this.buildTreatmentBookletAddenda(profile, scenes, totalScriptPages, pages.length);
+            if (addenda.length) pages.push(...addenda);
         }
 
         return pages;
@@ -703,6 +731,100 @@ export class PrintManager {
             sides,
             thumbBase: { width: 8.5 * inch, height: 11 * inch }
         };
+    }
+
+    buildTreatmentBookletAddenda(profile, scenes = [], totalScriptPages = 0, basePageCount = 0) {
+        const extras = [];
+        const summary = this.createTreatmentSummaryPage(profile, scenes, totalScriptPages);
+        if (summary) extras.push(summary);
+        const preBackCount = basePageCount + extras.length;
+        const blanksNeeded = (4 - ((preBackCount + 1) % 4)) % 4;
+        for (let i = 0; i < blanksNeeded; i++) {
+            extras.push(this.createBlankTreatmentPage(profile));
+        }
+        const backCover = this.createTreatmentBackCoverPage(profile);
+        if (backCover) extras.push(backCover);
+        return extras;
+    }
+
+    createTreatmentSummaryPage(profile, scenes = [], totalScriptPages = 0) {
+        const page = document.createElement('div');
+        page.className = 'treatment-print-page strict-fit-page booklet-summary';
+        if (profile.isLandscape) page.classList.add('landscape');
+        if (profile.isBooklet) page.classList.add('booklet-treatment');
+        page.style.width = `${profile.pageWidthIn}in`;
+        page.style.height = `${profile.pageHeightIn}in`;
+        page.style.padding = `${profile.paddingIn}in`;
+
+        const body = document.createElement('div');
+        body.className = 'treatment-body strict-body';
+        body.style.gap = `${profile.sectionGapPx}px`;
+
+        const title = document.createElement('div');
+        title.className = 'overview-title';
+        title.style.textAlign = 'center';
+        title.textContent = (this.app.meta.title || 'Untitled Screenplay').toUpperCase();
+        body.appendChild(title);
+
+        const stats = document.createElement('ul');
+        stats.className = 'stats-list';
+        const addItem = (label, value) => {
+            const li = document.createElement('li');
+            li.textContent = `${label}: ${value}`;
+            stats.appendChild(li);
+        };
+        addItem('Scenes', scenes.length);
+        addItem('Script Pages', totalScriptPages || 0);
+        const characters = new Set();
+        scenes.forEach(s => (s.characters || []).forEach(c => characters.add(c)));
+        if (characters.size) addItem('Cast', Array.from(characters).join(', '));
+
+        const statsSection = this.createSection('Booklet Summary', stats);
+        body.appendChild(statsSection);
+
+        page.appendChild(body);
+        return page;
+    }
+
+    createTreatmentBackCoverPage(profile) {
+        const page = document.createElement('div');
+        page.className = 'treatment-print-page strict-fit-page booklet-back-cover';
+        if (profile.isLandscape) page.classList.add('landscape');
+        if (profile.isBooklet) page.classList.add('booklet-treatment');
+        page.style.width = `${profile.pageWidthIn}in`;
+        page.style.height = `${profile.pageHeightIn}in`;
+        page.style.padding = `${profile.paddingIn}in`;
+
+        const body = document.createElement('div');
+        body.className = 'treatment-body strict-body';
+        body.style.alignItems = 'center';
+        body.style.justifyContent = 'center';
+        body.style.textAlign = 'center';
+        body.style.gap = `${profile.sectionGapPx}px`;
+
+        const title = document.createElement('div');
+        title.className = 'overview-title';
+        title.textContent = (this.app.meta.title || 'Untitled Screenplay').toUpperCase();
+        body.appendChild(title);
+
+        if (this.app.meta.author) {
+            const author = document.createElement('div');
+            author.className = 'overview-author';
+            author.textContent = this.app.meta.author;
+            body.appendChild(author);
+        }
+
+        const contactText = (this.app.meta.contact || '').trim();
+        const contact = document.createElement('div');
+        contact.className = 'section-body';
+        contact.style.whiteSpace = 'pre-wrap';
+        contact.textContent = contactText || 'Contact details';
+        const contactWrap = this.createSection('Contact', contact);
+        contactWrap.style.maxWidth = '4.5in';
+        body.appendChild(contactWrap);
+
+        page.appendChild(body);
+        return page;
     }
 
     async buildStrictScenePages(scene, galleryImgs, scriptPages, profile) {
@@ -1011,17 +1133,24 @@ export class PrintManager {
         if (!pages.length) return null;
         const baseW = profile.thumbBase.width;
         const baseH = profile.thumbBase.height;
-        let geometry = this.calculateGrid(pages.length, widthPx, heightPx, 8, baseW / baseH);
-        if (!this.globalThumbGeometry) {
-            this.globalThumbGeometry = { cellWidth: geometry.cellWidth, cellHeight: geometry.cellHeight };
+        const gap = 8;
+        let geometry;
+
+        if (this.thumbGeometryLocked && this.globalThumbGeometry) {
+            geometry = { cellWidth: this.globalThumbGeometry.cellWidth, cellHeight: this.globalThumbGeometry.cellHeight };
         } else {
-            this.globalThumbGeometry.cellWidth = Math.min(this.globalThumbGeometry.cellWidth, geometry.cellWidth);
-            this.globalThumbGeometry.cellHeight = Math.min(this.globalThumbGeometry.cellHeight, geometry.cellHeight);
+            geometry = this.calculateGrid(pages.length, widthPx, heightPx, gap, baseW / baseH);
+            if (!this.globalThumbGeometry) {
+                this.globalThumbGeometry = { cellWidth: geometry.cellWidth, cellHeight: geometry.cellHeight };
+            } else {
+                this.globalThumbGeometry.cellWidth = Math.min(this.globalThumbGeometry.cellWidth, geometry.cellWidth);
+                this.globalThumbGeometry.cellHeight = Math.min(this.globalThumbGeometry.cellHeight, geometry.cellHeight);
+            }
         }
 
-        const cellW = this.globalThumbGeometry.cellWidth;
-        const cellH = this.globalThumbGeometry.cellHeight;
-        const cols = Math.max(1, Math.floor((widthPx + 8) / (cellW + 8)));
+        const cellW = geometry.cellWidth;
+        const cellH = geometry.cellHeight;
+        const cols = Math.max(1, Math.floor((widthPx + gap) / (cellW + gap)));
         const rows = Math.ceil(pages.length / cols);
 
         const grid = document.createElement('div');
@@ -1029,7 +1158,7 @@ export class PrintManager {
         grid.style.display = 'grid';
         grid.style.gridTemplateColumns = `repeat(${cols}, ${cellW}px)`;
         grid.style.gridAutoRows = `${cellH}px`;
-        grid.style.gap = '8px';
+        grid.style.gap = `${gap}px`;
         grid.style.height = `${heightPx}px`;
 
         pages.forEach(pg => {
@@ -1567,6 +1696,9 @@ export class PrintManager {
         const isBooklet = this.config[mode]?.layout === 'booklet';
 
         if (isBooklet) {
+            if (mode === 'script') {
+                logicalPages = this.appendScriptBookletAddenda(logicalPages);
+            }
             finalSheets = this.applyBookletImposition(logicalPages);
         } else {
             finalSheets = logicalPages.map(page => {
@@ -1638,16 +1770,163 @@ export class PrintManager {
         clone.style.margin = '0';
         clone.style.boxShadow = 'none';
 
-        const pageWidthIn = parseFloat(clone.style.width) || 8.5;
+        const isLandscape = clone.classList.contains('landscape');
+        const fallbackWidth = isLandscape ? 11 : 8.5;
+        const fallbackHeight = isLandscape ? 8.5 : 11;
+        const pageWidthIn = parseFloat(clone.style.width) || fallbackWidth;
+        const pageHeightIn = parseFloat(clone.style.height) || fallbackHeight;
+        clone.style.width = `${pageWidthIn}in`;
+        clone.style.height = `${pageHeightIn}in`;
+
         const targetWidthIn = 5.5;
         const scale = Math.min(1, targetWidthIn / pageWidthIn);
         wrapper.style.transform = `scale(${scale})`;
         wrapper.style.width = `${pageWidthIn}in`;
-        wrapper.style.height = clone.style.height || '';
+        wrapper.style.height = `${pageHeightIn}in`;
         
         wrapper.appendChild(clone);
         slot.appendChild(wrapper);
         return slot;
+    }
+
+    appendScriptBookletAddenda(pages = []) {
+        const base = Array.isArray(pages) ? pages.slice() : [];
+        const extras = this.buildScriptBookletAddenda(base);
+        if (extras.length) base.push(...extras);
+        return base;
+    }
+
+    buildScriptBookletAddenda(basePages = []) {
+        const data = this.app.scriptData || this.app.exportToJSONStructure();
+        const blocks = data?.blocks || [];
+        const sceneCount = blocks.filter(b => b.type === constants.ELEMENT_TYPES.SLUG).length;
+        const characters = this.getSceneCharactersFromBlocks(blocks);
+
+        const extras = [];
+        const summary = this.createScriptSummaryPage({
+            title: this.app.meta.title || 'Untitled Screenplay',
+            author: this.app.meta.author || '',
+            totalPages: basePages.length,
+            sceneCount,
+            characters
+        });
+        if (summary) extras.push(summary);
+
+        const preBackCount = basePages.length + extras.length;
+        const blanksNeeded = (4 - ((preBackCount + 1) % 4)) % 4;
+        for (let i = 0; i < blanksNeeded; i++) {
+            extras.push(this.createBlankPage());
+        }
+
+        const backCover = this.createScriptBackCoverPage(this.app.meta || {});
+        if (backCover) extras.push(backCover);
+
+        return extras;
+    }
+
+    createScriptSummaryPage(info = {}) {
+        const page = this.createBlankPage();
+        page.classList.remove('page--blank');
+        page.classList.add('booklet-summary');
+
+        const cw = page.querySelector('.content-wrapper');
+        cw.style.display = 'flex';
+        cw.style.flexDirection = 'column';
+        cw.style.gap = '18px';
+        cw.style.fontFamily = "'Courier Prime', monospace";
+
+        const heading = document.createElement('div');
+        heading.style.textAlign = 'center';
+        heading.style.fontWeight = '700';
+        heading.style.fontSize = '16pt';
+        heading.textContent = `${(info.title || 'Untitled Screenplay').toUpperCase()} — SUMMARY`;
+        cw.appendChild(heading);
+
+        if (info.author) {
+            const author = document.createElement('div');
+            author.style.textAlign = 'center';
+            author.style.fontSize = '12pt';
+            author.textContent = `by ${info.author}`;
+            cw.appendChild(author);
+        }
+
+        const list = document.createElement('ul');
+        list.style.listStyle = 'none';
+        list.style.padding = '0';
+        list.style.margin = '0';
+        list.style.display = 'grid';
+        list.style.gap = '6px';
+        const items = [
+            { label: 'Pages', value: info.totalPages || 0 },
+            { label: 'Scenes', value: info.sceneCount || 0 }
+        ];
+        items.forEach(item => {
+            const li = document.createElement('li');
+            li.textContent = `${item.label}: ${item.value || 0}`;
+            list.appendChild(li);
+        });
+        if (info.characters?.length) {
+            const li = document.createElement('li');
+            li.textContent = `Cast: ${info.characters.join(', ')}`;
+            list.appendChild(li);
+        }
+        cw.appendChild(list);
+
+        return page;
+    }
+
+    createScriptBackCoverPage(meta = {}) {
+        const page = this.createBlankPage();
+        page.classList.remove('page--blank');
+        page.classList.add('booklet-back-cover');
+
+        const cw = page.querySelector('.content-wrapper');
+        cw.style.display = 'flex';
+        cw.style.flexDirection = 'column';
+        cw.style.alignItems = 'center';
+        cw.style.justifyContent = 'center';
+        cw.style.gap = '12px';
+        cw.style.textAlign = 'center';
+
+        const title = document.createElement('div');
+        title.style.fontFamily = "'Courier Prime', monospace";
+        title.style.fontSize = '16pt';
+        title.style.fontWeight = '700';
+        title.textContent = (meta.title || 'Untitled Screenplay').toUpperCase();
+        cw.appendChild(title);
+
+        if (meta.author) {
+            const author = document.createElement('div');
+            author.style.fontSize = '12pt';
+            author.textContent = meta.author;
+            cw.appendChild(author);
+        }
+
+        const contactText = (meta.contact || '').trim();
+        if (contactText) {
+            const contact = document.createElement('div');
+            contact.style.marginTop = '6px';
+            contact.style.whiteSpace = 'pre-wrap';
+            contact.style.fontSize = '11pt';
+            contact.textContent = contactText;
+            cw.appendChild(contact);
+        } else {
+            const placeholder = document.createElement('div');
+            placeholder.style.fontSize = '11pt';
+            placeholder.style.color = '#555';
+            placeholder.textContent = 'Contact details';
+            cw.appendChild(placeholder);
+        }
+
+        const stamp = document.createElement('div');
+        stamp.style.marginTop = '18px';
+        stamp.style.fontSize = '10pt';
+        stamp.style.letterSpacing = '0.08em';
+        stamp.style.textTransform = 'uppercase';
+        stamp.textContent = 'Back Cover';
+        cw.appendChild(stamp);
+
+        return page;
     }
 
     async print() {
@@ -1689,6 +1968,10 @@ export class PrintManager {
 
         sourceSheets.forEach(sheet => printTarget.appendChild(sheet.cloneNode(true)));
 
+        const restorePrintTarget = this.exposePrintTarget(printTarget);
+        await this.waitForPrintReady(printTarget);
+        restorePrintTarget();
+
         document.body.classList.add('printing-from-modal');
 
         // Allow DOM to settle before printing to prevent infinite load
@@ -1700,7 +1983,7 @@ export class PrintManager {
                 setTimeout(() => {
                     document.body.classList.remove('printing-from-modal');
                 }, 2000);
-            }, 800); 
+            }, 200); 
         });
 
         const cleanup = () => {
@@ -1732,6 +2015,56 @@ export class PrintManager {
         sandbox.style.overflow = 'hidden';
         document.body.appendChild(sandbox);
         return sandbox;
+    }
+
+    exposePrintTarget(printTarget) {
+        if (!printTarget) return () => {};
+        const prev = {
+            display: printTarget.style.display,
+            position: printTarget.style.position,
+            left: printTarget.style.left,
+            top: printTarget.style.top,
+            opacity: printTarget.style.opacity,
+            visibility: printTarget.style.visibility
+        };
+
+        printTarget.style.display = 'block';
+        printTarget.style.position = 'absolute';
+        printTarget.style.left = '-99999px';
+        printTarget.style.top = '0';
+        printTarget.style.opacity = '0';
+        printTarget.style.visibility = 'hidden';
+
+        return () => {
+            printTarget.style.display = prev.display;
+            printTarget.style.position = prev.position;
+            printTarget.style.left = prev.left;
+            printTarget.style.top = prev.top;
+            printTarget.style.opacity = prev.opacity;
+            printTarget.style.visibility = prev.visibility;
+        };
+    }
+
+    async waitForPrintReady(container) {
+        if (!container) return;
+        const images = Array.from(container.querySelectorAll('img'));
+        const waitForImages = images.map(img => {
+            if (img.complete) return Promise.resolve();
+            return new Promise(resolve => {
+                const done = () => {
+                    img.removeEventListener('load', done);
+                    img.removeEventListener('error', done);
+                    resolve();
+                };
+                img.addEventListener('load', done);
+                img.addEventListener('error', done);
+            });
+        });
+
+        await Promise.all(waitForImages);
+        await new Promise(requestAnimationFrame);
+        container.getBoundingClientRect(); // force layout flush
+        await new Promise(requestAnimationFrame);
     }
 
     clampText(text = '', maxChars = 800) {
