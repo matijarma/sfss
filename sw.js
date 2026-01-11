@@ -33,6 +33,12 @@ const APP_SHELL_URLS = [
   'assets/js-mod/IOManager.js',
   'assets/js-mod/SettingsManager.js',
   'assets/js-mod/TreatmentManager.js',
+  'assets/js-mod/FountainParser.js',
+  'assets/js-mod/FeatureManager.js',
+  'assets/js-mod/SingleFileGenerator.js',
+  'assets/js-mod/CollaborationManager.js',
+  'assets/js-mod/CollabUI.js',
+  'assets/js-mod/MobileApp.js',
   // Images/Icons
   'assets/images/icon-64.png',
   'assets/images/icon-512.png',
@@ -53,11 +59,12 @@ const APP_SHELL_URLS = [
 // On install, cache the app shell
 self.addEventListener('install', event => {
   self.skipWaiting(); // Force update
+  const SHELL = [...new Set(APP_SHELL_URLS)];
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
         console.log('Opened cache and caching app shell');
-        return cache.addAll(APP_SHELL_URLS);
+        return cache.addAll(SHELL);
       })
   );
 });

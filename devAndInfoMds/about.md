@@ -52,6 +52,10 @@ The sidebar acts as your production hub:
 *   **Soundtrack Integration:** Link **YouTube** tracks to scenes; the integrated player follows the playlist.
 *   **Organization:** Color-code scenes and assign semantic icons for quick visual reference.
 
+### ⚙️ Feature Management & Portable Build
+*   **Feature Toggles:** Enable/disable optional modules (Collaboration, Media) and apply on reload to tailor footprint.
+*   **Portable Generator:** Export a single-file `sfss_portable.html` for `file://` use; Collaboration/Media are omitted and scene tracks show as clickable YouTube links.
+
 ### 🤝 Real-Time Collaboration
 Write with a partner in a serverless environment.
 *   **Peer-to-Peer Connection:** Connect directly via Trystero (WebRTC).

@@ -60,6 +60,7 @@ The application is built on a modular class-based architecture, orchestrated by 
 - **Collaboration:** Host starts a room id like `script-xxxxx`; baton-based single-writer model, guests without the baton are read-only (mobile always read-only). No extra encryption beyond WebRTC.
 - **Pagination:** `PageRenderer` enforces Courier 12 pt geometry with JS measurement; orphan/widow handling is heuristic and still being refined.
 - **Media:** Scene music depends on YouTube IFrame API and oEmbed metadata; network is required for titles/artists.
+- **Feature toggles & portable builds:** `FeatureManager` persists optional modules (Collab/Media) and reloads to enforce them; `SingleFileGenerator` flattens the app plus assets into a single-file `file://` build, stubbing Collaboration/Media and rendering YouTube links as anchors for offline portability.
 
 ## 4. Data Structures
 

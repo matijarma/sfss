@@ -512,6 +512,22 @@ div#print-preview-scroller {
     color: var(--accent);
     border-bottom-color: var(--accent);
 }
+.help-tabs {
+    position: sticky;
+    top: 0;
+    background: var(--bg-paper);
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+    -webkit-overflow-scrolling: touch;
+}
+.help-tabs .tab-btn {
+    flex: 1 1 140px;
+    min-width: 120px;
+    text-align: center;
+    white-space: nowrap;
+}
 .tab-content { padding-top: 1rem; }
 .tab-content.hidden { display: none; }
 

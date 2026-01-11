@@ -41,13 +41,15 @@ The application is a writing studio built around three primary modes: **Write** 
     -   **Printing:** Print view shares pagination logic with Page View; title page can be toggled, and a dedicated print modal handles script/treatment/report output.
     -   **Light/Dark Mode:** Respects system preference; stored setting overrides.
     -   **Assets:** Scene images and YouTube track metadata stay local (IndexedDB) and are not embedded in exports.
+    -   **Feature Toggles & Portable Build:** Feature Manager lets you enable/disable optional modules (Collab, Media) and export a single-file offline build (`file://`) that omits network-bound features.
 
 ## 📌 Current State & Limitations
 -   **Local-first only:** Scene images and YouTube track links live in the browser (IndexedDB/LocalStorage) and are **not exported** with `.fdx/.fountain/.txt`; backups should use `.json`.
 -   **Autosave model:** Content writes to LocalStorage immediately and is debounced into IndexedDB; power-loss between writes can leave LocalStorage ahead of IDB until the next save.
 -   **Collaboration:** Host-only baton passing; guests without the baton are read-only and mobile peers join as spectators. No app-layer encryption beyond WebRTC DTLS-SRTP. Session ends when all peers leave.
 -   **Pagination heuristics:** `PageRenderer` enforces 12 pt Courier geometry but uses JS height measurement; complex orphan/widow cases may still need polish.
--   **Media playback:** Scene music relies on YouTube oEmbed/iframe; it requires network access even though the rest of the app is offline-capable.
+-   **Media playback:** Scene music relies on YouTube oEmbed/iframe; it requires network access even though the rest of the app is offline-capable. Portable builds replace metadata playback with clickable links.
+-   **Portable build scope:** The single-file export removes Collaboration and the Media Player for `file://` compatibility; core editor/print/treatment/report features remain.
 
 ## 🚀 Getting Started
 
@@ -56,6 +58,7 @@ SFSS is a static web application and requires no server or build process to run.
 1.  **Download:** Clone or download the repository.
 2.  **Run:** Open `index.html` in a modern web browser (Chrome, Firefox, Safari) or serve the folder with any static server.
 3.  **Install (Optional):** Use the in-app "Install" button or browser PWA prompt to install locally.
+4.  **Create a portable file (Optional):** Open **Feature Management** in the App menu, set your feature toggles, and click **Generate Single-File** to download a `sfss_portable.html` you can open directly via `file://` (Collab/Media excluded).
 ## 🛠️ Technical Deep Dive
 
 ### Technology Stack
@@ -65,6 +68,7 @@ SFSS is a static web application and requires no server or build process to run.
 *   **Storage:** IndexedDB for scripts/images; LocalStorage for autosave cache, meta, settings, and keymap.
 *   **PWA:** `sw.js` for offline caching and `manifest.json` for install metadata. File Handling API supported when the browser allows.
 *   **Icons & Fonts:** FontAwesome and Courier Prime (locally hosted).
+*   **Feature/runtime toggles:** `FeatureManager.js` persists enabled modules and gates optional imports; `SingleFileGenerator.js` flattens the app into a portable single-file build with stubs for disabled modules.
 ### Project Structure
 The codebase is organized into a modular, class-based architecture.
 

@@ -11,7 +11,6 @@
  */
 
 import * as constants from './Constants.js';
-import { MediaPlayer } from './MediaPlayer.js';
 import { SidebarManager } from './SidebarManager.js';
 import { EditorHandler } from './EditorHandler.js';
 import { ScrollbarManager } from './ScrollbarManager.js';
@@ -19,14 +18,13 @@ import { StorageManager } from './StorageManager.js';
 import { ReportsManager } from './ReportsManager.js';
 import { PageRenderer } from './PageRenderer.js';
 import { TreatmentRenderer } from './TreatmentRenderer.js';
-import { CollaborationManager } from './CollaborationManager.js';
-import { CollabUI } from './CollabUI.js';
 import { FountainParser } from './FountainParser.js';
 // New Modules
 import { SettingsManager } from './SettingsManager.js';
 import { TreatmentManager } from './TreatmentManager.js';
 import { IOManager } from './IOManager.js';
 import { PrintManager } from './PrintManager.js';
+import { FeatureManager } from './FeatureManager.js';
 
 export class SFSS {
     constructor() {
@@ -69,14 +67,15 @@ export class SFSS {
         this.historyTimeout = null;
 
         // Sub-modules
+        this.featureManager = new FeatureManager(this);
+        this.mediaPlayer = this.featureManager.createMediaStub();
+        this.collaborationManager = this.featureManager.createCollabManagerStub();
+        this.collabUI = this.featureManager.createCollabUIStub();
         this.storageManager = new StorageManager(this);
-        this.mediaPlayer = new MediaPlayer(this);
         this.sidebarManager = new SidebarManager(this);
         this.editorHandler = new EditorHandler(this);
         this.reportsManager = new ReportsManager(this);
         this.treatmentRenderer = new TreatmentRenderer(this);
-        this.collaborationManager = new CollaborationManager(this);
-        this.collabUI = new CollabUI(this);
         this.fountainParser = new FountainParser();
         
         // New Sub-modules
@@ -193,6 +192,7 @@ export class SFSS {
             document.documentElement.classList.add('dark-mode');
         }
 
+        await this.featureManager.loadFeatures();
         this.bindEventListeners();
         this.toggleSidebar(); 
 
@@ -367,6 +367,20 @@ export class SFSS {
         
         const collabBtn = document.getElementById('collab-menu-btn');
         if (collabBtn) collabBtn.addEventListener('click', () => this.collabUI.openModal());
+        const builderBtn = document.getElementById('feature-builder-btn');
+        if (builderBtn) builderBtn.addEventListener('click', (e) => { e.preventDefault(); this.openHelpTab('help-feature-toggles'); });
+        const builderApply = document.getElementById('feature-builder-apply-btn');
+        if (builderApply) builderApply.addEventListener('click', () => this.featureManager.applyAndReload());
+        const portableBtn = document.getElementById('portable-generate-btn');
+        if (portableBtn) portableBtn.addEventListener('click', async () => {
+            const statusEl = document.getElementById('feature-builder-status');
+            portableBtn.disabled = true;
+            try {
+                await this.featureManager.downloadPortable(statusEl);
+            } finally {
+                portableBtn.disabled = false;
+            }
+        });
 
         // IO Manager Delegations
         document.getElementById('download-json-btn').addEventListener('click', () => this.ioManager.downloadJSON());
@@ -456,13 +470,21 @@ export class SFSS {
         // New Menu Items
         document.getElementById('help-btn').addEventListener('click', (e) => { 
             e.preventDefault(); 
-            this.openHelp(); 
+            this.openHelpTab('help-about'); 
         });
         document.querySelector('[data-action="help"]').addEventListener('click', (e) => { 
             e.preventDefault();
-            this.openHelp(); 
+            this.openHelpTab('help-about'); 
             this.sidebarManager.toggleMobileMenu(); 
         });
+        const mobileBuilder = document.querySelector('[data-action="feature-builder"]');
+        if (mobileBuilder) {
+            mobileBuilder.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.openHelpTab('help-feature-toggles');
+                this.sidebarManager.toggleMobileMenu();
+            });
+        }
         document.getElementById('help-close-btn').addEventListener('click', () => document.getElementById('help-modal').classList.add('hidden'));
 
         // Mobile App Menu Toggle (Accordion)
@@ -506,18 +528,7 @@ export class SFSS {
         // Help Tabs
         const helpTabs = document.querySelectorAll('.tab-btn');
         helpTabs.forEach(btn => {
-            btn.addEventListener('click', () => {
-                // Deactivate all
-                helpTabs.forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
-                // Activate clicked
-                btn.classList.add('active');
-                const target = btn.dataset.tab;
-                document.getElementById(target).classList.remove('hidden');
-                if (target === 'help-changelog') {
-                    this.loadChangelog();
-                }
-            });
+            btn.addEventListener('click', () => this.openHelpTab(btn.dataset.tab));
         });
 
         // Welcome Modal Click-Away
@@ -549,9 +560,38 @@ export class SFSS {
         });
     }
 
+    openHelpTab(tabId) {
+        const helpModal = document.getElementById('help-modal');
+        if (helpModal) {
+            helpModal.classList.remove('hidden');
+            const helpBody = helpModal.querySelector('.modal-body');
+            if (helpBody) helpBody.scrollTop = 0;
+        }
+        const helpTabs = document.querySelectorAll('.tab-btn');
+        helpTabs.forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('hidden', c.id !== tabId));
+        if (tabId === 'help-changelog') {
+            this.loadChangelog();
+        }
+        if (tabId === 'help-feature-toggles') {
+            this.featureManager.openModal();
+        }
+    }
+
     async loadChangelog() {
         const container = document.getElementById('help-changelog');
-        if (container.dataset.loaded === 'true') return;
+        if (!container || container.dataset.loaded === 'true') return;
+
+        // In portable builds or offline contexts, avoid network fetches
+        if (window.isPortableBuild) {
+            const note = document.createElement('div');
+            note.className = 'text-meta text-sm';
+            note.textContent = 'Changelog is unavailable in the portable build. Check the hosted app for release notes.';
+            container.appendChild(note);
+            container.dataset.loaded = 'true';
+            return;
+        }
+
         try {
             const response = await fetch('changelog.html');
             if (response.ok) {
@@ -563,9 +603,12 @@ export class SFSS {
                 contentDiv.innerHTML = html;
                 container.appendChild(contentDiv);
                 container.dataset.loaded = 'true';
+            } else {
+                container.dataset.loaded = 'true';
             }
         } catch (e) {
             console.error("Failed to load changelog", e);
+            container.dataset.loaded = 'true';
         }
     }
 

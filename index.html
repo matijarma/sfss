@@ -399,6 +399,17 @@
         </div>
         <div class="modal-body">
                 <div id="keymap-settings"></div>
+                <div class="settings-section border-top-light mt-1 pt-1">
+                    <h3 class="text-xs uppercase font-bold text-meta mb-1">Common shortcuts</h3>
+                    <ul class="shortcut-list">
+                        <li><strong>Enter:</strong> Context-aware new line (e.g., Slug → Action)</li>
+                        <li><strong>Tab:</strong> Cycle element type (Action → Character, etc.)</li>
+                        <li><strong>Ctrl+Shift:</strong> Quick type toggle (S-A-C-P-D-T)</li>
+                        <li><strong>Ctrl+S:</strong> Save</li>
+                        <li><strong>Ctrl+Z / Ctrl+Y:</strong> Undo / Redo</li>
+                    </ul>
+                    <p class="text-meta text-sm">You can remap Enter/Tab behaviors per element in the list above.</p>
+                </div>
         </div>
         <div class="modal-footer">
             <button id="settings-save-btn" class="modal-btn-primary">Save & Close</button>
@@ -701,64 +712,76 @@
         </div>
         <div class="modal-body flex-1 overflow-y-auto p-2">
             <!-- Tabs Header -->
-            <div class="flex-row border-bottom-light mb-2">
+            <div class="flex-row border-bottom-light mb-2 help-tabs">
                 <button class="tab-btn active" data-tab="help-about">About</button>
-                <button class="tab-btn" data-tab="help-shortcuts">Shortcuts</button>
+                <button class="tab-btn" data-tab="help-feature-toggles">Feature Toggles</button>
+                <button class="tab-btn" data-tab="help-portable">Portable Build</button>
                 <button class="tab-btn" data-tab="help-changelog">Changelog</button>
-                <button class="tab-btn" data-tab="help-licenses">Credits and licenses</button>
+                <button class="tab-btn" data-tab="help-licenses">Credits & Licenses</button>
             </div>
 
             <!-- Tab Content: About -->
             <div id="help-about" class="tab-content active">
                 <h3>SFSS at a Glance</h3>
-                <p><strong>SFSS (Simple Free Screenplay Software)</strong> is a local-first, offline-capable screenwriting PWA. No accounts, no servers—your words, images, and tracks stay on your device.</p>
+                <p><strong>SFSS (Simple Free Screenplay Software)</strong> is a local-first, offline-capable screenwriting PWA. No accounts, no servers—your work stays on your device.</p>
 
                 <h4>Core Modes</h4>
                 <ul>
-                    <li><strong>Writing:</strong> Fast, context-aware editor with smart element switching and autocomplete.</li>
-                    <li><strong>Page View:</strong> True-to-page pagination for Letter/A4 with optional scene numbers and headers.</li>
-                    <li><strong>Treatment (Plan):</strong> Card view projected from your script—edit descriptions, pin images, add tracks, color/icons, and reorder scenes.</li>
-                    <li><strong>Reports:</strong> Scene stats, character breakdowns, and chronology views with printable summaries.</li>
-                    <li><strong>Print Prep:</strong> One print hub for script, treatment, or report layouts (normal/facing/booklet, single/double sided, watermarks).</li>
+                    <li><strong>Write:</strong> Context-aware editor with autocomplete and fast type switching.</li>
+                    <li><strong>Page View & Print:</strong> True-to-page pagination (Letter/A4) shared with Print Prep.</li>
+                    <li><strong>Treatment (Plan):</strong> Scene cards with colors/icons, descriptions, images, and track links.</li>
+                    <li><strong>Reports:</strong> Scene stats, character breakdowns, and chronology with printable summaries.</li>
                 </ul>
-
-                <h4>Collaboration</h4>
-                <p>Peer-to-peer, end-to-end encrypted sessions powered by Trystero. Share a room link, pass the editing baton to avoid conflicts, and keep optional video/audio chat inside the app. Guests without the baton see live updates in real time.</p>
 
                 <h4>Data, Privacy, and Storage</h4>
                 <ul>
-                    <li><strong>Local only:</strong> Scripts, scene images, and settings live in your browser (IndexedDB + LocalStorage). Clearing browser data removes them—export backups regularly.</li>
-                    <li><strong>Offline by default:</strong> Works fully offline once loaded.</li>
-                    <li><strong>No tracking:</strong> No analytics, no cookies. The only network call is when you paste/play a YouTube track to fetch metadata and stream audio directly from YouTube.</li>
+                    <li><strong>Local-only:</strong> Scripts, scene images, and settings live in your browser (IndexedDB + LocalStorage).</li>
+                    <li><strong>Offline-first:</strong> Works fully offline once loaded; installable as a PWA.</li>
+                    <li><strong>No tracking:</strong> No analytics or cookies. YouTube metadata is fetched only if you paste/play a link.</li>
+                    <li><strong>Backups:</strong> Use <code>.json</code> for full backups (images stay in IndexedDB), <code>.fdx</code>/<code>.fountain</code>/<code>.txt</code> for interchange.</li>
                 </ul>
 
-                <h4>Import / Export</h4>
+                <h4>Feature Toggles & Portable</h4>
                 <ul>
-                    <li><strong>Native backup:</strong> `.json` (includes all metadata; images remain in IndexedDB).</li>
-                    <li><strong>Final Draft (`.fdx`):</strong> Import and export for industry-standard interchange.</li>
-                    <li><strong>Fountain / Text:</strong> Lightweight plain text options for portability.</li>
+                    <li><strong>Feature toggles:</strong> Turn Collaboration / Media on or off; apply on reload.</li>
+                    <li><strong>Portable build:</strong> One-file <code>file://</code> export with Collaboration & Media removed; YouTube links render as clickable anchors.</li>
                 </ul>
 
                 <h4>Quick Start</h4>
                 <ul>
-                    <li>Open or create a script from the File menu.</li>
-                    <li>Use <strong>Write / Plan</strong> toggle to switch between the editor and Treatment cards.</li>
-                    <li>Press <strong>Ctrl+S</strong> anytime; autosave is always on.</li>
-                    <li>Use <strong>Print</strong> to launch Print Prep for script, treatment, or reports.</li>
-                    <li>Invite a collaborator by sharing a room link from the Collab panel.</li>
+                    <li>New/Open from the File menu; autosave runs continuously.</li>
+                    <li>Switch Write/Plan via toolbar or mobile toggle; drag scenes in Treatment.</li>
+                    <li>Use Print for script/treatment/report outputs; reports live in the Reports modal.</li>
+                    <li>Collab (host/guest baton) is optional and network-dependent.</li>
                 </ul>
             </div>
 
-            <!-- Tab Content: Shortcuts -->
-            <div id="help-shortcuts" class="tab-content hidden">
-                <p>Check the <strong>Keyboard Shortcuts</strong> menu item to customize these.</p>
-                <ul class="shortcut-list">
-                    <li><strong>Enter:</strong> Creates a new line. Context-aware (e.g., Slug -> Action).</li>
-                    <li><strong>Tab:</strong> Changes element type (e.g., Action -> Character).</li>
-                    <li><strong>Ctrl+Shift:</strong> Toggle element type (Cycle S-A-C-P-D-T).</li>
-                    <li><strong>Ctrl+S:</strong> Force save (Auto-save is always on).</li>
-                    <li><strong>Ctrl+Z / Ctrl+Y:</strong> Undo / Redo.</li>
+            <!-- Tab Content: Feature Toggles -->
+            <div id="help-feature-toggles" class="tab-content hidden">
+                <h3>Feature Management</h3>
+                <p class="text-meta">Choose which optional modules load next time. Changes are staged and applied on reload.</p>
+                <div class="flex-justify-between-center" style="gap: 0.5rem; margin-bottom:0.5rem;">
+                    <div class="text-meta text-xs">Collaboration and Media are optional; disabling them trims load and avoids network dependencies.</div>
+                    <button id="feature-builder-apply-btn" class="modal-btn-primary"><i class="fas fa-sync mr-1"></i> Apply & Reload</button>
+                </div>
+                <div id="feature-builder-list" class="flex-col gap-1"></div>
+                <div id="feature-builder-status" class="text-meta text-xs mt-2"></div>
+            </div>
+
+            <!-- Tab Content: Portable Build -->
+            <div id="help-portable" class="tab-content hidden">
+                <h3>Portable Single-File Build</h3>
+                <p class="text-meta text-sm">Generate a single HTML you can open via <code>file://</code>. Collaboration and Media Player are excluded; scene tracks show as links.</p>
+                <ul class="text-sm text-meta" style="margin: 0 0 0.5rem 1rem; list-style: disc;">
+                    <li><strong>Included:</strong> Editor, pagination/print, treatment, reports, storage.</li>
+                    <li><strong>Not included:</strong> Collaboration (network-bound), Media Player (YouTube iframe).</li>
+                    <li><strong>Tracks:</strong> YouTube URLs remain as clickable anchors in scene settings and Treatment.</li>
                 </ul>
+                <button id="portable-generate-btn" class="modal-btn-primary" style="margin-top: 0.25rem;">
+                    <i class="fas fa-file-download mr-1"></i> Generate Single-File
+                </button>
+                <div class="text-meta text-xs mt-2">Generation log</div>
+                <div id="portable-log" class="text-xs" style="background: var(--bg-muted); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem; max-height: 160px; overflow-y: auto; font-family: monospace;"></div>
             </div>
 
             <!-- Tab Content: Changelog -->
