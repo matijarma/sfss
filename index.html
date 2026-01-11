@@ -41,7 +41,7 @@
             } catch (e) { console.log('Theme detection failed', e); }
 
             // Your Version Logic
-            const staticversion = "" + "11-01-26_" + "public-" + "1501";
+            const staticversion = "" + "11-01-26_" + "public-" + "1505";
             //const staticversion = Math.round(Math.random()*1000000);
 
             const queryString = self.location.search;
@@ -712,10 +712,10 @@
         </div>
         <div class="modal-body flex-1 overflow-y-auto p-2">
             <!-- Tabs Header -->
-            <div class="flex-row border-bottom-light mb-2 help-tabs">
+            <div class="border-bottom-light mb-2 help-tabs">
                 <button class="tab-btn active" data-tab="help-about">About</button>
-                <button class="tab-btn" data-tab="help-feature-toggles">Feature Toggles</button>
-                <button class="tab-btn" data-tab="help-portable">Portable Build</button>
+                <button class="tab-btn desktop-only" data-tab="help-feature-toggles">Feature Toggles</button>
+                <button class="tab-btn desktop-only" data-tab="help-portable">Portable Build</button>
                 <button class="tab-btn" data-tab="help-changelog">Changelog</button>
                 <button class="tab-btn" data-tab="help-licenses">Credits & Licenses</button>
             </div>
@@ -788,6 +788,8 @@
             <div id="help-changelog" class="tab-content hidden">
                 <h3></h3>
                 <ul>
+                    <li>Feature Toggles (Enable/Disable Modules)</li>
+                    <li>Portable App Generator (Single-file Export)</li>
                     <li>Initial Release</li>
                     <li>Mobile Treatment Mode</li>
                     <li>Offline PWA Support</li>

@@ -513,20 +513,31 @@ div#print-preview-scroller {
     border-bottom-color: var(--accent);
 }
 .help-tabs {
+    display: flex;
+    flex-direction: row;
     position: sticky;
+    position: -webkit-sticky;
     top: 0;
     background: var(--bg-paper);
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 0.25rem;
     overflow-x: auto;
     padding-bottom: 0.25rem;
     -webkit-overflow-scrolling: touch;
+    z-index: 50;
+    flex-shrink: 0;
+    min-height: 40px;
+    transform: translateZ(0); /* Force GPU layer to fix mobile repaint glitches */
 }
 .help-tabs .tab-btn {
-    flex: 1 1 140px;
+    flex: 0 0 auto;
     min-width: 120px;
     text-align: center;
     white-space: nowrap;
+    height: 100%; /* Ensure full height */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 .tab-content { padding-top: 1rem; }
 .tab-content.hidden { display: none; }
