@@ -597,7 +597,7 @@ export class SFSS {
     openHelpTab(tabId) {
         const helpModal = document.getElementById('help-modal');
         if (helpModal) {
-            helpModal.classList.remove('hidden');
+            this.modalManager.open('help-modal');
             const helpBody = helpModal.querySelector('.modal-body');
             if (helpBody) helpBody.scrollTop = 0;
         }
@@ -735,8 +735,7 @@ export class SFSS {
     }
 
     openHelp() {
-        document.getElementById('help-modal').classList.remove('hidden');
-        this.pushHistoryState('help');
+        this.modalManager.open('help-modal');
     }
 
     resetCycleState() {
@@ -819,8 +818,8 @@ export class SFSS {
         this.sidebarManager.closeSceneSettings();
         this.sidebarManager.closeScriptMetaPopup();
         this.settingsManager.close();
-        document.getElementById('help-modal').classList.add('hidden');
-        document.getElementById('reports-modal').classList.add('hidden');
+        this.modalManager.close('help-modal');
+        this.modalManager.close('reports-modal');
     }
 
     measureLineHeight() {
@@ -1031,7 +1030,7 @@ export class SFSS {
             }
         } else {
             document.body.classList.remove('mobile-view');
-            document.getElementById('mobile-welcome-modal').classList.add('hidden');
+            this.modalManager.close('mobile-welcome-modal');
             this.editor.contentEditable = true;
             const mobileStyle = document.getElementById('mobile-style-injection');
             if (mobileStyle) mobileStyle.remove();

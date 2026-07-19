@@ -153,13 +153,13 @@ export class PrintManager {
         this.enforceTreatmentConstraints();
         this.syncReportCharacterSelect();
         this.syncUI();
-        this.modal.classList.remove('hidden');
+        this.app.modalManager.open('print-prep-modal');
         this.setMode(this.mode); 
         this.scheduleRender(50);
     }
 
     close() {
-        this.modal.classList.add('hidden');
+        this.app.modalManager.close('print-prep-modal');
     }
 
     openReportMode(options = {}) {
@@ -169,7 +169,7 @@ export class PrintManager {
         if (options.includeScenes !== undefined) this.config.report.includeScenes = !!options.includeScenes;
         this.syncReportCharacterSelect();
         this.syncUI();
-        this.modal.classList.remove('hidden');
+        this.app.modalManager.open('print-prep-modal');
         this.setMode('report');
         this.scheduleRender(30);
     }

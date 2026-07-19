@@ -61,7 +61,7 @@ export class CollabUI {
             this.showToast('Session Ended');
             document.getElementById('collab-hud').classList.add('hidden');
             document.getElementById('collab-top-bar').classList.add('hidden');
-            document.getElementById('collab-modal').classList.add('hidden'); // Ensure modal closes
+            this.app.modalManager.close('collab-modal'); // Ensure modal closes
             this.restoreToolbarItems(); 
             this.log('Disconnected from Swarm.', 'error');
         };
@@ -110,6 +110,7 @@ export class CollabUI {
         </div>
         `;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
+        this.app.modalManager.register('collab-modal', { closeBtnId: 'collab-close-btn' });
 
         // 2. Top Status Bar
         const topBarHtml = `
@@ -163,10 +164,6 @@ export class CollabUI {
 
     bindEvents() {
         // Modal & Link Logic
-        document.getElementById('collab-close-btn').addEventListener('click', () => {
-            document.getElementById('collab-modal').classList.add('hidden');
-        });
-        
         document.getElementById('collab-create-btn').addEventListener('click', async () => {
             const roomId = 'script-' + Math.random().toString(36).substring(2, 9);
             this.initSession(roomId, true);
@@ -209,7 +206,7 @@ export class CollabUI {
                 this.restoreToolbarItems(); // Restore UI
                 document.getElementById('collab-hud').classList.add('hidden');
                 document.getElementById('collab-top-bar').classList.add('hidden');
-                document.getElementById('collab-modal').classList.add('hidden');
+                this.app.modalManager.close('collab-modal');
             }
         });
 
@@ -381,7 +378,7 @@ export class CollabUI {
 
                     // Guest: Hide modal immediately, we assume success or show error later
 
-                    document.getElementById('collab-modal').classList.add('hidden');
+                    this.app.modalManager.close('collab-modal');
 
                 }
 
@@ -479,7 +476,7 @@ export class CollabUI {
 
                      this.log("Error: Connection initialization failed.", 'error');
 
-                     document.getElementById('collab-modal').classList.remove('hidden'); // Re-show if failed
+                     this.app.modalManager.open('collab-modal'); // Re-show if failed
 
                 }
 
@@ -577,12 +574,12 @@ export class CollabUI {
         if (welcome) welcome.classList.add('hidden');
         
         // Ensure Modal is hidden for Guest
-        document.getElementById('collab-modal').classList.add('hidden');
+        this.app.modalManager.close('collab-modal');
         this.initSession(roomId, false);
     }
 
     openModal() {
-        document.getElementById('collab-modal').classList.remove('hidden');
+        this.app.modalManager.open('collab-modal');
         document.getElementById('collab-start-view').classList.remove('hidden');
         document.getElementById('collab-waiting-view').classList.add('hidden');
     }
@@ -596,7 +593,7 @@ export class CollabUI {
     updateStatus(isConnected) {
         if (isConnected) {
             // Ensure modal is closed if peer connects (for Host who was waiting)
-            document.getElementById('collab-modal').classList.add('hidden');
+            this.app.modalManager.close('collab-modal');
         }
     }
 

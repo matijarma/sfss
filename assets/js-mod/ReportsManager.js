@@ -54,14 +54,13 @@ export class ReportsManager {
 
     open() {
         if (document.body.classList.contains('mobile-view')) this.app.sidebarManager.toggleMobileMenu();
-        this.modal.classList.remove('hidden');
+        this.app.modalManager.open('reports-modal');
         this.resetUI();
         this.populateCharacterSelect();
-        this.app.pushHistoryState('reports');
     }
 
     close() {
-        this.modal.classList.add('hidden');
+        this.app.modalManager.close('reports-modal');
         this.outputArea.innerHTML = '';
         this.downloadTxtBtn.classList.add('hidden');
         this.downloadPdfBtn.classList.add('hidden');
