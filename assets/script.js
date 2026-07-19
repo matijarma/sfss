@@ -33,9 +33,49 @@ window.addEventListener('beforeinstallprompt', (e) => {
     };
 
     if ('serviceWorker' in navigator) {
+        // Reload once when the updated SW takes control -- but never on the very
+        // first install (clients.claim() fires controllerchange then too).
+        let hadController = !!navigator.serviceWorker.controller;
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!hadController) { hadController = true; return; }
+            if (refreshing) return;
+            refreshing = true;
+            window.location.reload();
+        });
+
+        const showUpdateBanner = (registration) => {
+            if (document.getElementById('update-banner')) return;
+            const banner = document.createElement('div');
+            banner.id = 'update-banner';
+            const label = document.createElement('span');
+            label.textContent = 'A new version of SFSS is ready';
+            const reloadBtn = document.createElement('button');
+            reloadBtn.type = 'button';
+            reloadBtn.textContent = 'Reload';
+            reloadBtn.addEventListener('click', () => {
+                reloadBtn.disabled = true;
+                if (registration.waiting) {
+                    // The SW answers with skipWaiting(); controllerchange reloads us.
+                    registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                } else {
+                    window.location.reload();
+                }
+            });
+            banner.appendChild(label);
+            banner.appendChild(reloadBtn);
+            const attach = () => document.body.appendChild(banner);
+            if (document.body) attach();
+            else document.addEventListener('DOMContentLoaded', attach);
+        };
+
         const registerSW = () => {
             navigator.serviceWorker.register('./sw.js?v=' + CACHE_NAME).then(registration => {
                 console.log('SW registered: ', registration);
+                // An update may already be sitting in "waiting" from a previous visit.
+                if (registration.waiting && navigator.serviceWorker.controller) {
+                    showUpdateBanner(registration);
+                }
                 registration.onupdatefound = () => {
                     const installingWorker = registration.installing;
                     if (installingWorker == null) return;
@@ -43,6 +83,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
                         if (installingWorker.state === 'installed') {
                             if (navigator.serviceWorker.controller) {
                                 console.log('New content is available; please refresh.');
+                                showUpdateBanner(registration);
                             } else {
                                 console.log('Content is cached for offline use.');
                             }

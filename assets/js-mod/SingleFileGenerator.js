@@ -5,6 +5,7 @@ export class SingleFileGenerator {
         this.featureManager = featureManager;
         this.version = window.cacheverzija || 'dev';
         this.dataUrlCache = new Map();
+        this.assetManifest = null;
     }
 
     async generate({ statusEl, logEl, features } = {}) {
@@ -111,23 +112,35 @@ ${jsBundle}
         this.log(logEl, `✓ Inlined ${inlined} inline images`);
     }
 
+    // assets/asset-manifest.json is the single source of truth for the file
+    // lists (portableJsOrder / portableCss, with @media/@collab tokens
+    // expanding into the conditional groups). Fetched once, then cached.
+    async loadAssetManifest() {
+        if (!this.assetManifest) {
+            const res = await fetch(this.appendVersion('assets/asset-manifest.json'));
+            if (!res.ok) throw new Error('Failed to load assets/asset-manifest.json');
+            this.assetManifest = await res.json();
+        }
+        return this.assetManifest;
+    }
+
+    expandFeatureTokens(list, conditional, features) {
+        const expanded = [];
+        for (const entry of list) {
+            if (entry.startsWith('@')) {
+                const key = entry.slice(1);
+                if (features[key]) expanded.push(...(conditional[key] || []));
+            } else {
+                expanded.push(entry);
+            }
+        }
+        return expanded;
+    }
+
     async inlineCss(features, logEl) {
-        const cssFiles = [
-            'assets/fontawesome/css/all.css',
-            'assets/googlefonts.css',
-            'assets/css/base.css',
-            'assets/css/layout.css',
-            'assets/css/components.css',
-            'assets/css/editor.css'
-        ];
-
-        if (features.collab) cssFiles.push('assets/css/collab.css');
-
-        cssFiles.push(
-            'assets/css/print.css',
-            'assets/css/reports.css',
-            'assets/css/treatment.css'
-        );
+        const manifest = await this.loadAssetManifest();
+        const cssFiles = this.expandFeatureTokens(manifest.portableCss, manifest.conditional || {}, features)
+            .filter(file => file.endsWith('.css'));
 
         const contents = [];
         let cssTotal = 0;
@@ -176,7 +189,7 @@ ${jsBundle}
 
     async inlineJs(features, logEl, portableVersion) {
         const normalizedFeatures = { ...features, media: false, collab: false };
-        const files = this.getJsFiles(normalizedFeatures);
+        const files = await this.getJsFiles(normalizedFeatures);
         const bundleParts = [
             `window.isPortableBuild = true;`,
             `window.cacheverzija = '${portableVersion}';`,
@@ -207,38 +220,10 @@ ${jsBundle}
         return joined;
     }
 
-    getJsFiles(features) {
-        const order = [
-            'assets/js-mod/Constants.js',
-            'assets/js-mod/Utils.js',
-            'assets/js-mod/InlineMarkup.js',
-            'assets/js-mod/Toast.js',
-            'assets/js-mod/ModalManager.js',
-            'assets/js-mod/Shortcuts.js',
-            'assets/js-mod/GeometryManager.js',
-            'assets/js-mod/StorageLogic.js',
-            'assets/js-mod/FDXSerializer.js',
-            'assets/js-mod/TabGuard.js',
-            'assets/js-mod/IDBHelper.js',
-            'assets/js-mod/PageRenderer.js',
-            'assets/js-mod/ScrollbarManager.js',
-            'assets/js-mod/SettingsManager.js',
-            'assets/js-mod/StorageManager.js',
-            'assets/js-mod/IOManager.js',
-            'assets/js-mod/EditorHandler.js',
-            'assets/js-mod/ReportsManager.js',
-            'assets/js-mod/FountainParser.js',
-            'assets/js-mod/TreatmentRenderer.js',
-            'assets/js-mod/TreatmentManager.js',
-            'assets/js-mod/SidebarManager.js'
-        ];
-
-        if (features.media) order.push('assets/js-mod/MediaPlayer.js');
-        if (features.collab) order.push('assets/trystero.min.js', 'assets/js-mod/BatonProtocol.js', 'assets/js-mod/CollaborationManager.js', 'assets/js-mod/CollabUI.js');
-
-        order.push('assets/js-mod/PrintManager.js');
-        order.push('assets/js-mod/SFSS.js');
-        return order;
+    async getJsFiles(features) {
+        const manifest = await this.loadAssetManifest();
+        return this.expandFeatureTokens(manifest.portableJsOrder, manifest.conditional || {}, features)
+            .filter(file => file.endsWith('.js'));
     }
 
     prepareModule(code, file) {

@@ -3,12 +3,16 @@ const params = new URLSearchParams(queryString);
 const CACHE_NAME = params.get('v');
 console.log("ServiceWorker cache version: " + CACHE_NAME);
 
-// Keep this list for the essential "App Shell"
-const APP_SHELL_URLS = [
+// assets/asset-manifest.json is the single source of truth for what gets
+// precached (#19). This minimal shell is used ONLY if that manifest cannot
+// be fetched at install time.
+const FALLBACK_CORE_URLS = [
   '.',
   'index.html',
   'manifest.json',
-  // CSS
+  'assets/script.js',
+  'assets/js-mod/SFSS.js',
+  'assets/js-mod/Constants.js',
   'assets/css/base.css',
   'assets/css/layout.css',
   'assets/css/components.css',
@@ -16,70 +20,45 @@ const APP_SHELL_URLS = [
   'assets/css/editor.css',
   'assets/css/print.css',
   'assets/css/treatment.css',
-  'assets/css/collab.css',
-  'assets/fontawesome/css/all.css',
-  'assets/googlefonts.css',
-  // JS
-  'assets/script.js',
-  'assets/trystero.min.js',
-  'assets/js-mod/SFSS.js',
-  'assets/js-mod/Constants.js',
-  'assets/js-mod/Utils.js',
-  'assets/js-mod/InlineMarkup.js',
-  'assets/js-mod/Toast.js',
-  'assets/js-mod/ModalManager.js',
-  'assets/js-mod/Shortcuts.js',
-  'assets/js-mod/GeometryManager.js',
-  'assets/js-mod/StorageLogic.js',
-  'assets/js-mod/TabGuard.js',
-  'assets/js-mod/FDXSerializer.js',
-  'assets/js-mod/BatonProtocol.js',
-  'assets/js-mod/EditorHandler.js',
-  'assets/js-mod/PageRenderer.js',
-  'assets/js-mod/PrintManager.js',
-  'assets/js-mod/MediaPlayer.js',
-  'assets/js-mod/SidebarManager.js',
-  'assets/js-mod/IDBHelper.js',
-  'assets/js-mod/ScrollbarManager.js',
-  'assets/js-mod/StorageManager.js',
-  'assets/js-mod/ReportsManager.js',
-  'assets/js-mod/TreatmentRenderer.js',
-  'assets/js-mod/IOManager.js',
-  'assets/js-mod/SettingsManager.js',
-  'assets/js-mod/TreatmentManager.js',
-  'assets/js-mod/FountainParser.js',
-  'assets/js-mod/FeatureManager.js',
-  'assets/js-mod/SingleFileGenerator.js',
-  'assets/js-mod/CollaborationManager.js',
-  'assets/js-mod/CollabUI.js',
-  // Images/Icons
-  'assets/images/icon-64.png',
-  'assets/images/icon-512.png',
-  // Fonts (Google)
-  'assets/googlefonts/u-4n0q2lgwslOqpF_6gQ8kELawRZVsf6lvg.woff2',
-  'assets/googlefonts/u-4n0q2lgwslOqpF_6gQ8kELawRZWMf6.woff2',
-  'assets/googlefonts/u-4i0q2lgwslOqpF_6gQ8kELawRR4-Lvp9nsBXw.woff2',
-  'assets/googlefonts/u-450q2lgwslOqpF_6gQ8kELaw9pWt_-.woff2',
-  'assets/googlefonts/u-450q2lgwslOqpF_6gQ8kELawFpWg.woff2',
-  'assets/googlefonts/u-4k0q2lgwslOqpF_6gQ8kELY7pMT-7fq8Ho.woff2',
-  'assets/googlefonts/u-4k0q2lgwslOqpF_6gQ8kELY7pMT-Dfqw.woff2',
-  // Fonts (FontAwesome)
-  'assets/fontawesome/webfonts/fa-solid-900.woff2',
-  'assets/fontawesome/webfonts/fa-brands-400.woff2',
-  'assets/fontawesome/webfonts/fa-regular-400.woff2'
+  'assets/css/collab.css'
 ];
 
-// On install, cache the app shell
+// On install, cache the app shell. Core assets fail-hard (a broken install
+// never activates); extras + conditional feature modules fail-soft (logged,
+// never fatal). No skipWaiting() here: activation waits for the user's
+// explicit go-ahead via the SKIP_WAITING message (#20).
 self.addEventListener('install', event => {
-  self.skipWaiting(); // Force update
-  const SHELL = [...new Set(APP_SHELL_URLS)];
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Opened cache and caching app shell');
-        return cache.addAll(SHELL);
-      })
-  );
+  event.waitUntil((async () => {
+    let core = FALLBACK_CORE_URLS;
+    let soft = [];
+    try {
+      const response = await fetch('assets/asset-manifest.json?v=' + CACHE_NAME);
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const manifest = await response.json();
+      core = manifest.core || FALLBACK_CORE_URLS;
+      soft = (manifest.extras || []).concat(...Object.values(manifest.conditional || {}));
+    } catch (err) {
+      console.warn('Asset manifest unavailable, caching fallback shell:', err);
+    }
+    const coreUrls = [...new Set(core)];
+    const softUrls = [...new Set(soft)].filter(url => !coreUrls.includes(url));
+    const cache = await caches.open(CACHE_NAME);
+    console.log('Opened cache and caching app shell (' + coreUrls.length + ' core, ' + softUrls.length + ' optional)');
+    await cache.addAll(coreUrls); // fail-hard: install rejects if any core asset is missing
+    const results = await Promise.allSettled(softUrls.map(url => cache.add(url)));
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        console.warn('Optional asset not cached:', softUrls[index], result.reason);
+      }
+    });
+  })());
+});
+
+// The page posts this when the user clicks "Reload" on the update banner (#20).
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // On activate, clean up old caches
