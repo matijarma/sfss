@@ -1017,6 +1017,7 @@ export class TreatmentRenderer {
     }
 
     showTransitionMenu(targetElement, sceneId) {
+        this.app.editorHandler.closePopups(); // run any previous menu's cleanup
         const options = [constants.ELEMENT_TYPES.TRANSITION, constants.ELEMENT_TYPES.SLUG];
         const menu = this.app.editorHandler.typeMenu;
         menu.innerHTML = '';
@@ -1057,10 +1058,15 @@ export class TreatmentRenderer {
 
         const closeMenu = () => {
             menu.style.display = 'none';
+            menu.style.position = ''; // undo the position:fixed override
             this.app.editorHandler.popupState.active = false;
+            this.app.editorHandler.activePopupCleanup = null;
             targetElement.removeEventListener('keydown', keyHandler);
             document.removeEventListener('mousedown', outsideClickHandler);
         };
+        // Window-level Escape (handleBackOrEscape -> closePopups) must be able
+        // to run this cleanup, or the listeners above leak.
+        this.app.editorHandler.activePopupCleanup = closeMenu;
 
         const keyHandler = (e) => {
             if (e.key === 'ArrowDown') {

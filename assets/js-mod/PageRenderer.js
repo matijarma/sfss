@@ -1,11 +1,17 @@
 import * as constants from './Constants.js';
 
+// Matches a trailing "(CONT'D)" on a character cue. Single source of truth for
+// both stripping and testing the marker (R6).
+const CONTD_RE = /\s*\(CONT'D\)\s*$/i;
+
 export class PageRenderer {
-    constructor() {
+    // Legacy callers pass a measured line height; it is tolerated and ignored —
+    // geometry is derived from Constants so every consumer paginates identically (R18).
+    constructor(_legacyLineHeight) {
         this.formatting = constants.FORMATTING;
         this.paperConfig = constants.PAPER_CONFIGS.US_LETTER; // Default
         this.updateDimensions();
-        
+
         this.measureContainer = null;
     }
 
@@ -18,17 +24,14 @@ export class PageRenderer {
 
     updateDimensions() {
         this.dpi = this.formatting.PIXELS_PER_INCH;
-        this.lineHeightPx = this.formatting.LINE_HEIGHT_PT * (this.dpi / 72); // pt to px conversion usually 1.333, but user said 12pt = 100% line height. 
-        // User spec: 6 lines per inch. 1 inch = 96px. 96/6 = 16px.
-        // 12pt font is usually 16px.
-        this.lineHeightPx = 16; 
+        this.lineHeightPx = this.dpi / this.formatting.LINES_PER_INCH; // 96/6 = 16px (12pt, 6 lines per inch)
 
         this.pageHeightPx = this.paperConfig.dimensions.height * this.dpi;
         this.marginTopPx = this.paperConfig.margins.top * this.dpi;
         this.marginBottomPx = this.paperConfig.margins.bottom * this.dpi;
         this.contentHeightPx = this.pageHeightPx - this.marginTopPx - this.marginBottomPx;
-        
-        // Calculate strict max lines
+
+        // Calculate strict max lines (54 for US Letter)
         this.maxLinesPerPage = Math.floor(this.contentHeightPx / this.lineHeightPx);
     }
 
@@ -51,223 +54,139 @@ export class PageRenderer {
 
         container.classList.toggle('show-scene-numbers', !!options.showSceneNumbers);
 
+        // Pre-scan the source into logical blocks. Split remainders are pushed
+        // back onto the FRONT of this deque, so a remainder longer than a page
+        // simply splits again on the next iteration — nothing can overflow (R7).
+        const deque = this._buildBlockQueue(sourceNodes, options);
+
         let pageIndex = 1;
         let currentPage = this.createPage(container, options, pageIndex);
         let contentWrapper = currentPage.querySelector('.content-wrapper');
-        let currentLines = 0; // Tracking lines on current page
 
-        const createNewPage = () => {
+        const newPage = () => {
             pageIndex++;
             currentPage = this.createPage(container, options, pageIndex);
             contentWrapper = currentPage.querySelector('.content-wrapper');
-            currentLines = 0;
             return contentWrapper;
         };
 
+        while (deque.length > 0) {
+            const block = deque.shift();
+
+            // Materialize continuation remainders: a dialogue split pushed this
+            // block back with a {contd} marker — it receives a synthetic
+            // "NAME (CONT'D)" cue only now, at placement time (R6).
+            let nodes = block.nodes;
+            if (block.contd) {
+                nodes = [this._makeContdCue(block.cueNode, block.contd), ...nodes];
+            }
+
+            // Case A: Scene heading. A slug may only stay on this page if at
+            // least 2 lines of the FOLLOWING block fit beneath it (1 line if
+            // that block is another slug or a transition). Otherwise the page
+            // breaks BEFORE the slug (R5).
+            if (block.type === constants.ELEMENT_TYPES.SLUG) {
+                const probe = this._makeSlugProbe(deque[0]);
+                const tryNodes = probe ? [...nodes, probe] : nodes;
+                let placed = this._tryPlace(contentWrapper, tryNodes);
+                if (!placed && contentWrapper.childElementCount > 0) {
+                    newPage();
+                    placed = this._tryPlace(contentWrapper, tryNodes);
+                }
+                if (placed) {
+                    if (probe) placed.pop().remove();
+                } else {
+                    // Degenerate: slug (+probe) taller than an empty page.
+                    this._forcePlace(contentWrapper, nodes);
+                }
+                continue;
+            }
+
+            // Case B: Dialogue block (Character-led).
+            if (block.type === constants.ELEMENT_TYPES.CHARACTER) {
+                let placed = this._tryPlace(contentWrapper, nodes);
+                if (placed) continue;
+
+                let split = this._splitDialogue(contentWrapper, nodes);
+                if (!split && contentWrapper.childElementCount > 0) {
+                    // Not enough room to split here: bump the WHOLE block to the
+                    // next page, unchanged — bumped blocks never get (CONT'D) (R6).
+                    newPage();
+                    placed = this._tryPlace(contentWrapper, nodes);
+                    if (placed) continue;
+                    split = this._splitDialogue(contentWrapper, nodes);
+                }
+
+                if (split) {
+                    const cueNode = nodes[0];
+                    const charName = cueNode.textContent.replace(CONTD_RE, '').trim();
+                    deque.unshift({
+                        type: constants.ELEMENT_TYPES.CHARACTER,
+                        nodes: split.remainder,
+                        contd: charName,
+                        cueNode: cueNode
+                    });
+                    newPage();
+                } else if (!placed) {
+                    // Degenerate: unsplittable block taller than an empty page.
+                    this._forcePlace(contentWrapper, nodes);
+                }
+                continue;
+            }
+
+            // Case C: Action / Transition (and stray Dialogue or Parenthetical
+            // without a Character cue). Fits whole, or splits recursively.
+            let placed = this._tryPlace(contentWrapper, nodes);
+            if (placed) continue;
+
+            let split = nodes.length === 1
+                ? this._splitTextNode(contentWrapper, [], nodes[0], [])
+                : { success: false };
+            if (!split.success && contentWrapper.childElementCount > 0) {
+                newPage();
+                placed = this._tryPlace(contentWrapper, nodes);
+                if (placed) continue;
+                if (nodes.length === 1) {
+                    split = this._splitTextNode(contentWrapper, [], nodes[0], []);
+                }
+            }
+
+            if (split.success) {
+                if (!this._tryPlace(contentWrapper, [split.firstPart])) {
+                    this._forcePlace(contentWrapper, [split.firstPart]);
+                }
+                deque.unshift({ type: block.type, nodes: [split.secondPart] });
+                newPage();
+            } else if (!placed) {
+                // Degenerate: unsplittable node taller than an empty page.
+                this._forcePlace(contentWrapper, nodes);
+            }
+        }
+    }
+
+    // Pre-scan sourceNodes into logical blocks. Nodes are cloned once here so
+    // nothing downstream ever touches the caller's (editor's) live nodes.
+    _buildBlockQueue(sourceNodes, options) {
+        const queue = [];
         let i = 0;
         let sceneChronologicalIndex = 0;
-
         while (i < sourceNodes.length) {
-            // 1. Identify the logical block
-            let { blockNodes, type, nextIndex } = this.getNextLogicalBlock(sourceNodes, i);
-            
-            // 2. Measure the block
-            let blockHeight = this.measureBlockHeight(blockNodes, contentWrapper);
-            let blockLines = Math.ceil(blockHeight / this.lineHeightPx);
-            
-            // 3. Prepare extra attributes (like scene numbers)
-            const extraAttrs = {};
+            const { blockNodes, type, nextIndex } = this.getNextLogicalBlock(sourceNodes, i);
+            const nodes = blockNodes.map(n => n.cloneNode(true));
             if (type === constants.ELEMENT_TYPES.SLUG) {
                 sceneChronologicalIndex++;
                 if (options.showSceneNumbers) {
-                    const slugNode = blockNodes[0];
-                    const id = slugNode.dataset.lineId;
+                    const id = blockNodes[0].dataset.lineId;
                     // Use custom number from map if it exists, otherwise fall back to chronological index
-                    extraAttrs.sceneNumber = options.sceneNumberMap?.[id] || sceneChronologicalIndex;
+                    const num = options.sceneNumberMap?.[id] || sceneChronologicalIndex;
+                    // Numbering is rendered by CSS ::before/::after content: attr(data-scene-number-display)
+                    nodes[0].setAttribute('data-scene-number-display', num);
                 }
             }
-
-            // 4. Check fit
-            let linesRemaining = this.maxLinesPerPage - currentLines;
-
-            if (blockLines <= linesRemaining) {
-                // IT FITS
-                if (type === constants.ELEMENT_TYPES.SLUG) {
-                    if (linesRemaining - blockLines < 1) {
-                         createNewPage();
-                         this.appendBlock(contentWrapper, blockNodes, extraAttrs);
-                         currentLines += blockLines;
-                    } else {
-                        this.appendBlock(contentWrapper, blockNodes, extraAttrs);
-                        currentLines += blockLines;
-                    }
-                } else {
-                    this.appendBlock(contentWrapper, blockNodes, extraAttrs);
-                    currentLines += blockLines;
-                }
-                i = nextIndex;
-                continue;
-            }
-
-            // IT DOESN'T FIT - BREAKING LOGIC
-            
-            // Case A: Scene Heading
-            if (type === constants.ELEMENT_TYPES.SLUG) {
-                createNewPage();
-                this.appendBlock(contentWrapper, blockNodes, extraAttrs);
-                currentLines += blockLines;
-                i = nextIndex;
-                continue;
-            }
-
-            // Case B: Action / General
-            if (type === constants.ELEMENT_TYPES.ACTION || type === constants.ELEMENT_TYPES.TRANSITION) {
-                 // Try to split text
-                 const node = blockNodes[0]; // Action blocks are usually single nodes in this logic
-                 const result = this.splitTextNode(node, linesRemaining, contentWrapper, type);
-                 
-                 if (result.success) {
-                     this.appendBlock(contentWrapper, [result.firstPart]);
-                     currentLines += result.linesUsed;
-                     
-                     createNewPage();
-                     // The rest becomes the new node to process
-                     // We can't just modify sourceNodes[i] because it's a reference to the editor.
-                     // We need to insert a temp node into our processing stream or handle it here.
-                     // Easier: Handle the second part as if it were the start of a new block, 
-                     // but we need to ensure we don't skip the *original* next nodes.
-                     // Actually, splitTextNode returns a DOM node. We can just process it.
-                     
-                     // However, we need to handle the loop. 
-                     // The simplest way is to decrement i so we process the "remainder" in the next iteration,
-                     // BUT we need to replace sourceNodes[i] with the remainder. 
-                     // Since we can't touch sourceNodes (it's the editor content), we need a queue.
-                     
-                     // BETTER APPROACH: Use a local queue of nodes to process.
-                     // For now, let's just recursively handle the overflow or push it to next page if it's small.
-                     
-                     // If we split, we append the first part. The second part needs to be put on the new page.
-                     this.appendBlock(contentWrapper, [result.secondPart]);
-                     currentLines += Math.ceil(this.measureBlockHeight([result.secondPart], contentWrapper) / this.lineHeightPx);
-                     
-                     i = nextIndex; 
-                     continue;
-                 } else {
-                     // Could not split cleanly (orphans/widows), push whole block
-                     createNewPage();
-                     this.appendBlock(contentWrapper, blockNodes);
-                     currentLines += blockLines;
-                     i = nextIndex;
-                     continue;
-                 }
-            }
-
-            // Case C: Dialogue (Character + Parenthetical + Dialogue)
-            if (type === constants.ELEMENT_TYPES.CHARACTER) {
-                // This is a dialogue block.
-                // Structure: Character -> (Parenthetical)* -> Dialogue
-                
-                // Calculate how much space we have.
-                // We need to place at least Character + (MORE) line.
-                // If we can't fit Character + 1 line of dialogue, push all.
-                
-                // Let's identify the parts.
-                const charNode = blockNodes[0];
-                const dialogueNode = blockNodes[blockNodes.length - 1]; // Assuming last is dialogue
-                const parentheticals = blockNodes.slice(1, -1);
-                
-                // Measure Header (Char + Parens)
-                const headerNodes = [charNode, ...parentheticals];
-                const headerHeight = this.measureBlockHeight(headerNodes, contentWrapper);
-                const headerLines = Math.ceil(headerHeight / this.lineHeightPx);
-                
-                // Space available for dialogue
-                const dialogueSpaceLines = linesRemaining - headerLines;
-                
-                if (dialogueSpaceLines < 2) { 
-                    // Need at least 2 lines (1 text + 1 MORE) or just 1 line if it's the end?
-                    // Spec says: "Orphans: A single line of Action or Dialogue cannot be left at the bottom of a page."
-                    // So we probably want at least 2 lines of dialogue or the whole thing.
-                    createNewPage();
-                    // Handle (CONT'D)
-                    const newCharNode = charNode.cloneNode(true);
-                    if (!newCharNode.textContent.includes("(CONT'D)")) {
-                         // Only add if not already there (though usually user types it)
-                         // Spec says: Insert CHARACTER NAME (CONT'D) at the top of Page B.
-                         // We should modify the text content of the clone.
-                         newCharNode.textContent = newCharNode.textContent.trim() + " (CONT'D)";
-                    }
-                    const newBlock = [newCharNode, ...parentheticals.map(p => p.cloneNode(true)), dialogueNode.cloneNode(true)];
-                    this.appendBlock(contentWrapper, newBlock);
-                    currentLines += Math.ceil(this.measureBlockHeight(newBlock, contentWrapper) / this.lineHeightPx);
-                    i = nextIndex;
-                    continue;
-                }
-                
-                // We have space for some dialogue. Try to split.
-                // We need to reserve 1 line for (MORE).
-                const splitResult = this.splitTextNode(dialogueNode, dialogueSpaceLines - 1, contentWrapper, constants.ELEMENT_TYPES.DIALOGUE);
-                
-                if (splitResult.success && splitResult.firstPart) {
-                    // We split successfully.
-                    
-                    // 1. Append Header
-                    this.appendBlock(contentWrapper, headerNodes.map(n => n.cloneNode(true)));
-                    
-                    // 2. Append First Part
-                    this.appendBlock(contentWrapper, [splitResult.firstPart]);
-                    
-                    // 3. Append (MORE)
-                    const moreNode = document.createElement('div');
-                    moreNode.className = `script-line ${constants.ELEMENT_TYPES.CHARACTER}`; // Use character style for alignment or specific?
-                    // Spec says: "insert (MORE) centered at the bottom of Page A" 
-                    // Usually (MORE) is centered relative to the dialogue or page? Standard is centered text, often modeled as Character or Dialogue with special text.
-                    // Final Draft uses Character alignment usually, or Centered. 
-                    // Let's look at `assets/css/editor.css`... no specific class.
-                    // Let's make a manual style or use Character.
-                    moreNode.textContent = "(MORE)";
-                    moreNode.style.textAlign = "center"; 
-                    moreNode.style.width = "100%";
-                    moreNode.style.marginLeft = "0";
-                    this.appendBlock(contentWrapper, [moreNode]);
-                    
-                    currentLines = this.maxLinesPerPage; // We filled it effectively
-                    
-                    // 4. New Page
-                    createNewPage();
-                    
-                    // 5. Append (CONT'D) Header
-                    const contCharNode = charNode.cloneNode(true);
-                    let cleanName = contCharNode.textContent.replace(/\s*\(CONT'D\)\s*$/, '').trim();
-                    contCharNode.textContent = cleanName + " (CONT'D)";
-                    
-                    this.appendBlock(contentWrapper, [contCharNode]);
-                    
-                    // 6. Append Second Part
-                    this.appendBlock(contentWrapper, [splitResult.secondPart]);
-                    currentLines += Math.ceil(this.measureBlockHeight([contCharNode, splitResult.secondPart], contentWrapper) / this.lineHeightPx);
-                    
-                    i = nextIndex;
-                    continue;
-                } else {
-                    // Can't split cleanly
-                    createNewPage();
-                     const newCharNode = charNode.cloneNode(true);
-                     let cleanName = newCharNode.textContent.replace(/\s*\(CONT'D\)\s*$/, '').trim();
-                     newCharNode.textContent = cleanName + " (CONT'D)";
-                     const newBlock = [newCharNode, ...parentheticals.map(p => p.cloneNode(true)), dialogueNode.cloneNode(true)];
-                    this.appendBlock(contentWrapper, newBlock);
-                    currentLines += Math.ceil(this.measureBlockHeight(newBlock, contentWrapper) / this.lineHeightPx);
-                    i = nextIndex;
-                    continue;
-                }
-            }
-            
-            // Fallback
-            this.appendBlock(contentWrapper, blockNodes);
-            currentLines += blockLines;
+            queue.push({ type, nodes });
             i = nextIndex;
         }
+        return queue;
     }
 
     getNextLogicalBlock(nodes, startIndex) {
@@ -277,39 +196,211 @@ export class PageRenderer {
         let nextIndex = startIndex + 1;
 
         if (type === constants.ELEMENT_TYPES.CHARACTER) {
-            // Include Parentheticals and Dialogue
+            // Include Parentheticals and Dialogue: Char -> (Paren) -> Dialog -> (Paren) -> Dialog...
             while (nextIndex < nodes.length) {
                 const nextNode = nodes[nextIndex];
                 const nextType = this.getType(nextNode);
                 if (nextType === constants.ELEMENT_TYPES.PARENTHETICAL || nextType === constants.ELEMENT_TYPES.DIALOGUE) {
                     blockNodes.push(nextNode);
                     nextIndex++;
-                    // If we hit dialogue, we usually stop after it, UNLESS there are multiple dialogue chunks (rare but possible with parentheticals in between)
-                    // Standard: Char -> (Paren) -> Dialog -> (Paren) -> Dialog.
-                    // We should grab them all as one block usually.
                 } else {
                     break;
                 }
             }
-        } else if (type === constants.ELEMENT_TYPES.SLUG) {
-            // Just the slug? Or Slug + Action?
-            // "Scene Header cannot be last line".
-            // We treat the slug as its own block for measurement, but we handle the "next line" check in the main loop.
-        } 
-        
+        }
+        // Slugs are their own block; the "carry" rule is handled at placement time.
+
         return { blockNodes, type, nextIndex };
     }
 
-    appendBlock(container, nodes, extraAttrs = {}) {
-        nodes.forEach(node => {
-            const clone = node.cloneNode(true);
-            if (extraAttrs.sceneNumber && this.getType(node) === constants.ELEMENT_TYPES.SLUG) {
-                clone.setAttribute('data-scene-number-display', extraAttrs.sceneNumber);
-                // Removed explicit span injection as requested.
-                // Numbering is handled by CSS ::before/::after content: attr(data-scene-number-display)
+    // --- Place-then-check measurement (R12) ---
+    // All fit decisions go through the REAL content wrapper, so sibling margin
+    // collapse is modeled exactly. Appends clones of `nodes`; if the last one
+    // ends within the live area (1px epsilon) the clones stay and are returned,
+    // otherwise they are removed and false is returned.
+    _tryPlace(contentWrapper, nodes) {
+        if (!nodes || nodes.length === 0) return [];
+        const clones = this._forcePlace(contentWrapper, nodes);
+        const last = clones[clones.length - 1];
+        if (this._contentBottom(contentWrapper, last) <= this.contentHeightPx + 1) {
+            return clones;
+        }
+        clones.forEach(c => c.remove());
+        return false;
+    }
+
+    _forcePlace(contentWrapper, nodes) {
+        const clones = nodes.map(n => n.cloneNode(true));
+        clones.forEach(c => contentWrapper.appendChild(c));
+        return clones;
+    }
+
+    // Bottom edge of `node` relative to the top of the page's live area.
+    // The content wrapper is NOT a positioned element, so offsetTop is relative
+    // to the .page (position: relative). Measuring against the page origin also
+    // catches top margins that collapse through the (padding-less) wrapper.
+    _contentBottom(contentWrapper, node) {
+        const page = contentWrapper.parentElement;
+        if (node.offsetParent === page) {
+            return node.offsetTop - this.marginTopPx + node.offsetHeight;
+        }
+        if (node.offsetParent === contentWrapper) {
+            return node.offsetTop + node.offsetHeight;
+        }
+        // Fallback for exotic contexts: geometric difference.
+        return node.getBoundingClientRect().bottom - contentWrapper.getBoundingClientRect().top;
+    }
+
+    // Probe used by the slug-carry rule (R5): an empty element with the classes
+    // (and therefore margins) of the next block's first node, sized to the
+    // number of lines the slug must carry with it.
+    _makeSlugProbe(nextBlock) {
+        if (!nextBlock || !nextBlock.nodes || nextBlock.nodes.length === 0) return null;
+        const linesNeeded = (nextBlock.type === constants.ELEMENT_TYPES.SLUG ||
+                             nextBlock.type === constants.ELEMENT_TYPES.TRANSITION) ? 1 : 2;
+        const probe = nextBlock.nodes[0].cloneNode(false);
+        probe.textContent = '';
+        probe.style.height = `${linesNeeded * this.lineHeightPx}px`;
+        probe.style.minHeight = probe.style.height;
+        return probe;
+    }
+
+    // Synthetic pagination nodes carry data-synthetic="true" so consumers (and
+    // tests) can separate generated furniture from source text.
+    _makeMoreNode() {
+        const el = document.createElement('div');
+        el.className = 'script-line sc-more';
+        el.dataset.synthetic = 'true';
+        el.textContent = '(MORE)';
+        return el;
+    }
+
+    _makeContdCue(cueNode, charName) {
+        const cue = cueNode.cloneNode(true);
+        cue.textContent = `${charName} (CONT'D)`;
+        cue.dataset.synthetic = 'true';
+        return cue;
+    }
+
+    // Split a Character-led block so the page ends with (MORE). Prefers the
+    // latest possible cut: inside the last dialogue node first, then between
+    // nodes, walking backwards. Returns { remainder } with the split's page
+    // nodes already placed, or null when no legal cut exists (caller bumps).
+    _splitDialogue(contentWrapper, nodes) {
+        const moreNode = this._makeMoreNode();
+        for (let j = nodes.length - 1; j >= 1; j--) {
+            if (this.getType(nodes[j]) !== constants.ELEMENT_TYPES.DIALOGUE) continue;
+
+            // (a) Cut BETWEEN nodes, after dialogue node j (only if something follows).
+            if (j < nodes.length - 1) {
+                const placed = this._tryPlace(contentWrapper, [...nodes.slice(0, j + 1), moreNode]);
+                if (placed) {
+                    // Orphan rule: never leave a single dialogue line above (MORE).
+                    const cutClone = placed[placed.length - 2];
+                    if (cutClone.offsetHeight >= 2 * this.lineHeightPx - 1) {
+                        return { remainder: nodes.slice(j + 1) };
+                    }
+                    placed.forEach(el => el.remove());
+                }
             }
-            container.appendChild(clone);
-        });
+
+            // (b) Cut INSIDE dialogue node j.
+            const prefix = nodes.slice(0, j);
+            const split = this._splitTextNode(contentWrapper, prefix, nodes[j], [moreNode]);
+            if (split.success) {
+                if (!this._tryPlace(contentWrapper, [...prefix, split.firstPart, moreNode])) {
+                    this._forcePlace(contentWrapper, [...prefix, split.firstPart, moreNode]);
+                }
+                return { remainder: [split.secondPart, ...nodes.slice(j + 1)] };
+            }
+        }
+        return null;
+    }
+
+    // Binary search over the word index for the max prefix of `node`'s text
+    // that fits the current page when placed after `contextNodes` and followed
+    // by `tailNodes` (R27: one in-situ measurement per iteration).
+    // Widow rule (R9): if the remainder would be < 2 lines, retreat the cut by
+    // one line; if that leaves the first part < 2 lines, fail (caller bumps).
+    _splitTextNode(contentWrapper, contextNodes, node, tailNodes) {
+        const parts = node.textContent.split(/(\s+)/);
+        const wordIdx = [];
+        for (let i = 0; i < parts.length; i++) {
+            if (parts[i].trim() !== '') wordIdx.push(i);
+        }
+        if (wordIdx.length < 2) return { success: false };
+
+        const makeFirst = (k) => { // first k words
+            const clone = node.cloneNode(false);
+            clone.textContent = parts.slice(0, wordIdx[k - 1] + 1).join('').replace(/\s+$/, '');
+            return clone;
+        };
+        const makeSecond = (k) => { // everything after the first k words
+            const clone = node.cloneNode(false);
+            clone.textContent = parts.slice(wordIdx[k - 1] + 1).join('').replace(/^\s+/, '');
+            return clone;
+        };
+        const fits = (k) => {
+            const placed = this._tryPlace(contentWrapper, [...contextNodes, makeFirst(k), ...tailNodes]);
+            if (!placed) return false;
+            placed.forEach(el => el.remove());
+            return true;
+        };
+        const measureLines = (el) => {
+            contentWrapper.appendChild(el);
+            const lines = Math.max(1, Math.round(el.offsetHeight / this.lineHeightPx));
+            el.remove();
+            return lines;
+        };
+
+        // Upper bound: more characters than a full page can hold in any column
+        // can never fit, so cap the search range (keeps probe clones small).
+        const charsPerLine = Math.ceil(this.paperConfig.liveArea.width / this.formatting.CHAR_WIDTH_INCH);
+        const maxChars = (this.maxLinesPerPage + 2) * (charsPerLine + 1);
+        let hi = wordIdx.length - 1;
+        let cum = 0;
+        for (let k = 1; k <= wordIdx.length - 1; k++) {
+            cum += parts[wordIdx[k - 1]].length + 1;
+            if (cum > maxChars) { hi = Math.min(hi, k); break; }
+        }
+
+        // Max k in [1, hi] such that the first k words (+ tail) fit.
+        let lo = 1;
+        let best = 0;
+        while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            if (fits(mid)) { best = mid; lo = mid + 1; } else { hi = mid - 1; }
+        }
+        if (best === 0) return { success: false };
+
+        let cut = best;
+        let firstNode = makeFirst(cut);
+        let secondNode = makeSecond(cut);
+        let firstLines = measureLines(firstNode);
+        // Long remainders are trivially >= 2 lines; only measure near the boundary.
+        let secondLines = secondNode.textContent.length > 4 * charsPerLine
+            ? 2
+            : measureLines(secondNode);
+
+        if (secondLines < 2) {
+            // Retreat the cut by one line.
+            const targetLines = firstLines - 1;
+            if (targetLines < 2) return { success: false };
+            let rLo = 1, rHi = cut, retreat = 0;
+            while (rLo <= rHi) {
+                const mid = (rLo + rHi) >> 1;
+                if (measureLines(makeFirst(mid)) <= targetLines) { retreat = mid; rLo = mid + 1; } else { rHi = mid - 1; }
+            }
+            if (retreat === 0) return { success: false };
+            cut = retreat;
+            firstNode = makeFirst(cut);
+            secondNode = makeSecond(cut);
+            firstLines = measureLines(firstNode);
+            secondLines = measureLines(secondNode);
+        }
+
+        if (firstLines < 2 || secondLines < 2) return { success: false };
+        return { success: true, firstPart: firstNode, secondPart: secondNode };
     }
 
     measureBlockHeight(nodes, container) {
@@ -319,102 +410,20 @@ export class PageRenderer {
             this.measureContainer.style.visibility = 'hidden';
             this.measureContainer.style.height = 'auto';
             this.measureContainer.style.width = '100%'; // Will inherit from parent
-            // IMPORTANT: Copy styles relevant to layout
         }
-        
+
         container.appendChild(this.measureContainer);
         this.measureContainer.innerHTML = '';
         nodes.forEach(node => this.measureContainer.appendChild(node.cloneNode(true)));
-        
+
         const height = this.measureContainer.offsetHeight;
         container.removeChild(this.measureContainer);
         return height;
     }
-    
+
     // Alias for backward compatibility
     measureNodeHeight(nodes, container) {
         return this.measureBlockHeight(Array.isArray(nodes) ? nodes : [nodes], container);
-    }
-
-    splitTextNode(node, maxLines, container, type) {
-        // We need to find the point in the text where it exceeds maxLines.
-        // Binary search or word-by-word. Word-by-word is safer for correctness.
-        
-        const fullText = node.textContent;
-        const words = fullText.split(/(\s+)/); // Keep delimiters
-        let currentText = "";
-        let splitIndex = -1;
-        
-        // Optimize: Estimate char count? No, stick to measurement.
-        
-        // Helper to check height
-        const checkHeight = (text) => {
-            const tempNode = node.cloneNode(false);
-            tempNode.textContent = text;
-            return Math.ceil(this.measureBlockHeight([tempNode], container) / this.lineHeightPx);
-        };
-
-        let low = 0;
-        let high = words.length;
-        let bestFitIndex = 0;
-
-        // Linear scan might be slow for long paragraphs, but safe. 
-        // Let's try to build up.
-        
-        for (let i = 0; i < words.length; i++) {
-            let testText = currentText + words[i];
-            let lines = checkHeight(testText);
-            
-            if (lines > maxLines) {
-                // We exceeded. The previous state was the max.
-                // However, we need to check for orphans.
-                // If the remaining text is just 1 line, we shouldn't split here if possible?
-                // Spec: "A single line... cannot be left at the bottom of a page." -> This refers to the orphan on the OLD page? 
-                // "Orphans: A single line of Action or Dialogue cannot be left at the bottom of a page."
-                // Usually "Orphan" = First line of paragraph at bottom of page. "Widow" = Last line of paragraph at top of page.
-                // The spec phrasing is slightly ambiguous. "Cannot be left at the bottom of a page" suggests ORPHAN protection (don't leave 1 line alone at bottom).
-                
-                // So, if maxLines < 2, we shouldn't put anything? 
-                // Or if we split, we must ensure we have at least 2 lines?
-                
-                // Let's assume strict maxLines limit.
-                splitIndex = i; // The word that broke the camel's back
-                break;
-            }
-            currentText = testText;
-            bestFitIndex = i + 1;
-        }
-
-        if (bestFitIndex === 0 || bestFitIndex === words.length) {
-            return { success: false };
-        }
-
-        // Check for Widow (Last line alone on next page)
-        // If remaining text is short (1 line), we might want to move an extra line to the next page?
-        // But we are constrained by maxLines on THIS page. We can't increase space.
-        // So we must move the cut point BACKWARDS.
-        
-        let firstPartText = words.slice(0, splitIndex).join('');
-        let secondPartText = words.slice(splitIndex).join('');
-
-        // Measure second part
-        // If second part < 2 lines? Spec doesn't explicitly forbid 1 line at TOP of next page (Widow), 
-        // but "Orphans... cannot be left at bottom" is explicit.
-        // Common practice: Avoid single lines anywhere.
-        
-        // Let's enforce: First part must be >= 2 lines (if maxLines >= 2). 
-        // Since we filled 'maxLines', it is likely >= 2 unless maxLines=1.
-        
-        // If maxLines=1, we have an orphan by definition. We should not split, just push whole block.
-        if (maxLines < 2) return { success: false };
-
-        const node1 = node.cloneNode(false);
-        node1.textContent = firstPartText;
-        
-        const node2 = node.cloneNode(false);
-        node2.textContent = secondPartText;
-        
-        return { success: true, firstPart: node1, secondPart: node2, linesUsed: maxLines };
     }
 
     createPage(container, options, pageNum) {
@@ -423,24 +432,16 @@ export class PageRenderer {
         if (options.showSceneNumbers) page.classList.add('show-scene-numbers');
         page.dataset.pageNumber = pageNum;
         const suppressMeta = options.hideFirstPageMeta && pageNum === 1;
-        
+
         // Show header if explicit text is provided OR if showDate option is true
         if ((options.headerText || options.showDate) && !suppressMeta) {
             const header = document.createElement('div');
             header.className = 'page-header';
             let text = options.headerText || '';
-            
-            // Logic handled in SFSS.js: getHeaderText() usually combines title + date if flag is set.
-            // But if we want granular control here:
-            // Actually, SFSS.js passes `headerText` which ALREADY contains the date if `meta.showDate` is true.
-            // So we just need to render it if it's not empty.
-            
-            // However, the issue description says "#toolbar-date is still not toggling .page-header".
-            // This suggests that even if we toggle it, the header might not appear if `headerText` is empty (e.g. no title).
-            // We should ensure it renders if showDate is requested, even if title is blank.
-            
-            // Let's rely on what's passed.
-            
+
+            // SFSS.js passes `headerText` which ALREADY contains the date if
+            // `meta.showDate` is true; we just render whatever we were given.
+
             header.textContent = text;
             page.appendChild(header);
         }

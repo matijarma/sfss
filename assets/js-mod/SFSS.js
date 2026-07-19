@@ -11,7 +11,10 @@
  */
 
 import * as constants from './Constants.js';
+import * as Shortcuts from './Shortcuts.js';
 import { escapeHtml } from './Utils.js';
+import { toast } from './Toast.js';
+import { ModalManager } from './ModalManager.js';
 import { SidebarManager } from './SidebarManager.js';
 import { EditorHandler } from './EditorHandler.js';
 import { ScrollbarManager } from './ScrollbarManager.js';
@@ -67,7 +70,9 @@ export class SFSS {
         this.isRestoring = false;
         this.historyTimeout = null;
 
-        // Sub-modules
+        // Sub-modules (ModalManager first: every other manager routes its
+        // modal open/close through it)
+        this.modalManager = new ModalManager(this);
         this.featureManager = new FeatureManager(this);
         this.mediaPlayer = this.featureManager.createMediaStub();
         this.collaborationManager = this.featureManager.createCollabManagerStub();
@@ -197,9 +202,10 @@ export class SFSS {
             document.documentElement.classList.add('dark-mode');
         }
 
+        this.registerModals();
         await this.featureManager.loadFeatures();
         this.bindEventListeners();
-        this.toggleSidebar(); 
+        this.toggleSidebar();
 
         const activeScriptId = await this.storageManager.init();
         await this.loadScript(activeScriptId);
@@ -275,21 +281,43 @@ export class SFSS {
         }
     }
 
+    registerModals() {
+        this.modalManager.register('settings-modal', { closeBtnId: 'settings-close-btn' });
+        this.modalManager.register('script-meta-popup', {});
+        this.modalManager.register('reports-modal', {
+            closeBtnId: 'reports-close-btn',
+            onClose: () => this.reportsManager.onModalClosed()
+        });
+        this.modalManager.register('help-modal', { closeBtnId: 'help-close-btn' });
+        this.modalManager.register('print-prep-modal', { closeBtnId: 'print-prep-close-btn' });
+        this.modalManager.register('mobile-welcome-modal', {
+            // The welcome screen may only be dismissed once a script exists.
+            canClose: () => {
+                const blocks = this.editor.querySelectorAll('.script-line');
+                return !(blocks.length === 0 || (blocks.length === 1 && !blocks[0].textContent.trim()));
+            }
+        });
+        // Non-blocking draggable popup: joins the stack for Escape handling
+        // but neither traps focus nor closes on backdrop clicks.
+        this.modalManager.register('scene-settings-popup', { trapFocus: false, backdropClose: false });
+        // collab-modal registers itself in CollabUI.injectHTML (its DOM is injected).
+    }
+
     async checkWelcomeScreen() {
         if (!document.body.classList.contains('mobile-view')) {
-            document.getElementById('mobile-welcome-modal').classList.add('hidden');
+            this.modalManager.close('mobile-welcome-modal');
             return;
         }
         const showWelcome = localStorage.getItem('sfss_show_welcome');
         // Logic specific to welcome screen
-        const shouldShow = showWelcome === null || showWelcome === 'true'; 
+        const shouldShow = showWelcome === null || showWelcome === 'true';
 
         const sidebarToggle = document.getElementById('sidebar-welcome-toggle');
         if (sidebarToggle) sidebarToggle.checked = shouldShow;
 
         if (shouldShow) {
             await this.populateWelcomeScriptList();
-            document.getElementById('mobile-welcome-modal').classList.remove('hidden');
+            this.modalManager.open('mobile-welcome-modal');
             document.getElementById('welcome-startup-toggle').checked = true;
         } else {
             const blocks = this.editor.querySelectorAll('.script-line');
@@ -297,9 +325,9 @@ export class SFSS {
             const isDefaultTitle = !this.meta.title || this.meta.title === 'Untitled Screenplay' || this.meta.title === '';
             if (isEmpty && isDefaultTitle) {
                  await this.populateWelcomeScriptList();
-                 document.getElementById('mobile-welcome-modal').classList.remove('hidden');
+                 this.modalManager.open('mobile-welcome-modal');
             } else {
-                 document.getElementById('mobile-welcome-modal').classList.add('hidden');
+                 this.modalManager.close('mobile-welcome-modal');
             }
         }
     }
@@ -327,7 +355,7 @@ export class SFSS {
             const activeText = isActive ? ' <span class="text-accent text-xs">(Open)</span>' : '';
             item.innerHTML = `<div class="font-bold">${escapeHtml(title)}${activeText}</div><div class="text-xs opacity-50">${date}</div>`;
             item.onclick = async () => {
-                document.getElementById('mobile-welcome-modal').classList.add('hidden');
+                this.modalManager.close('mobile-welcome-modal');
                 await this.loadScript(id);
             };
             container.appendChild(item);

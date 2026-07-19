@@ -1,13 +1,15 @@
 import * as constants from './Constants.js';
 import { generateLineId } from './Utils.js';
+import { getTextOffset, setTextOffset } from './InlineMarkup.js';
 
 export class EditorHandler {
     constructor(app) {
         this.app = app;
         this.autoMenu = document.getElementById('autocomplete-menu');
         this.typeMenu = document.getElementById('type-selector-menu');
-        
+
         this.popupState = { active: false, type: null, selectedIndex: 0, options: [], targetBlock: null };
+        this.activePopupCleanup = null;
         this.sceneListUpdateTimeout = null;
 
         this.init();
@@ -19,9 +21,34 @@ export class EditorHandler {
         this.app.editor.addEventListener('input', this.handleInput.bind(this));
         this.app.editor.addEventListener('mouseup', this.updateContext.bind(this));
         this.app.editor.addEventListener('paste', this.handlePaste.bind(this));
+        // Newlines are always represented as new blocks (the keydown handlers
+        // create them); never let the browser insert <br>/paragraphs, which
+        // the textContent-based export would silently drop.
+        this.app.editor.addEventListener('beforeinput', (e) => {
+            if (e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak') {
+                e.preventDefault();
+            }
+        });
         this.app.editor.addEventListener('focusout', (e) => {
             if (e.target.classList && e.target.classList.contains('script-line')) this.sanitizeBlock(e.target);
         }, true);
+    }
+
+    // Span-safe caret helpers: offsets are character offsets into
+    // block.textContent, independent of any styled-span structure.
+    getCaretPosition() {
+        const block = this.getCurrentBlock();
+        if (!block) return null;
+        const offset = getTextOffset(block);
+        if (offset === null) return null;
+        return { blockId: block.dataset.lineId, offset };
+    }
+
+    setCaret(blockEl, offset) {
+        if (!blockEl) return;
+        if (blockEl.childNodes.length === 0) blockEl.appendChild(document.createTextNode(''));
+        const clamped = Math.max(0, Math.min(offset, blockEl.textContent.length));
+        setTextOffset(blockEl, clamped);
     }
     
     handlePaste(e) {
@@ -245,57 +272,14 @@ export class EditorHandler {
 
             if (!isEmpty) {
                 if (key === 'enter') {
-                    // Smart Split Logic
+                    // Smart Split: Enter mid-text splits the block in two.
                     const sel = window.getSelection();
                     const range = sel.getRangeAt(0);
-                    // Check if cursor is at the end
-                    // Compare range end with length of text content
-                    // Note: block.textContent might be different than visible text if there are hidden chars, but usually fine here.
-                    // We need to be careful with child nodes. block usually has 1 text node.
-                    
-                    const isAtEnd = (range.endContainer === block || range.endContainer.parentNode === block) && 
+                    const isAtEnd = (range.endContainer === block || range.endContainer.parentNode === block) &&
                                     range.endOffset === block.textContent.length;
-                    
+
                     if (!isAtEnd && [constants.ELEMENT_TYPES.ACTION, constants.ELEMENT_TYPES.DIALOGUE, constants.ELEMENT_TYPES.PARENTHETICAL].includes(type)) {
-                        // SPLIT THE BLOCK
-                        const text = block.textContent;
-                        
-                        // Robust text extraction:
-                        const preRange = document.createRange();
-                        preRange.selectNodeContents(block);
-                        preRange.setEnd(range.endContainer, range.endOffset);
-                        const firstPartRaw = preRange.toString();
-                        const secondPartRaw = text.slice(firstPartRaw.length);
-
-                        let firstPart = firstPartRaw;
-                        let secondPart = secondPartRaw;
-
-                        // Special handling for Parentheticals
-                        if (type === constants.ELEMENT_TYPES.PARENTHETICAL) {
-                            // Strip existing brackets from split parts if they exist (though textContent should be clean now)
-                            let cleanFirst = firstPart.replace(/^\(+/, '').trim();
-                            let cleanSecond = secondPart.replace(/\)+$/, '').trim();
-                            
-                            // Do NOT re-wrap. CSS handles brackets.
-                            firstPart = cleanFirst;
-                            secondPart = cleanSecond;
-                        }
-
-                        block.textContent = firstPart;
-                        const newBlock = this.createBlock(type, secondPart, block); // Create same type
-                        
-                        // Fix focus for new parenthetical
-                        // If we just created (text), cursor should be at index 1 (after '(') or 0? 
-                        // Standard focusBlock(newBlock, 0) puts it at start.
-                        // For parenthetical, we might want it inside the bracket?
-                        // Let's stick to 0 or 1. If it starts with '(', 1 is better.
-                        let focusOffset = 0;
-                        if (type === constants.ELEMENT_TYPES.PARENTHETICAL && newBlock.textContent.startsWith('(')) {
-                            focusOffset = 1;
-                        }
-                        
-                        this.focusBlock(newBlock, focusOffset); 
-                        this.app.saveState(true);
+                        this.splitBlockAtCaret(block, type);
                         return;
                     }
                 }
@@ -351,6 +335,14 @@ export class EditorHandler {
             this.app.saveState(true);
         }
 
+        if (e.key === 'Enter' && e.shiftKey) {
+            // Shift+Enter: split into a new block of the SAME type at the
+            // caret (never a <br> — that data was lost on export).
+            e.preventDefault();
+            this.splitBlockAtCaret(block, type);
+            return;
+        }
+
         if (e.key === 'Enter' && !e.shiftKey) {
             handleNav('enter');
         }
@@ -358,6 +350,31 @@ export class EditorHandler {
         if (e.key === 'Tab' && !e.shiftKey) {
             handleNav('tab');
         }
+    }
+
+    // Splits `block` at the caret; text after the caret moves into a new
+    // block of `newType` which receives focus at offset 0.
+    splitBlockAtCaret(block, newType) {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return null;
+        const range = sel.getRangeAt(0);
+        const preRange = document.createRange();
+        preRange.selectNodeContents(block);
+        preRange.setEnd(range.endContainer, range.endOffset);
+        let firstPart = preRange.toString();
+        let secondPart = block.textContent.slice(firstPart.length);
+
+        if (newType === constants.ELEMENT_TYPES.PARENTHETICAL) {
+            // DOM text carries no outer parens (CSS supplies them); strip strays.
+            firstPart = firstPart.replace(/^\(+/, '').trim();
+            secondPart = secondPart.replace(/\)+$/, '').trim();
+        }
+
+        block.textContent = firstPart;
+        const newBlock = this.createBlock(newType, secondPart, block);
+        this.focusBlock(newBlock, 0);
+        this.app.saveState(true);
+        return newBlock;
     }
 
     handleInput(e) {
@@ -384,16 +401,9 @@ export class EditorHandler {
 
         if ([constants.ELEMENT_TYPES.SLUG, constants.ELEMENT_TYPES.CHARACTER, constants.ELEMENT_TYPES.TRANSITION].includes(type)) {
             if (text !== text.toUpperCase()) {
-                const sel = window.getSelection();
-                const offset = sel.anchorOffset;
+                const offset = getTextOffset(block);
                 block.textContent = text.toUpperCase();
-                try {
-                    const range = document.createRange();
-                    range.setStart(block.childNodes[0], Math.min(offset, block.textContent.length));
-                    range.collapse(true);
-                    sel.removeAllRanges();
-                    sel.addRange(range);
-                } catch(err) {}
+                if (offset !== null) this.setCaret(block, offset);
             }
         }
 
@@ -422,6 +432,8 @@ export class EditorHandler {
     }
     
     sanitizeBlock(block) {
+        // No <br> may survive in a block: the model is one block per line.
+        block.querySelectorAll('br').forEach(br => br.remove());
         const type = this.getBlockType(block);
         let text = block.textContent.trim();
         if (type === constants.ELEMENT_TYPES.PARENTHETICAL) {
@@ -520,7 +532,7 @@ export class EditorHandler {
         else this.closePopups();
     }
 
-    openTypeSelector(block) { this.showPopup('selector', block, Object.values(constants.ELEMENT_TYPES)); }
+    openTypeSelector(block) { this.showPopup('selector', block, constants.TYPE_ORDER); }
 
     showPopup(type, block, options) {
         if (document.body.classList.contains('mobile-view')) return;
@@ -594,6 +606,7 @@ export class EditorHandler {
 
         const rect = block.getBoundingClientRect();
         const parentRect = document.getElementById('editor-wrapper').getBoundingClientRect();
+        menu.style.position = ''; // TreatmentRenderer may have left position:fixed behind
         menu.style.display = 'block';
         menu.style.top = (rect.bottom - parentRect.top) + 'px';
         menu.style.left = (rect.left - parentRect.left) + 'px';
@@ -637,15 +650,29 @@ export class EditorHandler {
         this.closePopups();
     }
 
+    // Returns true if any popup/menu was actually open (Escape dispatch needs
+    // to know whether the event was consumed).
     closePopups() {
+        const iconPicker = document.getElementById('icon-picker-menu');
+        const wasOpen = this.popupState.active ||
+            this.autoMenu.style.display !== 'none' ||
+            this.typeMenu.style.display !== 'none' ||
+            (iconPicker && iconPicker.style.display !== 'none') ||
+            !!this.activePopupCleanup;
+        if (this.activePopupCleanup) {
+            const cleanup = this.activePopupCleanup;
+            this.activePopupCleanup = null;
+            cleanup();
+        }
         this.popupState.active = false;
         this.autoMenu.style.display = 'none';
         this.typeMenu.style.display = 'none';
         if (this.app.sidebarManager) {
             this.app.sidebarManager.hideIconPickerMenu();
-        } else {
-             document.getElementById('icon-picker-menu').style.display = 'none';
+        } else if (iconPicker) {
+            iconPicker.style.display = 'none';
         }
+        return wasOpen;
     }
 
     createBlock(type, text = '', insertAfterNode = null) {
@@ -661,24 +688,7 @@ export class EditorHandler {
 
     focusBlock(block, offset = -1) {
         if (!block) return;
-        const range = document.createRange();
-        const sel = window.getSelection();
-        if (block.childNodes.length === 0) block.appendChild(document.createTextNode(''));
-        
-        if (offset === -1) {
-            range.selectNodeContents(block);
-            range.collapse(false); 
-        } else {
-            const textNode = block.firstChild;
-            if (textNode && textNode.nodeType === Node.TEXT_NODE) {
-                const length = textNode.textContent.length;
-                range.setStart(textNode, Math.min(offset, length));
-                range.collapse(true);
-            }
-        }
-        
-        sel.removeAllRanges();
-        sel.addRange(range);
+        this.setCaret(block, offset === -1 ? block.textContent.length : offset);
         this.updateContext();
         block.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }

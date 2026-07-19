@@ -1,12 +1,26 @@
 import * as constants from './Constants.js';
+import * as Shortcuts from './Shortcuts.js';
 
 export class SettingsManager {
     constructor(sfss) {
         this.sfss = sfss;
-        
+
         // Shortcuts
+        this.shortcuts = { cycleType: 'Ctrl+E' };
         const storedShortcuts = localStorage.getItem('sfss_shortcuts');
-        this.shortcuts = storedShortcuts ? JSON.parse(storedShortcuts) : { cycleType: 'Ctrl+Shift' };
+        if (storedShortcuts) {
+            try {
+                this.shortcuts = { ...this.shortcuts, ...JSON.parse(storedShortcuts) };
+            } catch (e) {
+                console.error("Error loading shortcuts", e);
+            }
+        }
+        // Migrate legacy bare-modifier bindings (e.g. 'Ctrl+Shift') that used
+        // to hijack every Ctrl+Shift+<key> chord.
+        if (!Shortcuts.isValidBinding(this.shortcuts.cycleType)) {
+            this.shortcuts.cycleType = 'Ctrl+E';
+            localStorage.setItem('sfss_shortcuts', JSON.stringify(this.shortcuts));
+        }
 
         // Keymap
         this.keymap = {
@@ -22,7 +36,11 @@ export class SettingsManager {
         if (storedKeymap) {
             try {
                 const parsed = JSON.parse(storedKeymap);
-                this.keymap = { ...this.keymap, ...parsed };
+                // Per-type merge so a partial stored entry can't leave
+                // tab/enter undefined.
+                for (const t of Object.keys(this.keymap)) {
+                    this.keymap[t] = { ...this.keymap[t], ...(parsed[t] || {}) };
+                }
             } catch (e) {
                 console.error("Error loading keymap", e);
             }
@@ -30,46 +48,26 @@ export class SettingsManager {
     }
 
     open() {
-        // Manually close other popups via sfss
         this.sfss.editorHandler.closePopups();
-        this.sfss.sidebarManager.closeSceneSettings();
-        this.sfss.sidebarManager.closeScriptMetaPopup();
-        document.getElementById('help-modal').classList.add('hidden');
-        document.getElementById('reports-modal').classList.add('hidden');
-        
         this.generateUI();
-        document.getElementById('settings-modal').classList.remove('hidden');
-        this.sfss.pushHistoryState('settings');
+        this.sfss.modalManager.open('settings-modal');
     }
 
     close() {
-        document.getElementById('settings-modal').classList.add('hidden');
+        this.sfss.modalManager.close('settings-modal');
     }
 
     async save() {
+        if (!Shortcuts.isValidBinding(this.shortcuts.cycleType)) {
+            this.shortcuts.cycleType = 'Ctrl+E';
+        }
         localStorage.setItem('sfss_keymap', JSON.stringify(this.keymap));
         localStorage.setItem('sfss_shortcuts', JSON.stringify(this.shortcuts));
         await this.sfss.persistSettings();
     }
 
     checkShortcut(e, action) {
-        if (!this.shortcuts[action]) return false;
-        const keys = this.shortcuts[action].toLowerCase().split('+');
-        const pressedKey = e.key.toLowerCase();
-        const ctrl = keys.includes('ctrl') || keys.includes('control') || keys.includes('meta') || keys.includes('cmd');
-        const shift = keys.includes('shift');
-        const alt = keys.includes('alt');
-        
-        if (ctrl !== (e.ctrlKey || e.metaKey)) return false;
-        if (shift !== e.shiftKey) return false;
-        if (alt !== e.altKey) return false;
-        
-        const mainKey = keys.find(k => !['ctrl', 'control', 'meta', 'cmd', 'shift', 'alt'].includes(k));
-        if (mainKey) {
-            return mainKey === pressedKey;
-        } else {
-            return true; 
-        }
+        return Shortcuts.matches(e, this.shortcuts[action]);
     }
 
     toggleTheme() {
@@ -99,41 +97,76 @@ export class SettingsManager {
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'settings-input';
-        input.value = this.shortcuts.cycleType || '';
+        input.value = this.shortcuts.cycleType ? Shortcuts.format(this.shortcuts.cycleType) : '';
         input.readOnly = true;
         input.placeholder = 'Click to record...';
         input.style.cursor = 'pointer';
         input.style.textAlign = 'center';
-        
+
+        const errorEl = document.createElement('div');
+        errorEl.className = 'text-sm';
+        errorEl.style.color = '#ef4444';
+        errorEl.style.display = 'none';
+
+        const showStored = () => {
+            input.value = this.shortcuts.cycleType ? Shortcuts.format(this.shortcuts.cycleType) : '';
+        };
+        const showError = (msg) => {
+            errorEl.textContent = msg || '';
+            errorEl.style.display = msg ? '' : 'none';
+        };
+
         input.addEventListener('keydown', (e) => {
+            // The recorder owns every key while focused: nothing may bubble to
+            // the editor, the modal stack or the browser (Esc must not close
+            // Settings, Ctrl+S must not open Save As).
             e.preventDefault();
+            e.stopPropagation();
             if (e.key === 'Escape') {
+                showError('');
+                showStored();
                 input.blur();
                 return;
             }
             if (e.key === 'Backspace') {
                 this.shortcuts.cycleType = '';
+                showError('');
                 input.value = '';
                 return;
             }
-            const keys = [];
-            if (e.ctrlKey || e.metaKey) keys.push('Ctrl');
-            if (e.altKey) keys.push('Alt');
-            if (e.shiftKey) keys.push('Shift');
-            
-            if (!['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
-                keys.push(e.key.toUpperCase());
+            const combo = Shortcuts.comboFromEvent(e);
+            if (combo === null) {
+                // Modifier-only chord: show pending text, commit nothing.
+                const mods = [];
+                if (e.ctrlKey || e.metaKey) mods.push('Ctrl');
+                if (e.altKey) mods.push('Alt');
+                if (e.shiftKey) mods.push('Shift');
+                const label = Shortcuts.format(mods.join('+'));
+                input.value = label ? (Shortcuts.IS_MAC ? `${label}…` : `${label}+…`) : '';
+                return;
             }
-            
-            // Allow just modifiers (e.g. Ctrl+Shift)
-            if (keys.length > 0) {
-                const shortcut = keys.join('+');
-                this.shortcuts.cycleType = shortcut;
-                input.value = shortcut;
+            if (!Shortcuts.isValidBinding(combo)) {
+                showError('Shortcut needs a modifier (e.g. Ctrl) plus a key.');
+                showStored();
+                return;
             }
+            const clash = Shortcuts.conflict(combo);
+            if (clash) {
+                showError(`${Shortcuts.format(combo)} is reserved for ${Shortcuts.format(clash)}.`);
+                showStored();
+                return;
+            }
+            this.shortcuts.cycleType = combo;
+            showError('');
+            showStored();
         });
-        
+        input.addEventListener('blur', () => {
+            showError('');
+            showStored();
+        });
+
         inputCell.appendChild(input);
+        inputCell.appendChild(errorEl);
         row.appendChild(labelCell);
         row.appendChild(inputCell);
         globalTable.appendChild(row);

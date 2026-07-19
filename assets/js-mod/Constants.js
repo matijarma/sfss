@@ -18,6 +18,16 @@ export const TYPE_LABELS = {
 
 export const TYPE_SHORTCUTS = { 's': ELEMENT_TYPES.SLUG, 'a': ELEMENT_TYPES.ACTION, 'c': ELEMENT_TYPES.CHARACTER, 'd': ELEMENT_TYPES.DIALOGUE, 'p': ELEMENT_TYPES.PARENTHETICAL, 't': ELEMENT_TYPES.TRANSITION };
 
+// Canonical element order shared by cycleType, type selectors and popups.
+export const TYPE_ORDER = [
+    ELEMENT_TYPES.SLUG,
+    ELEMENT_TYPES.ACTION,
+    ELEMENT_TYPES.CHARACTER,
+    ELEMENT_TYPES.PARENTHETICAL,
+    ELEMENT_TYPES.DIALOGUE,
+    ELEMENT_TYPES.TRANSITION
+];
+
 // FDX Map: SFSS Class -> FDX XML Type Attribute
 export const FDX_MAP = {
     'sc-slug': 'Scene Heading',
