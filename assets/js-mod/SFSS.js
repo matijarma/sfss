@@ -513,7 +513,7 @@ export class SFSS {
                 this.sidebarManager.toggleMobileMenu();
             });
         }
-        document.getElementById('help-close-btn').addEventListener('click', () => document.getElementById('help-modal').classList.add('hidden'));
+        // (help-close-btn is wired by ModalManager via registerModals.)
 
         // Mobile App Menu Toggle (Accordion)
         const appMenuToggle = document.getElementById('mobile-app-menu-toggle');
@@ -530,12 +530,12 @@ export class SFSS {
 
         // Welcome Modal
         document.getElementById('welcome-new-btn').addEventListener('click', async () => {
-            document.getElementById('mobile-welcome-modal').classList.add('hidden');
+            this.modalManager.close('mobile-welcome-modal');
             await this.newScreenplay();
             if (!this.treatmentManager.isActive) this.treatmentManager.toggle();
         });
         document.getElementById('welcome-open-btn').addEventListener('click', () => {
-            document.getElementById('mobile-welcome-modal').classList.add('hidden');
+            this.modalManager.close('mobile-welcome-modal');
             document.getElementById('file-input').click();
         });
         document.getElementById('welcome-startup-toggle').addEventListener('change', (e) => {
@@ -559,26 +559,32 @@ export class SFSS {
             btn.addEventListener('click', () => this.openHelpTab(btn.dataset.tab));
         });
 
-        // Welcome Modal Click-Away
-        document.getElementById('mobile-welcome-modal').addEventListener('click', (e) => {
-            if (e.target.id === 'mobile-welcome-modal') {
-                const blocks = this.editor.querySelectorAll('.script-line');
-                const isEmpty = blocks.length === 0 || (blocks.length === 1 && !blocks[0].textContent.trim());
-                if (!isEmpty) {
-                    document.getElementById('mobile-welcome-modal').classList.add('hidden');
-                }
-            }
-        });
+        // (Welcome modal backdrop-close is handled by ModalManager via its
+        // canClose guard — see registerModals.)
 
-        // Global Keys & Back Navigation
-        window.addEventListener('keydown', (e) => {
-            if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'p') {
+        // Global Keys & Back Navigation — ONE consolidated handler (see the
+        // dispatch-order contract in Shortcuts.js).
+        window.addEventListener('keydown', async (e) => {
+            if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 's') {
+                // Always suppress the browser Save-As dialog; saving is safe
+                // in any state.
                 e.preventDefault();
-                e.stopPropagation();
-                this.printManager.open();
+                await this.save();
+                toast('Saved', { type: 'success' });
+                return;
             }
-        });
-        window.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
+                // Always suppress the browser print dialog, but only open the
+                // print modal for a plain Ctrl+P outside form fields and with
+                // no modal already open.
+                e.preventDefault();
+                if (!e.shiftKey && !e.altKey &&
+                    this.modalManager.stack.length === 0 &&
+                    !Shortcuts.isEditableTarget(e.target, this.editor)) {
+                    this.printManager.open();
+                }
+                return;
+            }
             if (e.key === 'Escape') {
                 this.handleBackOrEscape();
             }
@@ -641,35 +647,66 @@ export class SFSS {
     }
 
     handleBackOrEscape(isPopState = false) {
+        // Single Escape/back entry point. Order (dispatch contract in
+        // Shortcuts.js): editor popups -> modal stack -> mobile sidebar ->
+        // page view -> Esc-from-editor focus hatch.
         let handled = false;
-        const closeIfOpen = (id) => {
-            const el = document.getElementById(id);
-            if (el && !el.classList.contains('hidden')) {
-                el.classList.add('hidden');
-                return true;
-            }
-            return false;
-        };
 
-        if (this.editorHandler.typeMenu.style.display !== 'none' || this.editorHandler.autoMenu.style.display !== 'none') {
-            this.editorHandler.closePopups();
-            handled = true;
-        } else if (closeIfOpen('scene-settings-popup')) handled = true;
-        else if (closeIfOpen('script-meta-popup')) handled = true;
-        else if (closeIfOpen('settings-modal')) handled = true;
-        else if (closeIfOpen('help-modal')) handled = true;
-        else if (closeIfOpen('reports-modal')) handled = true;
-        else if (this.sidebar.classList.contains('open')) {
+        // 1. Transient editor popups (autocomplete / selector / treatment menus)
+        if (this.editorHandler.closePopups()) handled = true;
+
+        // 2. Modal stack (top-most closable modal)
+        if (!handled && this.modalManager.closeTop()) handled = true;
+
+        // 2b. Fallback for popups SidebarManager still opens with raw
+        //     classList (not yet routed through ModalManager, so they never
+        //     enter the stack) — keep them Escape-closable.
+        if (!handled) {
+            const sceneSettings = document.getElementById('scene-settings-popup');
+            const scriptMeta = document.getElementById('script-meta-popup');
+            if (sceneSettings && !sceneSettings.classList.contains('hidden') && !this.modalManager.isOpen('scene-settings-popup')) {
+                this.sidebarManager.closeSceneSettings();
+                handled = true;
+            } else if (scriptMeta && !scriptMeta.classList.contains('hidden') && !this.modalManager.isOpen('script-meta-popup')) {
+                this.sidebarManager.closeScriptMetaPopup();
+                handled = true;
+            }
+        }
+
+        // 3. Mobile sidebar
+        if (!handled && this.sidebar.classList.contains('open')) {
             this.sidebarManager.toggleMobileMenu();
             handled = true;
-        } else if (this.pageViewActive) {
+        }
+
+        // 4. Page view
+        if (!handled && this.pageViewActive) {
             this.togglePageView();
             handled = true;
         }
 
+        // 5. Desktop keyboard hatch: Esc while writing moves focus out of the
+        //    editor onto the toolbar (the editor otherwise traps Tab).
+        if (!handled && !isPopState && !document.body.classList.contains('mobile-view') &&
+            this.editor.contains(document.activeElement)) {
+            const selector = document.getElementById('top-type-selector');
+            let target = (selector && selector.offsetParent !== null) ? selector : null;
+            if (!target) {
+                const toolbar = document.getElementById('toolbar');
+                if (toolbar) {
+                    target = Array.from(toolbar.querySelectorAll('button, select, [tabindex]'))
+                        .find(el => el.offsetParent !== null && !el.disabled);
+                }
+            }
+            if (target) {
+                target.focus();
+                handled = true;
+            }
+        }
+
         if (handled) {
             if (isPopState && document.body.classList.contains('mobile-view')) {
-                history.pushState(null, null, location.href); 
+                history.pushState(null, null, location.href);
             }
             return;
         }
@@ -679,17 +716,9 @@ export class SFSS {
                 return;
             } else {
                 this.canExit = true;
-                const status = document.getElementById('save-status'); 
-                const originalText = status.innerHTML;
-                const originalOpacity = status.style.opacity;
-                status.textContent = 'Press back again to exit';
-                status.style.opacity = '1';
-                history.pushState(null, null, location.pathname); 
-                setTimeout(() => {
-                    this.canExit = false;
-                    status.style.opacity = originalOpacity;
-                    setTimeout(() => status.innerHTML = originalText, 300);
-                }, 2000);
+                toast('Press back again to exit', { duration: 2000 });
+                history.pushState(null, null, location.pathname);
+                setTimeout(() => { this.canExit = false; }, 2000);
             }
         }
     }
@@ -729,39 +758,39 @@ export class SFSS {
     }
 
     cycleType() {
-        const cycleOrder = [
-            constants.ELEMENT_TYPES.SLUG,
-            constants.ELEMENT_TYPES.ACTION,
-            constants.ELEMENT_TYPES.CHARACTER,
-            constants.ELEMENT_TYPES.PARENTHETICAL,
-            constants.ELEMENT_TYPES.DIALOGUE,
-            constants.ELEMENT_TYPES.TRANSITION
-        ];
+        const cycleOrder = constants.TYPE_ORDER;
         const currentBlock = this.editorHandler.getCurrentBlock();
         if (!currentBlock) return;
         const currentType = this.editorHandler.getBlockType(currentBlock);
-        
+
         if (!this.cycleState || this.cycleState.blockId !== currentBlock.dataset.lineId) {
             this.cycleState = {
                 blockId: currentBlock.dataset.lineId,
                 originalText: currentBlock.textContent
             };
         }
-        
+
         const idx = cycleOrder.indexOf(currentType);
         const nextIndex = idx === -1 ? 1 : (idx + 1) % cycleOrder.length;
         const nextType = cycleOrder[nextIndex];
-        
+
+        // Capture the caret BEFORE any mutation; reassigning textContent
+        // collapses the selection to the start of the block.
+        const caret = this.editorHandler.getCaretPosition();
+
         this.editorHandler.manualTypeChangeZD(nextType);
-        
+
         const isUppercaseType = [constants.ELEMENT_TYPES.SLUG, constants.ELEMENT_TYPES.CHARACTER, constants.ELEMENT_TYPES.TRANSITION].includes(nextType);
+        let newText = currentBlock.textContent;
         if (isUppercaseType) {
-            currentBlock.textContent = currentBlock.textContent.toUpperCase();
-        } else {
-            if (this.cycleState && this.cycleState.originalText) {
-                currentBlock.textContent = this.cycleState.originalText;
-            }
+            newText = newText.toUpperCase();
+        } else if (this.cycleState && this.cycleState.originalText) {
+            newText = this.cycleState.originalText;
         }
+        if (currentBlock.textContent !== newText) {
+            currentBlock.textContent = newText;
+        }
+        if (caret) this.editorHandler.setCaret(currentBlock, caret.offset);
     }
 
     checkShortcut(e, action) {
@@ -1016,18 +1045,26 @@ export class SFSS {
         }
     }
 
+    // History entries are { data, caret } — caret is the editor position at
+    // capture time ({ blockId, offset } or null), so undo/redo can put the
+    // cursor back where the edit happened.
     saveState(force = false) {
         if (this.isRestoring) return;
         clearTimeout(this.historyTimeout);
         const saveFn = () => {
+            const currentState = this.exportToJSONStructure();
+            const caret = this.treatmentManager.isActive ? null : this.editorHandler.getCaretPosition();
+            const latest = this.historyIndex >= 0 ? this.history[this.historyIndex] : null;
+            if (latest && JSON.stringify(currentState) === JSON.stringify(latest.data)) {
+                // Content unchanged: only refresh the caret so undo lands on
+                // the most recent position (never truncate the redo tail).
+                if (caret) latest.caret = caret;
+                return;
+            }
             if (this.historyIndex < this.history.length - 1) {
                 this.history = this.history.slice(0, this.historyIndex + 1);
             }
-            const currentState = this.exportToJSONStructure();
-            if (this.history.length > 0 && JSON.stringify(currentState) === JSON.stringify(this.history[this.historyIndex])) {
-                return;
-            }
-            this.history.push(currentState);
+            this.history.push({ data: currentState, caret });
             this.historyIndex = this.history.length - 1;
             if (this.collaborationManager && this.collaborationManager.hasBaton) {
                 this.collaborationManager.sendUpdate(currentState);
@@ -1037,22 +1074,37 @@ export class SFSS {
         else this.historyTimeout = setTimeout(saveFn, 500);
     }
 
-    undo() {
+    async undo() {
         if (this.historyIndex > 0) {
             this.historyIndex--;
-            this.isRestoring = true;
-            this.importJSON(this.history[this.historyIndex]);
-            this.isRestoring = false;
+            await this._restoreHistoryEntry(this.history[this.historyIndex]);
         }
     }
 
-    redo() {
+    async redo() {
         if (this.historyIndex < this.history.length - 1) {
             this.historyIndex++;
-            this.isRestoring = true;
-            this.importJSON(this.history[this.historyIndex]);
+            await this._restoreHistoryEntry(this.history[this.historyIndex]);
+        }
+    }
+
+    async _restoreHistoryEntry(entry) {
+        this.isRestoring = true;
+        try {
+            // Await the full import so its trailing saveState(true) runs while
+            // isRestoring is still set (it used to fire afterwards and
+            // truncate the redo tail).
+            await this.importJSON(entry.data);
+        } finally {
             this.isRestoring = false;
         }
+        const caret = entry.caret;
+        if (!caret || this.treatmentManager.isActive || this.pageViewActive) return;
+        const block = this.editor.querySelector(`[data-line-id="${caret.blockId}"]`);
+        if (!block) return;
+        this.editor.focus({ preventScroll: true });
+        this.editorHandler.setCaret(block, caret.offset);
+        block.scrollIntoView({ block: 'nearest' });
     }
 
     getCurrentScrollElement() {
@@ -1242,6 +1294,11 @@ export class SFSS {
 
     togglePageView() {
         const topElementId = this.getCurrentScrollElement();
+        if (!this.pageViewActive) {
+            // Entering page view: bookmark the caret so it can be restored
+            // when the user returns to Write mode.
+            this._caretBookmark = this.editorHandler.getCaretPosition();
+        }
         this.pageViewActive = !this.pageViewActive;
         if (this.pageViewActive) {
              this.pushHistoryState('pageview');
@@ -1267,9 +1324,18 @@ export class SFSS {
             this.editor.style.display = '';
             document.getElementById('print-title-page').style.display = '';
             this.pageViewContainer.classList.add('hidden');
-            if (topElementId) {
-                requestAnimationFrame(() => this.restoreScrollToElement(topElementId));
-            }
+            const bookmark = this._caretBookmark;
+            this._caretBookmark = null;
+            requestAnimationFrame(() => {
+                if (topElementId) this.restoreScrollToElement(topElementId);
+                if (bookmark) {
+                    const block = this.editor.querySelector(`[data-line-id="${bookmark.blockId}"]`);
+                    if (block) {
+                        this.editor.focus({ preventScroll: true });
+                        this.editorHandler.setCaret(block, bookmark.offset);
+                    }
+                }
+            });
         }
     }
 
