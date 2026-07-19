@@ -1,4 +1,5 @@
 import { escapeHtml } from './Utils.js';
+import { toast } from './Toast.js';
 
 export class CollabUI {
     constructor(app) {
@@ -12,7 +13,8 @@ export class CollabUI {
         this.bindEvents();
         this.hasRemoteStream = false;
         this.remoteVideoEnabled = false;
-        
+        this.userInitiatedLeave = false;
+
         // Hook into Manager Callbacks
         this.manager.onBatonStatusChange = (hasBaton) => {
             this.updateBatonUI(hasBaton);
@@ -58,12 +60,21 @@ export class CollabUI {
         };
         this.manager.onDisconnect = () => {
             this.updateStatus(false);
-            this.showToast('Session Ended');
             document.getElementById('collab-hud').classList.add('hidden');
             document.getElementById('collab-top-bar').classList.add('hidden');
             this.app.modalManager.close('collab-modal'); // Ensure modal closes
-            this.restoreToolbarItems(); 
+            this.restoreToolbarItems();
             this.log('Disconnected from Swarm.', 'error');
+            // Rejoin affordance: unexpected disconnects offer a one-click way
+            // back into the same room (deliberate leaves just get the plain toast).
+            if (!this.userInitiatedLeave && this.manager.lastRoomId) {
+                this.showActionToast('Session ended.', 'Rejoin', () => {
+                    this.initSession(this.manager.lastRoomId, this.manager.wasHost);
+                });
+            } else {
+                this.showToast('Session Ended');
+            }
+            this.userInitiatedLeave = false;
         };
     }
 
@@ -92,6 +103,11 @@ export class CollabUI {
                                 <input type="text" id="collab-join-input" class="settings-input" placeholder="Paste link here...">
                                 <button id="collab-join-btn" class="btn-text btn-border">Join</button>
                             </div>
+                        </div>
+                        <div id="collab-rejoin-row" class="hidden mt-2">
+                            <button id="collab-rejoin-btn" class="btn-text btn-border" style="width: 100%;">
+                                <i class="fas fa-history mr-1"></i> Rejoin Last Session
+                            </button>
                         </div>
                     </div>
 
@@ -152,19 +168,17 @@ export class CollabUI {
         </div>
         `;
         document.body.insertAdjacentHTML('beforeend', hudHtml);
-
-        // 4. Toast Container
-        if (!document.getElementById('collab-toast')) {
-            const toast = document.createElement('div');
-            toast.id = 'collab-toast';
-            toast.className = 'collab-toast';
-            document.body.appendChild(toast);
-        }
     }
 
     bindEvents() {
         // Modal & Link Logic
         document.getElementById('collab-create-btn').addEventListener('click', async () => {
+            // #29: mobile clients can't host (Treatment-forced view never
+            // produces UPDATEs) — they can still join as readers.
+            if (document.body.classList.contains('mobile-view')) {
+                this.showToast("Hosting isn't supported on mobile — join from a desktop, or open an invite link to follow along.");
+                return;
+            }
             const roomId = 'script-' + Math.random().toString(36).substring(2, 9);
             this.initSession(roomId, true);
             
@@ -191,6 +205,11 @@ export class CollabUI {
             this.initSession(input, false);
         });
 
+        document.getElementById('collab-rejoin-btn').addEventListener('click', () => {
+            if (!this.manager.lastRoomId) return;
+            this.initSession(this.manager.lastRoomId, this.manager.wasHost);
+        });
+
         document.getElementById('collab-copy-btn').addEventListener('click', () => {
             const copyText = document.getElementById('collab-invite-link');
             copyText.select();
@@ -201,6 +220,7 @@ export class CollabUI {
         // Top Bar Logic
         document.getElementById('collab-leave-btn').addEventListener('click', () => {
             if(confirm("Disconnect from session?")) {
+                this.userInitiatedLeave = true;
                 this.manager.disconnect();
                 this.manager.stopMedia();
                 this.restoreToolbarItems(); // Restore UI
@@ -352,136 +372,81 @@ export class CollabUI {
         }
     }
 
-        
-
-            async initSession(roomId, isHost) {
-
-                if (!roomId) return;
-
-                
-
-                // Ensure Writing Mode
-
-                this.app.ensureWritingMode();
-
-                
-
-                // Show Waiting View ONLY if Host (Guest joins immediately)
-
-                if (isHost) {
-
-                    document.getElementById('collab-start-view').classList.add('hidden');
-
-                    document.getElementById('collab-waiting-view').classList.remove('hidden');
-
-                } else {
-
-                    // Guest: Hide modal immediately, we assume success or show error later
-
-                    this.app.modalManager.close('collab-modal');
-
-                }
-
-                
-
-                const link = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
-
-                document.getElementById('collab-invite-link').value = link;
-
-                
-
-                this.log(`Initializing session. Room ID: ${roomId}`, 'info');
-
-                this.log(`Role: ${isHost ? 'HOST (You started the session)' : 'GUEST (You joined a session)'}`, 'info');
-
-                this.log(`Connecting to secure peer-to-peer network...`, 'system');
-
-                this.log(`Searching for peers in the swarm...`, 'system');
-
-        
-
-                const success = this.manager.connect(roomId, isHost);
-
-                if (success) {
-
-                    this.showHUD(roomId);
-
-                    this.moveToolbarItems(); // Move UI elements
-
-                    if (isHost) this.showToast("Session started. Waiting for others to join...");
-
-                    else this.showToast("Joining session...");
-
-                    
-
-                    // Auto-Start Media
-
-                    const camBtn = document.getElementById('collab-cam-btn');
-
-                    const micBtn = document.getElementById('collab-mic-btn');
-
-                    
-
-                    // Simulate delay for "Connecting" feel
-
-                    setTimeout(async () => {
-
-                        this.log("Attempting to auto-start camera...", 'system');
-
-                        const result = await this.manager.enableMedia(document.getElementById('collab-local-video'));
-
-                        if (result.success) {
-
-                            camBtn.classList.add('active');
-
-                            micBtn.disabled = false;
-
-                            
-
-                            // Default to Muted
-
-                            this.manager.toggleAudio(false);
-
-                            micBtn.classList.remove('active');
-
-                            micBtn.innerHTML = '<i class="fas fa-microphone-slash"></i>';
-
-                            
-
-                            this.updateVideoVisibility();
-
-                            this.log("Camera started. Mic muted by default.", 'success');
-
-                        } else {
-
-                             this.log(`Could not auto-start camera: ${result.error}`, 'warn');
-
-                        }
-
-                    }, 800);
-
-        
-
-                    if (document.body.classList.contains('mobile-view')) {
-
-                        document.getElementById('collab-baton-btn').style.display = 'none';
-
-                    }
-
-        
-
-                } else {
-
-                     alert("Failed to initialize connection.");
-
-                     this.log("Error: Connection initialization failed.", 'error');
-
-                     this.app.modalManager.open('collab-modal'); // Re-show if failed
-
-                }
-
+    async initSession(roomId, isHost) {
+        if (!roomId) return;
+
+        // #29: hosting requires the desktop editor (defense in depth — the
+        // Start New Session button is blocked before it ever gets here).
+        if (isHost && document.body.classList.contains('mobile-view')) {
+            this.showToast("Hosting isn't supported on mobile — join from a desktop, or open an invite link to follow along.");
+            return;
+        }
+
+        // Ensure Writing Mode
+        this.app.ensureWritingMode();
+
+        // Show Waiting View ONLY if Host (Guest joins immediately)
+        if (isHost) {
+            document.getElementById('collab-start-view').classList.add('hidden');
+            document.getElementById('collab-waiting-view').classList.remove('hidden');
+        } else {
+            // Guest: Hide modal immediately, we assume success or show error later
+            this.app.modalManager.close('collab-modal');
+        }
+
+        const link = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
+        document.getElementById('collab-invite-link').value = link;
+
+        this.log(`Initializing session. Room ID: ${roomId}`, 'info');
+        this.log(`Role: ${isHost ? 'HOST (You started the session)' : 'GUEST (You joined a session)'}`, 'info');
+        this.log(`Connecting to secure peer-to-peer network...`, 'system');
+        this.log(`Searching for peers in the swarm...`, 'system');
+
+        const success = this.manager.connect(roomId, isHost);
+        if (success) {
+            this.showHUD(roomId);
+            this.moveToolbarItems(); // Move UI elements
+            if (isHost) this.showToast("Session started. Waiting for others to join...");
+            else this.showToast("Joining session...");
+
+            this.autoStartMedia();
+
+            if (document.body.classList.contains('mobile-view')) {
+                document.getElementById('collab-baton-btn').style.display = 'none';
             }
-    
+        } else {
+            alert("Failed to initialize connection.");
+            this.log("Error: Connection initialization failed.", 'error');
+            this.app.modalManager.open('collab-modal'); // Re-show if failed
+        }
+    }
+
+    // Auto-start the camera (mic muted) right after a session begins.
+    autoStartMedia() {
+        const camBtn = document.getElementById('collab-cam-btn');
+        const micBtn = document.getElementById('collab-mic-btn');
+
+        // Simulate delay for "Connecting" feel
+        setTimeout(async () => {
+            this.log("Attempting to auto-start camera...", 'system');
+            const result = await this.manager.enableMedia(document.getElementById('collab-local-video'));
+            if (result.success) {
+                camBtn.classList.add('active');
+                micBtn.disabled = false;
+
+                // Default to Muted
+                this.manager.toggleAudio(false);
+                micBtn.classList.remove('active');
+                micBtn.innerHTML = '<i class="fas fa-microphone-slash"></i>';
+
+                this.updateVideoVisibility();
+                this.log("Camera started. Mic muted by default.", 'success');
+            } else {
+                this.log(`Could not auto-start camera: ${result.error}`, 'warn');
+            }
+        }, 800);
+    }
+
     moveToolbarItems() {
         const topBar = document.getElementById('collab-top-bar');
         if (!topBar) return;
@@ -582,6 +547,8 @@ export class CollabUI {
         this.app.modalManager.open('collab-modal');
         document.getElementById('collab-start-view').classList.remove('hidden');
         document.getElementById('collab-waiting-view').classList.add('hidden');
+        // Offer a rejoin shortcut when a previous session is remembered.
+        document.getElementById('collab-rejoin-row').classList.toggle('hidden', !this.manager.lastRoomId || !!this.manager.room);
     }
 
     showHUD(roomId) {
@@ -620,10 +587,27 @@ export class CollabUI {
     }
 
     showToast(msg) {
-        const toast = document.getElementById('collab-toast');
-        toast.textContent = msg;
-        toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 3000);
+        toast(msg);
+    }
+
+    // Persistent toast with a single action button (e.g. the reconnection
+    // wait). Returns a dismiss function for the caller.
+    showActionToast(msg, actionLabel, onAction) {
+        const el = toast(msg, { duration: 0 });
+        const btn = document.createElement('button');
+        btn.className = 'btn-text btn-border';
+        btn.style.marginLeft = '8px';
+        btn.textContent = actionLabel;
+        const dismiss = () => {
+            el.classList.remove('show');
+            setTimeout(() => el.remove(), 300);
+        };
+        btn.addEventListener('click', () => {
+            dismiss();
+            onAction();
+        });
+        el.appendChild(btn);
+        return dismiss;
     }
 
     log(msg, type = 'info') {
