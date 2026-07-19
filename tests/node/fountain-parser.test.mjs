@@ -1,10 +1,9 @@
-// Phase 0 characterization tests for FountainParser.parse().
+// Phase 6 spec-compliance tests for FountainParser.parse().
 //
-// IMPORTANT: These tests pin down the parser's CURRENT actual behavior,
-// bugs included. They are the baseline diff for the Phase 6 parser rewrite.
-// Lines marked "CURRENT (buggy) behavior" assert output that contradicts
-// devAndInfoMds/syntaxSpecification.md on purpose — do NOT "fix" the
-// expectations without also fixing the parser.
+// These replace the Phase 0 characterization baseline: every expectation that
+// was marked "CURRENT (buggy) behavior" has been flipped to the behavior
+// devAndInfoMds/syntaxSpecification.md (sections 2.1-2.9) requires. parse()
+// now also returns an additive `boneyard` array (multi-line /* */ spans).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,29 +19,30 @@ function parseFixture(name) {
     return new FountainParser().parse(text);
 }
 
+function parseText(text) {
+    return new FountainParser().parse(text);
+}
+
 /** [type, text] pairs, ignoring the random ids. */
 function seq(blocks) {
     return blocks.map(b => [b.type, b.text]);
 }
 
 test('forces.fountain — forced heading/action/character/transition', () => {
-    const { blocks, meta, sceneMeta } = parseFixture('forces.fountain');
+    const { blocks, meta, sceneMeta, boneyard } = parseFixture('forces.fountain');
     assert.deepEqual(seq(blocks), [
         [SLUG, 'SNIPER SCOPE POV'],           // "." stripped, uppercased
         [ACTION, 'LOUD NOISES startle him.'], // "!" stripped, case preserved
-        // CURRENT (buggy) behavior — will change in Phase 6: forced characters
-        // are uppercased, destroying mixed-case names ("@McClane" should stay "McClane").
-        [CHARACTER, 'MCCLANE'],
+        [CHARACTER, 'McClane'],               // FIXED: "@" keeps the typed case
         [DIALOGUE, 'Yippee ki-yay.'],
-        // CURRENT (buggy) behavior — will change in Phase 6: forced transition text is
-        // substring(1) without trim, so the space after ">" is kept: " BURN TO PINK".
-        [TRANSITION, ' BURN TO PINK'],
+        [TRANSITION, 'BURN TO PINK'],         // FIXED: "> " force is trimmed
     ]);
     assert.deepEqual(meta, {});
     assert.deepEqual(sceneMeta, {});
+    assert.deepEqual(boneyard, []);
 });
 
-test('scene-headings.fountain — INT/EXT/EST/I-E variants and the INT./EXT. hole', () => {
+test('scene-headings.fountain — INT/EXT/EST/I-E variants including INT./EXT.', () => {
     const { blocks, meta, sceneMeta } = parseFixture('scene-headings.fountain');
     assert.deepEqual(seq(blocks), [
         [SLUG, 'INT. HOUSE - DAY'],
@@ -52,15 +52,20 @@ test('scene-headings.fountain — INT/EXT/EST/I-E variants and the INT./EXT. hol
         [SLUG, 'I/E CAR - CONTINUOUS'],
         [SLUG, 'INT. BASEMENT - NIGHT'], // lowercase "int." matched (/i) and uppercased
         [SLUG, 'INT/EXT SHED - DAY'],
-        // CURRENT (buggy) behavior — will change in Phase 6: the sceneHeading regex
-        // /^(?:INT\.|EXT\.|EST\.|INT\/EXT|I\/E)(\s|\.|\$)/i has no "INT./EXT." alternative,
-        // so "INT./EXT. HOUSE - DAY" is not a slug. Being all-caps and followed by text,
-        // it is misread as a CHARACTER and the following action line becomes DIALOGUE.
-        [CHARACTER, 'INT./EXT. HOUSE - DAY'],
-        [DIALOGUE, 'The slash-dot variant confuses the parser.'],
+        [SLUG, 'INT./EXT. HOUSE - DAY'], // FIXED: the slash-dot variant is a slug now (#13)
+        [ACTION, 'The slash-dot variant confuses the parser.'],
     ]);
     assert.deepEqual(meta, {});
     assert.deepEqual(sceneMeta, {});
+});
+
+test('scene heading requires a preceding blank line (spec 2.2.1)', () => {
+    const { blocks } = parseText('Some action.\nINT. HOUSE - DAY');
+    assert.deepEqual(seq(blocks), [
+        [ACTION, 'Some action.'],
+        [ACTION, 'INT. HOUSE - DAY'], // no blank line before it -> not a slug
+    ]);
+    assert.equal(blocks[1].tight, true); // same visual paragraph as the line above
 });
 
 test('centered.fountain — "> TEXT <" becomes a centered action block', () => {
@@ -77,57 +82,61 @@ test('centered.fountain — "> TEXT <" becomes a centered action block', () => {
     assert.deepEqual(sceneMeta, {});
 });
 
-test('sections-synopses.fountain — sections fall through to action, synopses go to sceneMeta', () => {
+test('sections-synopses.fountain — sections into sceneMeta, pre-slug synopsis attached', () => {
     const { blocks, meta, sceneMeta } = parseFixture('sections-synopses.fountain');
+    // FIXED: "# Section" lines are no longer printed ACTION blocks; they are
+    // buffered and attached to the NEXT slug's sceneMeta entry (#9).
     assert.deepEqual(seq(blocks), [
-        // CURRENT (buggy) behavior — will change in Phase 6: "# Section" lines are not
-        // recognized (regex.section is defined but never used); they fall through to ACTION
-        // blocks with the hashes kept, so they will print inside the script.
-        [ACTION, '# Act 1'],
-        [ACTION, '## Sequence 2'],
         [SLUG, 'INT. LAB - NIGHT'],
         [ACTION, 'Action line.'],
         [SLUG, 'EXT. ROOF - DAY'],
     ]);
     assert.deepEqual(meta, {});
 
-    // Synopses attach to the last seen scene heading via sceneMeta[<slug id>].description.
-    const slug1 = blocks[2];
-    const slug2 = blocks[4];
-    assert.deepEqual(sceneMeta[slug1.id], { description: 'The monster awakens.' });
+    const slug1 = blocks[0];
+    const slug2 = blocks[2];
+    assert.deepEqual(sceneMeta[slug1.id], {
+        sections: [
+            { depth: 1, text: 'Act 1' },
+            { depth: 2, text: 'Sequence 2' },
+        ],
+        // FIXED: a synopsis before any scene heading is no longer dropped —
+        // it is buffered and attached to the first slug.
+        description: 'Synopsis before any scene.\nThe monster awakens.',
+    });
     assert.deepEqual(sceneMeta[slug2.id], { description: 'Second scene synopsis.' });
-    // CURRENT (buggy) behavior — will change in Phase 6: a synopsis appearing before any
-    // scene heading (lastSceneId === null) is silently DROPPED — no block, no meta.
     assert.equal(Object.keys(sceneMeta).length, 2);
-    assert.ok(!blocks.some(b => b.text.includes('Synopsis before any scene')));
 });
 
-test('boneyard.fountain — /* */ comments are not stripped', () => {
-    const { blocks, meta, sceneMeta } = parseFixture('boneyard.fountain');
+test('boneyard.fountain — multi-line /* */ extracted to boneyard[], inline kept', () => {
+    const { blocks, meta, sceneMeta, boneyard } = parseFixture('boneyard.fountain');
     assert.deepEqual(seq(blocks), [
         [ACTION, 'Action before.'],
-        // CURRENT (buggy) behavior — will change in Phase 6: inline boneyard is kept
-        // verbatim inside the action text instead of being removed.
+        // Inline (single-line) boneyard stays verbatim in the text — it
+        // round-trips literally and InlineMarkup owns the rendering decision.
         [ACTION, 'He nods. /* cut this */ She waves.'],
-        // CURRENT (buggy) behavior — will change in Phase 6: a multi-line boneyard block is
-        // not recognized at all (regex.boneyard is defined but never used). "/*" and "*/"
-        // are all-caps-equal lines followed by text, so each is misread as a CHARACTER and
-        // the lines after them become DIALOGUE — including real script content ("Action after.").
-        [CHARACTER, '/*'],
-        [DIALOGUE, 'Cut scene here.'],
-        [CHARACTER, '*/'],
-        [DIALOGUE, 'Action after.'],
+        // FIXED: the multi-line boneyard no longer leaks "/*" and "*/" blocks
+        // (previously misread as CHARACTERs); "Action after." is ACTION again.
+        [ACTION, 'Action after.'],
+    ]);
+    assert.deepEqual(boneyard, [
+        { anchorId: blocks[1].id, text: '\nCut scene here.\n' },
     ]);
     assert.deepEqual(meta, {});
     assert.deepEqual(sceneMeta, {});
 });
 
+test('boneyard at file start anchors to null', () => {
+    const { blocks, boneyard } = parseText('/*\nhidden\n*/\nAction line.');
+    assert.deepEqual(seq(blocks), [[ACTION, 'Action line.']]);
+    assert.deepEqual(boneyard, [{ anchorId: null, text: '\nhidden\n' }]);
+});
+
 test('notes-emphasis.fountain — notes, emphasis and escapes pass through verbatim', () => {
     const { blocks, meta, sceneMeta } = parseFixture('notes-emphasis.fountain');
-    // CURRENT behavior (documented): [[notes]], **bold**, *italic*, _underline_,
-    // ***bold italic*** and escaped \* sequences are NOT interpreted or stripped by the
-    // parser — the markup characters stay in the plain block text. Phase 6 must decide
-    // note extraction / emphasis handling; today it is pure pass-through.
+    // [[notes]], **bold**, *italic*, _underline_, ***bold italic*** and \*
+    // escapes are NOT interpreted by the parser — the markers stay literally
+    // in block text (InlineMarkup owns tokenizing/rendering them).
     assert.deepEqual(seq(blocks), [
         [ACTION, 'He waits. [[check the timing]]'],
         [ACTION, 'She uses **bold** and *italic* and _underline_ moves.'],
@@ -138,14 +147,13 @@ test('notes-emphasis.fountain — notes, emphasis and escapes pass through verba
     assert.deepEqual(sceneMeta, {});
 });
 
-test('dual-dialogue.fountain — caret is stripped, dual link is lost', () => {
+test('dual-dialogue.fountain — caret stripped, sequential plain characters', () => {
     const { blocks, meta, sceneMeta } = parseFixture('dual-dialogue.fountain');
+    // Documented limitation: dual dialogue passes through uncorrupted but the
+    // simultaneous-speech pairing is not modeled — no dual flag/link.
     assert.deepEqual(seq(blocks), [
         [CHARACTER, 'SIMON'],
         [DIALOGUE, 'Go left!'],
-        // CURRENT (buggy) behavior — will change in Phase 6: "ALVIN ^" has the caret
-        // stripped but NO dual-dialogue flag/link is recorded, so the simultaneous-speech
-        // pairing is silently lost.
         [CHARACTER, 'ALVIN'],
         [DIALOGUE, 'Go right!'],
     ]);
@@ -154,23 +162,17 @@ test('dual-dialogue.fountain — caret is stripped, dual link is lost', () => {
     assert.deepEqual(sceneMeta, {});
 });
 
-test('title-page-multiline.fountain — single-line keys parse, multi-line values leak into body', () => {
+test('title-page-multiline.fountain — indented continuation lines join the key value (#17)', () => {
     const { blocks, meta, sceneMeta } = parseFixture('title-page-multiline.fountain');
-    // Keys are lowercased; only same-line "Key: Value" pairs are captured.
+    // FIXED: a bare "Contact:" key with indented value lines is a valid
+    // multi-line title-page value; nothing leaks into the body anymore.
     assert.deepEqual(meta, {
         title: 'The Big One',
         credit: 'Written by',
         author: 'Jane Doe',
+        contact: '555-1234\njane@example.com',
     });
     assert.deepEqual(seq(blocks), [
-        // CURRENT (buggy) behavior — will change in Phase 6: a bare "Contact:" key with the
-        // value on following indented lines (valid Fountain multi-line value) ends title-page
-        // parsing; "Contact:" itself becomes an ACTION block and the indented value lines leak
-        // into the body — "555-1234" is all-caps-equal (digits) followed by text, so it is
-        // misread as a CHARACTER and "jane@example.com" becomes its DIALOGUE.
-        [ACTION, 'Contact:'],
-        [CHARACTER, '555-1234'],
-        [DIALOGUE, 'jane@example.com'],
         [SLUG, 'INT. ROOM - DAY'],
         [ACTION, 'She opens the letter.'],
     ]);
@@ -188,59 +190,68 @@ test('scene-numbers.fountain — #1A# extracted into sceneMeta and stripped from
     assert.deepEqual(meta, {});
 });
 
-test('page-break-lyrics.fountain — "===" swallowed as synopsis, "~" lyrics fall through', () => {
+test('page-break-lyrics.fountain — "===" is a page break, "~" lyrics typed by context', () => {
     const { blocks, meta, sceneMeta } = parseFixture('page-break-lyrics.fountain');
     assert.deepEqual(seq(blocks), [
         [SLUG, 'INT. STAGE - NIGHT'],
         [ACTION, 'The band plays.'],
-        // CURRENT (buggy) behavior — will change in Phase 6: "~" lyric lines are not
-        // recognized (regex.lyrics is defined but never used); they fall through to ACTION
-        // with the tilde kept in the text.
+        // FIXED: "~" lyric lines keep the tilde and are typed by context —
+        // ACTION here because the previous block is not dialogue-side (#9).
         [ACTION, '~These are the lyrics'],
         [ACTION, '~Of a happy song'],
+        // FIXED: "===" no longer swallowed by the synopsis rule — it emits a
+        // dedicated page-break block (empty ACTION with pageBreak: true) (#9).
+        [ACTION, ''],
         [ACTION, 'The next morning.'],
     ]);
-    // CURRENT (buggy) behavior — will change in Phase 6: "===" (page break) matches the
-    // synopsis regex /^=(?: *)(.*)/ first, so it produces NO block and instead appends the
-    // leftover "==" to the current scene's description in sceneMeta.
-    assert.deepEqual(sceneMeta[blocks[0].id], { description: '==' });
-    assert.equal(Object.keys(sceneMeta).length, 1);
+    assert.equal(blocks[3].tight, true);     // contiguous lyric lines stay one paragraph
+    assert.equal(blocks[4].pageBreak, true);
+    assert.equal(blocks[5].pageBreak, undefined);
+    assert.deepEqual(sceneMeta, {});         // no bogus "==" description anymore
     assert.deepEqual(meta, {});
 });
 
-test('dialogue-two-spaces.fountain — two-space line breaks the dialogue block', () => {
+test('lyrics after a character/dialogue are typed DIALOGUE', () => {
+    const { blocks } = parseText('BOB\n~La la la');
+    assert.deepEqual(seq(blocks), [
+        [CHARACTER, 'BOB'],
+        [DIALOGUE, '~La la la'],
+    ]);
+});
+
+test('dialogue-two-spaces.fountain — two-space line keeps the speech together', () => {
     const { blocks, meta, sceneMeta } = parseFixture('dialogue-two-spaces.fountain');
+    // FIXED: a line of two spaces inside a speech emits an empty DIALOGUE
+    // continuation block instead of terminating the dialogue, so "Four." is
+    // DIALOGUE (was ACTION) per spec 2.5.1.
     assert.deepEqual(seq(blocks), [
         [SLUG, 'INT. CASINO - NIGHT'],
         [CHARACTER, 'DEALER'],
         [DIALOGUE, 'Ten.'],
-        // CURRENT (buggy) behavior — will change in Phase 6: per spec, a line containing
-        // exactly two spaces keeps the dialogue block alive ("Four." should be DIALOGUE).
-        // The parser trims every line, treats "  " as blank and skips it, and since the
-        // previous block is DIALOGUE (not CHARACTER/PARENTHETICAL) "Four." defaults to ACTION.
-        [ACTION, 'Four.'],
+        [DIALOGUE, ''],
+        [DIALOGUE, 'Four.'],
     ]);
     assert.deepEqual(meta, {});
     assert.deepEqual(sceneMeta, {});
 });
 
-test('character-numeric.fountain — R2D2 accepted, but so is bare "23"', () => {
+test('character-numeric.fountain — R2D2 accepted, bare "23" is Action (#14)', () => {
     const { blocks, meta, sceneMeta } = parseFixture('character-numeric.fountain');
     assert.deepEqual(seq(blocks), [
-        [CHARACTER, 'R2D2'], // correct: names may contain digits
+        [CHARACTER, 'R2D2'], // names may contain digits...
         [DIALOGUE, 'Beep boop bee-doo.'],
-        // CURRENT (buggy) behavior — will change in Phase 6: per spec a character name must
-        // contain at least one letter; "23" === "23".toUpperCase() so a bare number followed
-        // by text is misread as a CHARACTER, and the following action line becomes DIALOGUE.
-        [CHARACTER, '23'],
-        [DIALOGUE, 'People stand in line.'],
+        // FIXED: ...but need at least one letter; a bare number is Action and
+        // the line after it stays Action too (same paragraph -> tight).
+        [ACTION, '23'],
+        [ACTION, 'People stand in line.'],
     ]);
+    assert.equal(blocks[3].tight, true);
     assert.deepEqual(meta, {});
     assert.deepEqual(sceneMeta, {});
 });
 
 test('simple.fountain — happy-path two-scene script', () => {
-    const { blocks, meta, sceneMeta } = parseFixture('simple.fountain');
+    const { blocks, meta, sceneMeta, boneyard } = parseFixture('simple.fountain');
     assert.deepEqual(seq(blocks), [
         [SLUG, 'INT. KITCHEN - DAY'],
         [ACTION, 'JOHN stands at the counter, pouring coffee.'],
@@ -256,6 +267,9 @@ test('simple.fountain — happy-path two-scene script', () => {
     ]);
     assert.deepEqual(meta, {});
     assert.deepEqual(sceneMeta, {});
+    assert.deepEqual(boneyard, []);
+    // No stray flags on a plain script.
+    assert.ok(blocks.every(b => !b.tight && !b.pageBreak && !b.centered));
     // Every block gets a generated "line-*" id.
     for (const b of blocks) assert.match(b.id, /^line-[a-z0-9]{9}$/);
 });
