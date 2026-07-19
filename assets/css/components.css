@@ -1346,3 +1346,36 @@ aside#sidebar.open #hide-sidebar-btn {
 }
 #toast-container .toast-success { background: #2e7d32; color: #fff; }
 #toast-container .toast-error { background: #c62828; color: #fff; }
+
+/* --- TAB LOCK OVERLAY (TabGuard.js multi-tab single-writer lock) --- */
+#tab-lock-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 5000; /* above modals and toasts: passive tabs are fully blocked */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-body);
+    color: var(--text-main);
+}
+#tab-lock-overlay .tab-lock-box {
+    text-align: center;
+    padding: 2rem 2.5rem;
+}
+#tab-lock-overlay p {
+    margin: 0 0 1.25rem;
+    font-size: 1.05rem;
+}
+#tab-lock-overlay button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 1.5rem;
+    font-size: 1rem;
+    cursor: pointer;
+}
+#tab-lock-overlay button:disabled {
+    opacity: 0.6;
+    cursor: default;
+}

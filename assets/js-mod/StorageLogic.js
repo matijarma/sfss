@@ -55,6 +55,31 @@ export function mergeScriptLists(idbDict, lsEntries) {
     return merged;
 }
 
+// Save-time sceneMeta pruning (#5): a key survives when its scene exists in
+// the live document OR in ANY undo-history entry (history-aware so undo can
+// still restore a deleted scene together with its meta). History entries are
+// { data: { blocks, sceneMeta }, caret }. History sceneMeta objects that
+// alias the live object are ignored — counting their keys would make pruning
+// a permanent no-op. Returns the input object unchanged (same reference)
+// when nothing needs pruning.
+export function pruneSceneMeta(sceneMeta, liveBlockIds, historyEntries = []) {
+    if (!sceneMeta) return sceneMeta;
+    const keep = new Set(liveBlockIds || []);
+    for (const entry of historyEntries) {
+        const data = entry && entry.data;
+        if (!data) continue;
+        (data.blocks || []).forEach(b => { if (b && b.id) keep.add(b.id); });
+        if (data.sceneMeta && data.sceneMeta !== sceneMeta) {
+            Object.keys(data.sceneMeta).forEach(k => keep.add(k));
+        }
+    }
+    const keys = Object.keys(sceneMeta);
+    if (keys.every(k => keep.has(k))) return sceneMeta;
+    const pruned = {};
+    keys.forEach(k => { if (keep.has(k)) pruned[k] = sceneMeta[k]; });
+    return pruned;
+}
+
 const BACKUP_STALE_MS = 30 * 60 * 1000;
 
 function timeAgoLabel(ms) {

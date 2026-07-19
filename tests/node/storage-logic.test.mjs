@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { reconcileScript, mergeScriptLists, computeBackupWarning } from '../../assets/js-mod/StorageLogic.js';
+import { reconcileScript, mergeScriptLists, computeBackupWarning, pruneSceneMeta } from '../../assets/js-mod/StorageLogic.js';
 
 const T1 = '2026-07-01T10:00:00.000Z';
 const T2 = '2026-07-01T11:00:00.000Z';
@@ -86,4 +86,50 @@ test('backup warning: freshly backed up does not warn', () => {
         lastSavedAt: new Date(NOW - 120 * 1000).toISOString()
     }), NOW);
     assert.equal(r.warn, false);
+});
+
+test('pruneSceneMeta: drops keys absent from live blocks and history', () => {
+    const meta = { a: { notes: 'keep' }, gone: { notes: 'drop' } };
+    const pruned = pruneSceneMeta(meta, ['a'], []);
+    assert.deepEqual(Object.keys(pruned), ['a']);
+    assert.equal(pruned.a.notes, 'keep');
+});
+
+test('pruneSceneMeta: keeps keys referenced by any history entry blocks', () => {
+    const meta = { a: {}, b: {}, gone: {} };
+    const history = [
+        { data: { blocks: [{ id: 'a' }] }, caret: null },
+        { data: { blocks: [{ id: 'b' }] }, caret: null }
+    ];
+    const pruned = pruneSceneMeta(meta, ['a'], history);
+    assert.deepEqual(Object.keys(pruned).sort(), ['a', 'b']);
+});
+
+test('pruneSceneMeta: keeps keys from a distinct history sceneMeta snapshot', () => {
+    const meta = { a: {}, snap: {} };
+    const history = [{ data: { blocks: [], sceneMeta: { snap: {} } }, caret: null }];
+    const pruned = pruneSceneMeta(meta, ['a'], history);
+    assert.deepEqual(Object.keys(pruned).sort(), ['a', 'snap']);
+});
+
+test('pruneSceneMeta: ignores history sceneMeta aliasing the live object', () => {
+    // exportToJSONStructure stores the LIVE sceneMeta reference into history
+    // entries; counting its own keys would make pruning a permanent no-op.
+    const meta = { a: {}, gone: {} };
+    const history = [{ data: { blocks: [{ id: 'a' }], sceneMeta: meta }, caret: null }];
+    const pruned = pruneSceneMeta(meta, ['a'], history);
+    assert.deepEqual(Object.keys(pruned), ['a']);
+});
+
+test('pruneSceneMeta: returns the same object when nothing needs pruning', () => {
+    const meta = { a: {}, b: {} };
+    assert.equal(pruneSceneMeta(meta, ['a'], [{ data: { blocks: [{ id: 'b' }] } }]), meta);
+    assert.equal(pruneSceneMeta(null, ['a'], []), null);
+});
+
+test('pruneSceneMeta: tolerates malformed history entries', () => {
+    const meta = { a: {}, gone: {} };
+    const history = [null, {}, { data: null }, { data: {} }];
+    const pruned = pruneSceneMeta(meta, ['a'], history);
+    assert.deepEqual(Object.keys(pruned), ['a']);
 });

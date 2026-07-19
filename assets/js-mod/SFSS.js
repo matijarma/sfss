@@ -14,6 +14,8 @@ import * as constants from './Constants.js';
 import * as Shortcuts from './Shortcuts.js';
 import { escapeHtml } from './Utils.js';
 import { toast } from './Toast.js';
+import { computeBackupWarning, pruneSceneMeta } from './StorageLogic.js';
+import { TabGuard } from './TabGuard.js';
 import { ModalManager } from './ModalManager.js';
 import { SidebarManager } from './SidebarManager.js';
 import { EditorHandler } from './EditorHandler.js';
@@ -141,8 +143,7 @@ export class SFSS {
                 if (!script) {
                     console.error(`Script with ID ${scriptId} not found.`);
                     const fallbackScript = this.storageManager.createNewScript();
-                    delete fallbackScript.isNew;
-                    await this.storageManager.saveScript(fallbackScript.id, fallbackScript.content); 
+                    await this.storageManager.saveScript(fallbackScript.id, fallbackScript.content);
                     await this.loadScript(fallbackScript.id);
                     resolve(); 
                     return;
@@ -185,6 +186,9 @@ export class SFSS {
             await this.save();
         }
         const newScript = this.storageManager.createNewScript();
+        // Persist immediately (#7): a new script must survive a reload even
+        // before the first edit.
+        await this.storageManager.saveScript(newScript.id, newScript.content);
         await this.loadScript(newScript.id, newScript);
     }
 
@@ -207,6 +211,11 @@ export class SFSS {
         this.bindEventListeners();
         this.toggleSidebar();
 
+        // Multi-tab single-writer lock (#1): the claim handshake must finish
+        // (deciding active vs passive) before any storage writes happen.
+        this.tabGuard = new TabGuard(this);
+        await this.tabGuard.claim();
+
         const activeScriptId = await this.storageManager.init();
         await this.loadScript(activeScriptId);
 
@@ -217,7 +226,9 @@ export class SFSS {
         new ScrollbarManager('#scroll-area');
         document.querySelectorAll('.modal-body').forEach(el => new ScrollbarManager(el));
 
-        setInterval(async () => { if (this.isDirty) await this.save(); }, 3000);
+        // Autosave + backup polling are suspended while this tab is passive
+        // (another tab holds the write lock — see TabGuard).
+        setInterval(async () => { if (this.isDirty && !this.tabGuard.passive) await this.save(); }, 3000);
 
         this.sidebarManager.updateSceneList();
         this.checkMobile();
@@ -225,7 +236,10 @@ export class SFSS {
         await this.checkBackupStatus();
         this.checkWelcomeScreen();
 
-        setInterval(async () => await this.checkBackupStatus(), 60000); 
+        setInterval(async () => { if (!this.tabGuard.passive) await this.checkBackupStatus(); }, 60000);
+
+        // Deferred orphan-image sweep (#5): never blocks boot.
+        setTimeout(() => this.storageManager.sweepOrphanImages(this.sidebarManager.imageDB), 5000);
 
         if ('launchQueue' in window) {
             console.log('File Handling API is supported.');
@@ -235,18 +249,10 @@ export class SFSS {
                     try {
                         const file = await fileHandle.getFile();
                         const fileText = await file.text();
-                        // Mock file input for IOManager
-                        // This part might need refactoring to separate file reading from input element
-                        // For now we can just call import methods directly
-                        if (file.name.endsWith('.fdx')) {
-                            await this.ioManager.importFDX(fileText);
-                        } else if (file.name.endsWith('.json')) {
-                            await this.importJSON(JSON.parse(fileText));
-                        } else {
-                            this.editor.textContent = fileText;
-                            this.sidebarManager.updateSceneList();
-                            await this.save();
-                        }
+                        // Import into a FRESH script (shared with uploadFile).
+                        // Importing into the active script used to wipe its
+                        // blocks while keeping its sceneMeta/images (#5).
+                        await this.ioManager.importIntoNewScript(file.name, fileText);
                     } catch (err) {
                         console.error('Error handling file:', err);
                         alert('Could not open file: ' + err.message);
@@ -567,10 +573,12 @@ export class SFSS {
         window.addEventListener('keydown', async (e) => {
             if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 's') {
                 // Always suppress the browser Save-As dialog; saving is safe
-                // in any state.
+                // in any state (except passive tabs, which never write).
                 e.preventDefault();
-                await this.save();
-                toast('Saved', { type: 'success' });
+                if (!(this.tabGuard && this.tabGuard.passive)) {
+                    await this.save();
+                    toast('Saved', { type: 'success' });
+                }
                 return;
             }
             if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
@@ -591,6 +599,32 @@ export class SFSS {
         });
         window.addEventListener('popstate', (e) => {
             this.handleBackOrEscape(true);
+        });
+
+        // Unload safety (#2): the IDB write is debounced 2s, so a closed or
+        // backgrounded tab could lose the tail edit. On pagehide/hidden do a
+        // synchronous LS write of the current state, then persist every
+        // pending debounced write immediately.
+        const flushOnExit = () => {
+            if (this.tabGuard && this.tabGuard.passive) return;
+            if (this.isDirty && this.activeScriptId) {
+                this.storageManager.saveScriptSync(this.activeScriptId, this.exportToJSONStructure());
+                this.isDirty = false;
+            }
+            this.storageManager.flushPendingSaves();
+        };
+        window.addEventListener('pagehide', flushOnExit);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') flushOnExit();
+        });
+
+        // Dirty-close prompt (plan C3). The flush above still runs on actual
+        // unload, so this is belt-and-braces for the seconds-old edit case.
+        window.addEventListener('beforeunload', (e) => {
+            if (this.isDirty && !(this.tabGuard && this.tabGuard.passive)) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
         });
     }
 
@@ -615,6 +649,9 @@ export class SFSS {
     async loadChangelog() {
         const container = document.getElementById('help-changelog');
         if (!container || container.dataset.loaded === 'true') return;
+
+        const versionHeaderEl = container.querySelector('h3');
+        if (versionHeaderEl) versionHeaderEl.textContent = 'Version ' + window.cacheverzija;
 
         // In portable builds or offline contexts, avoid network fetches
         if (window.isPortableBuild) {
@@ -1031,7 +1068,8 @@ export class SFSS {
         } else {
             document.body.classList.remove('mobile-view');
             this.modalManager.close('mobile-welcome-modal');
-            this.editor.contentEditable = true;
+            // Never re-enable editing in a passive tab (TabGuard read-only).
+            this.editor.contentEditable = !(this.tabGuard && this.tabGuard.passive);
             const mobileStyle = document.getElementById('mobile-style-injection');
             if (mobileStyle) mobileStyle.remove();
             if (wasMobile) {
@@ -1065,6 +1103,12 @@ export class SFSS {
             }
             this.history.push({ data: currentState, caret });
             this.historyIndex = this.history.length - 1;
+            // Cap undo depth (#6): drop the oldest entry on overflow.
+            const MAX_HISTORY = 100;
+            if (this.history.length > MAX_HISTORY) {
+                this.history.shift();
+                this.historyIndex--;
+            }
             if (this.collaborationManager && this.collaborationManager.hasBaton) {
                 this.collaborationManager.sendUpdate(currentState);
             }
@@ -1359,11 +1403,28 @@ export class SFSS {
     }        
 
     async save() {
+        // Passive tabs (another tab holds the write lock) never write.
+        if (this.tabGuard && this.tabGuard.passive) return;
         const data = this.exportToJSONStructure();
+
+        // Prune sceneMeta entries whose scene exists neither in the current
+        // blocks nor in any undo-history entry (#5) — history-aware so undo
+        // can still restore a deleted scene together with its meta.
+        const liveBlockIds = (data.blocks || []).map(b => b.id);
+        const pruned = pruneSceneMeta(this.sceneMeta, liveBlockIds, this.history);
+        if (pruned !== this.sceneMeta) {
+            this.sceneMeta = pruned;
+            data.sceneMeta = pruned;
+        }
+
         await this.storageManager.saveScript(this.activeScriptId, data);
         const status = document.getElementById('save-status');
         status.style.opacity = '1';
-        setTimeout(() => status.style.opacity = '0', 2000);
+        setTimeout(() => {
+            // Keep the indicator visible while a persist failure is flagged
+            // (StorageManager attaches a '!' hint on IDB write errors).
+            if (!status.querySelector('.persist-error-hint')) status.style.opacity = '0';
+        }, 2000);
         this.isDirty = false;
     }
 
@@ -1579,21 +1640,19 @@ export class SFSS {
         });
     }
 
+    // Backup reminder (#4): shows the '!' badges on the Backup menus when the
+    // script has meaningful content and was never exported (or was edited
+    // >30min past the last export). Rule lives in StorageLogic (node-tested);
+    // cleared when IOManager download* refresh the backup timestamp.
     async checkBackupStatus() {
+        if (!this.activeScriptId) return;
         const script = await this.storageManager.getScript(this.activeScriptId);
         if (!script) return;
-        const backupWarnings = [document.getElementById('backup-warning'), document.getElementById('mobile-backup-warning')];
-        const thirtyMinutes = 30 * 60 * 1000;
-        let timeAgo = 'a while';
-        if(script.lastBackupAt) {
-            const minutes = Math.floor((new Date() - new Date(script.lastBackupAt)) / 60000);
-            if (minutes < 60) {
-                timeAgo = `${minutes}m ago`;
-            } else if (minutes < 1440) {
-                timeAgo = `${Math.floor(minutes / 60)}h ago`;
-            } else {
-                timeAgo = `${Math.floor(minutes / 1440)}d ago`;
-            }
-        }
+        const { warn, label } = computeBackupWarning(script, Date.now());
+        [document.getElementById('backup-warning'), document.getElementById('mobile-backup-warning')].forEach(el => {
+            if (!el) return;
+            el.classList.toggle('hidden', !warn);
+            el.title = label;
+        });
     }
 }

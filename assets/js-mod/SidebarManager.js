@@ -1,6 +1,7 @@
 import * as constants from './Constants.js';
 import { IDBHelper } from './IDBHelper.js';
 import { escapeHtml, generateLineId } from './Utils.js';
+import { toast } from './Toast.js';
 
 export class SidebarManager {
     constructor(app) {
@@ -432,8 +433,17 @@ export class SidebarManager {
             if (!file) return;
 
             const imageId = `${sceneId}-${Date.now()}`;
-            await this.imageDB.put(file, imageId);
-        
+            try {
+                await this.imageDB.put(file, imageId);
+            } catch (e) {
+                // Quota/abort failures must not leave a dangling sceneMeta
+                // reference to an image that was never stored (#8).
+                console.error('Failed to store scene image:', e);
+                toast("Couldn't store the image (storage quota?). Try a smaller file.", { type: 'error' });
+                imgInput.value = '';
+                return;
+            }
+
             if (!this.app.sceneMeta[sceneId]) this.app.sceneMeta[sceneId] = {};
             if (!this.app.sceneMeta[sceneId].images) this.app.sceneMeta[sceneId].images = [];
             this.app.sceneMeta[sceneId].images.push(imageId);

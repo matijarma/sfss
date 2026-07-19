@@ -2,8 +2,9 @@
   "name": "Simple Free Screenplay Software",
   "short_name": "SFSS",
   "description": "Professional Client-Side Screenwriting PWA",
-  "id": "/?best=screenwriting&app",
-  "start_url": "/",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#d9dde2",
@@ -40,7 +41,7 @@
   ],
   "file_handlers": [
     {
-      "action": "index.html",
+      "action": "./index.html",
       "accept": {
         "application/xml": [ ".fdx" ],
         "text/plain": [ ".fountain", ".txt" ],

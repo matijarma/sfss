@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RUNNING</title>
+<!--
+  SFSS storage-integrity browser tests (Phase 5).
+
+  Must be served over HTTP from the app root (module imports need it), e.g.:
+      cd E:\scratch\Sfss\app && python -m http.server 8127
+      -> http://localhost:8127/tests/browser/storage-tests.html
+
+  Automation contract (same as test.html):
+    - window.__results        : [{ name, ok, error }] per test
+    - <ul id="results">        : one <li> per test, class "pass" | "fail"
+    - <div id="summary">       : "X passed, Y failed"
+    - document.body.dataset.done === '1' when the run is complete
+    - document.title           : 'PASS' or 'FAIL' when complete
+-->
+<style>
+  body { font-family: monospace; margin: 1.5rem; background: #fff; color: #111; }
+  ul#results { list-style: none; padding: 0; }
+  ul#results li { padding: 2px 6px; }
+  ul#results li.pass { color: #0a6b2d; }
+  ul#results li.pass::before { content: "PASS  "; font-weight: bold; }
+  ul#results li.fail { color: #b00020; background: #fde8ec; }
+  ul#results li.fail::before { content: "FAIL  "; font-weight: bold; }
+  #summary { margin-top: 1rem; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>SFSS storage tests</h1>
+<ul id="results"></ul>
+<div id="summary"></div>
+
+<script type="module">
+window.__results = [];
+
+// ---------- tiny assertion helpers ----------
+function assert(cond, msg) {
+    if (!cond) throw new Error(msg || 'assertion failed');
+}
+function assertEqual(actual, expected, msg) {
+    const a = JSON.stringify(actual);
+    const e = JSON.stringify(expected);
+    if (a !== e) throw new Error(`${msg || 'not equal'}: expected ${e}, got ${a}`);
+}
+function sleep(ms) {
+    return new Promise(r => setTimeout(r, ms));
+}
+async function waitUntil(fn, timeout = 3000, msg = 'condition') {
+    const start = performance.now();
+    while (performance.now() - start < timeout) {
+        if (await fn()) return;
+        await sleep(25);
+    }
+    throw new Error(`timed out waiting for ${msg}`);
+}
+// Resolves with the first message of the given type on a raw channel.
+function onceMsg(channel, type, timeout = 3000) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`timed out waiting for ${type}`)), timeout);
+        const prev = channel.onmessage;
+        channel.onmessage = (e) => {
+            if (prev) prev(e);
+            if (e.data && e.data.t === type) {
+                clearTimeout(timer);
+                resolve(e.data);
+            }
+        };
+    });
+}
+
+// ---------- module imports ----------
+const { TabGuard } = await import('../../assets/js-mod/TabGuard.js');
+const { IDBHelper } = await import('../../assets/js-mod/IDBHelper.js');
+const { StorageManager } = await import('../../assets/js-mod/StorageManager.js');
+
+// Mock SFSS app: just enough surface for TabGuard.
+function mkApp() {
+    const app = {
+        editor: document.createElement('div'),
+        isDirty: false,
+        activeScriptId: 'mock-script',
+        saveCalls: 0,
+        flushCalls: 0,
+        async save() { app.saveCalls++; app.isDirty = false; },
+        storageManager: { flushPendingSaves() { app.flushCalls++; } }
+    };
+    app.editor.contentEditable = true;
+    return app;
+}
+
+// ---------- registry ----------
+const REGISTRY = [];
+function test(name, fn) {
+    REGISTRY.push({ name, fn });
+}
+
+// ---------- TabGuard: two-channel protocol simulation ----------
+
+test('TabGuard boots ACTIVE when no tab answers, then answers CLAIMs with HELD', async () => {
+    const guard = new TabGuard(mkApp());
+    try {
+        await guard.claim();
+        assertEqual(guard.passive, false, 'boots active on silence');
+        assert(!document.getElementById('tab-lock-overlay'), 'no overlay while active');
+
+        const raw = new BroadcastChannel('sfss-tab-lock');
+        try {
+            const heldP = onceMsg(raw, 'HELD');
+            raw.postMessage({ t: 'CLAIM', tabId: 'raw-tab' });
+            const held = await heldP;
+            assertEqual(held.tabId, guard.tabId, 'HELD carries the active tabId');
+        } finally {
+            raw.close();
+        }
+    } finally {
+        guard.destroy();
+    }
+});
+
+test('TabGuard boots PASSIVE on HELD: overlay + read-only editor', async () => {
+    const raw = new BroadcastChannel('sfss-tab-lock');
+    raw.onmessage = (e) => {
+        if (e.data && e.data.t === 'CLAIM') raw.postMessage({ t: 'HELD', tabId: 'raw-active' });
+    };
+    const app = mkApp();
+    const guard = new TabGuard(app);
+    try {
+        await guard.claim();
+        assertEqual(guard.passive, true, 'boots passive when HELD arrives');
+        const overlay = document.getElementById('tab-lock-overlay');
+        assert(overlay, 'overlay injected');
+        assert(overlay.textContent.includes('This screenplay is open in another tab.'), 'overlay message');
+        assert(document.getElementById('tab-lock-use-here-btn'), 'Use here button present');
+        assertEqual(app.editor.contentEditable, 'false', 'editor read-only');
+    } finally {
+        raw.close();
+        guard.destroy();
+    }
+    assert(!document.getElementById('tab-lock-overlay'), 'overlay removed on destroy');
+});
+
+test('TAKEOVER makes the active tab flush, flip passive and reply RELEASED', async () => {
+    const app = mkApp();
+    app.isDirty = true;
+    const guard = new TabGuard(app);
+    const raw = new BroadcastChannel('sfss-tab-lock');
+    try {
+        await guard.claim(); // active (nobody answers)
+        const releasedP = onceMsg(raw, 'RELEASED');
+        raw.postMessage({ t: 'TAKEOVER', tabId: 'raw-tab' });
+        const released = await releasedP;
+        assertEqual(released.tabId, guard.tabId, 'RELEASED from the old active tab');
+        assertEqual(app.saveCalls, 1, 'dirty state saved before handover');
+        assertEqual(app.flushCalls, 1, 'pending IDB writes flushed');
+        assertEqual(guard.passive, true, 'old active tab is now passive');
+        assert(document.getElementById('tab-lock-overlay'), 'old active tab shows its own overlay');
+    } finally {
+        raw.close();
+        guard.destroy();
+    }
+});
+
+test('passive tab activates (reload path) on RELEASED after its TAKEOVER', async () => {
+    const raw = new BroadcastChannel('sfss-tab-lock');
+    raw.onmessage = (e) => {
+        if (!e.data) return;
+        if (e.data.t === 'CLAIM') raw.postMessage({ t: 'HELD', tabId: 'raw-active' });
+        if (e.data.t === 'TAKEOVER') raw.postMessage({ t: 'RELEASED', tabId: 'raw-active' });
+    };
+    const app = mkApp();
+    const guard = new TabGuard(app);
+    let reloaded = false;
+    guard._reload = () => { reloaded = true; }; // stub: a real guard reloads the page
+    try {
+        await guard.claim();
+        assertEqual(guard.passive, true, 'starts passive');
+        guard.requestTakeover();
+        await waitUntil(() => reloaded, 3000, 'reload after RELEASED');
+        assertEqual(guard.passive, false, 'active after takeover');
+        assert(!document.getElementById('tab-lock-overlay'), 'overlay removed');
+        assertEqual(app.editor.contentEditable, 'true', 'editor editable again');
+    } finally {
+        raw.close();
+        guard.destroy();
+    }
+});
+
+test('killed active tab: takeover falls back to the 1s timeout', async () => {
+    const raw = new BroadcastChannel('sfss-tab-lock');
+    raw.onmessage = (e) => {
+        if (e.data && e.data.t === 'CLAIM') raw.postMessage({ t: 'HELD', tabId: 'raw-active' });
+    };
+    const guard = new TabGuard(mkApp());
+    let reloaded = false;
+    guard._reload = () => { reloaded = true; };
+    try {
+        await guard.claim();
+        assertEqual(guard.passive, true, 'starts passive');
+        raw.close(); // simulate the active tab being killed
+        const t0 = performance.now();
+        guard.requestTakeover();
+        await waitUntil(() => reloaded, 3000, 'timeout activation');
+        assert(performance.now() - t0 >= 900, 'waited ~1s for the missing RELEASED');
+        assertEqual(guard.passive, false, 'active after timeout');
+    } finally {
+        guard.destroy();
+    }
+});
+
+// ---------- IDBHelper + orphan-image sweep ----------
+
+test('IDBHelper.getAllKeys returns every key in the store', async () => {
+    const dbName = `sfss-test-keys-${Date.now()}`;
+    const helper = new IDBHelper(dbName, 'sceneImages', 3);
+    try {
+        await helper.put(new Blob(['a']), 'k1');
+        await helper.put(new Blob(['b']), 'k2');
+        await helper.put(new Blob(['c']), 'k3');
+        const keys = await helper.getAllKeys();
+        assertEqual(Array.from(keys).sort(), ['k1', 'k2', 'k3'], 'all keys listed');
+    } finally {
+        if (helper.db) helper.db.close();
+        indexedDB.deleteDatabase(dbName);
+    }
+});
+
+test('sweepOrphanImages deletes only unreferenced image blobs', async () => {
+    const dbName = `sfss-test-sweep-${Date.now()}`;
+    const imageDB = new IDBHelper(dbName, 'sceneImages', 3);
+    const scriptsDB = new IDBHelper(dbName, 'scripts', 3);
+    try {
+        // Seed 3 fake image blobs; a fake script references 2 of them.
+        await imageDB.put(new Blob(['1']), 'img-1');
+        await imageDB.put(new Blob(['2']), 'img-2');
+        await imageDB.put(new Blob(['3']), 'img-3');
+        await scriptsDB.put({
+            id: 'scr-1',
+            content: {
+                meta: { title: 'Sweep fixture' },
+                sceneMeta: {
+                    'scene-a': { images: ['img-1'] },
+                    'scene-b': { images: ['img-2'], notes: 'no images lost' },
+                    'scene-c': {} // no images key: must not crash the sweep
+                },
+                blocks: []
+            },
+            lastSavedAt: new Date().toISOString()
+        });
+
+        const sm = new StorageManager(null); // no app: sweep guards handle it
+        sm.scriptsDB = scriptsDB;
+        const removed = await sm.sweepOrphanImages(imageDB);
+        assertEqual(removed, 1, 'exactly one orphan removed');
+        const keys = Array.from(await imageDB.getAllKeys()).sort();
+        assertEqual(keys, ['img-1', 'img-2'], 'referenced images survive');
+    } finally {
+        if (imageDB.db) imageDB.db.close();
+        if (scriptsDB.db) scriptsDB.db.close();
+        indexedDB.deleteDatabase(dbName);
+    }
+});
+
+// ---------- StorageManager: pending-save shape, flush, sync save ----------
+
+test('flushPendingSaves persists the debounced write immediately', async () => {
+    const dbName = `sfss-test-flush-${Date.now()}`;
+    const sm = new StorageManager(null);
+    sm.scriptsDB = new IDBHelper(dbName, 'scripts', 3);
+    const id = `test-flush-${Date.now()}`;
+    try {
+        await sm.saveScript(id, { meta: {}, blocks: [{ id: 'b1' }] });
+        const pending = sm.pendingSaves[id];
+        assert(pending && pending.timer, 'pending entry holds the timer');
+        assert(pending.content && pending.content.blocks.length === 1, 'pending entry holds the content');
+        assert(pending.timestamp, 'pending entry holds the timestamp');
+
+        sm.flushPendingSaves();
+        assertEqual(Object.keys(sm.pendingSaves).length, 0, 'pending map emptied');
+        await waitUntil(async () => !!(await sm.scriptsDB.get(id)), 3000, 'IDB record after flush');
+        const rec = await sm.scriptsDB.get(id);
+        assertEqual(rec.content.blocks[0].id, 'b1', 'flushed content persisted');
+    } finally {
+        localStorage.removeItem(`sfss_autosave_${id}`);
+        if (sm.scriptsDB.db) sm.scriptsDB.db.close();
+        indexedDB.deleteDatabase(dbName);
+    }
+});
+
+test('saveScriptSync writes LS synchronously and IDB immediately', async () => {
+    const dbName = `sfss-test-sync-${Date.now()}`;
+    const sm = new StorageManager(null);
+    sm.scriptsDB = new IDBHelper(dbName, 'scripts', 3);
+    const id = `test-sync-${Date.now()}`;
+    try {
+        // A stale debounced write must be superseded, not race the sync one.
+        await sm.saveScript(id, { meta: {}, blocks: [{ id: 'old' }] });
+        sm.saveScriptSync(id, { meta: {}, blocks: [{ id: 'new' }] });
+        assertEqual(Object.keys(sm.pendingSaves).length, 0, 'stale debounce cancelled');
+        const ls = JSON.parse(localStorage.getItem(`sfss_autosave_${id}`));
+        assertEqual(ls.content.blocks[0].id, 'new', 'LS holds the sync content immediately');
+        await waitUntil(async () => {
+            const rec = await sm.scriptsDB.get(id);
+            return !!(rec && rec.content.blocks[0].id === 'new');
+        }, 3000, 'IDB record after sync save');
+    } finally {
+        localStorage.removeItem(`sfss_autosave_${id}`);
+        if (sm.scriptsDB.db) sm.scriptsDB.db.close();
+        indexedDB.deleteDatabase(dbName);
+    }
+});
+
+// ---------- runner ----------
+async function run() {
+    const ul = document.getElementById('results');
+    for (const { name, fn } of REGISTRY) {
+        const entry = { name, ok: false, error: null };
+        try {
+            await fn();
+            entry.ok = true;
+        } catch (e) {
+            entry.error = e && e.message ? e.message : String(e);
+        }
+        window.__results.push(entry);
+        const li = document.createElement('li');
+        li.className = entry.ok ? 'pass' : 'fail';
+        li.textContent = entry.ok ? name : `${name} — ${entry.error}`;
+        ul.appendChild(li);
+    }
+    const passed = window.__results.filter(r => r.ok).length;
+    const failed = window.__results.length - passed;
+    document.getElementById('summary').textContent = `${passed} passed, ${failed} failed`;
+    document.title = failed ? 'FAIL' : 'PASS';
+    document.body.dataset.done = '1';
+}
+run();
+</script>
+</body>
+</html>

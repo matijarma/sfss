@@ -8,6 +8,7 @@ export class IOManager {
 
     async downloadJSON() {
         await this.sfss.storageManager.updateBackupTimestamp(this.sfss.activeScriptId);
+        await this.sfss.checkBackupStatus();
         const data = this.sfss.exportToJSONStructure();
         const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
         const a = document.createElement('a');
@@ -22,35 +23,37 @@ export class IOManager {
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
-                const newScript = this.sfss.storageManager.createNewScript();
-                await this.sfss.loadScript(newScript.id, newScript);
-                if (file.name.endsWith('.fdx')) {
-                    await this.importFDX(e.target.result);
-                } else if (file.name.endsWith('.json')) {
-                    await this.sfss.importJSON(JSON.parse(e.target.result)); 
-                } else if (file.name.endsWith('.fountain')) {
-                    const parsed = this.sfss.fountainParser.parse(e.target.result);
-                    await this.sfss.importJSON({
-                        blocks: parsed.blocks, 
-                        meta: { ...this.sfss.meta, ...parsed.meta }, 
-                        sceneMeta: parsed.sceneMeta 
-                    });
-                } else {
-                    // Fallback for .txt or other: Use fountain parser anyway as it handles plain text well
-                    const parsed = this.sfss.fountainParser.parse(e.target.result);
-                    await this.sfss.importJSON({
-                        blocks: parsed.blocks, 
-                        meta: { ...this.sfss.meta, ...parsed.meta }, 
-                        sceneMeta: parsed.sceneMeta 
-                    });
-                }
-            } catch (err) { 
+                await this.importIntoNewScript(file.name, e.target.result);
+            } catch (err) {
                 console.error(err);
-                alert('Invalid file format or error importing.'); 
+                alert('Invalid file format or error importing.');
             }
         };
         reader.readAsText(file);
         input.value = '';
+    }
+
+    // Creates + persists a fresh script and imports the file into it. Shared
+    // by uploadFile and the PWA launchQueue file handler — the latter used to
+    // import straight into the ACTIVE script, orphaning its sceneMeta (#5).
+    async importIntoNewScript(fileName, text) {
+        const newScript = this.sfss.storageManager.createNewScript();
+        await this.sfss.storageManager.saveScript(newScript.id, newScript.content);
+        await this.sfss.loadScript(newScript.id, newScript);
+        if (fileName.endsWith('.fdx')) {
+            await this.importFDX(text);
+        } else if (fileName.endsWith('.json')) {
+            await this.sfss.importJSON(JSON.parse(text));
+        } else {
+            // .fountain, .txt and anything else: the fountain parser handles
+            // plain text well.
+            const parsed = this.sfss.fountainParser.parse(text);
+            await this.sfss.importJSON({
+                blocks: parsed.blocks,
+                meta: { ...this.sfss.meta, ...parsed.meta },
+                sceneMeta: parsed.sceneMeta
+            });
+        }
     }
 
     async importFDX(xmlText) {
@@ -111,7 +114,8 @@ export class IOManager {
 
     async downloadFDX() {
         await this.sfss.storageManager.updateBackupTimestamp(this.sfss.activeScriptId);
-        
+        await this.sfss.checkBackupStatus();
+
         // 1. Calculate Scene Stats (Headless Pagination)
         const hiddenContainer = document.createElement('div');
         hiddenContainer.style.position = 'absolute';
@@ -260,6 +264,7 @@ export class IOManager {
     async downloadFountain() {
         try {
             await this.sfss.storageManager.updateBackupTimestamp(this.sfss.activeScriptId);
+            await this.sfss.checkBackupStatus();
             const data = this.sfss.exportToJSONStructure();
             if (!this.sfss.fountainParser) {
                 console.error("FountainParser not initialized");
@@ -280,6 +285,7 @@ export class IOManager {
 
     async downloadText() {
         await this.sfss.storageManager.updateBackupTimestamp(this.sfss.activeScriptId);
+        await this.sfss.checkBackupStatus();
         const data = this.sfss.exportToJSONStructure();
         const textData = this.sfss.fountainParser.generate(data);
         const blob = new Blob([textData], {type: 'text/plain;charset=utf-8'});
