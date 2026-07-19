@@ -240,7 +240,18 @@ window.constants = window.SFSS_CONSTANTS;`;
 window.joinRoom = typeof joinRoom !== 'undefined' ? joinRoom : (typeof Y !== 'undefined' ? Y : undefined);`;
         }
 
+        if (file.endsWith('Shortcuts.js')) {
+            // Shortcuts.js is consumed via a namespace import (import * as
+            // Shortcuts). Rebuild that namespace object from the module's own
+            // export statements so the list can never drift out of date.
+            const names = [...code.matchAll(/export\s+(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/g)].map(m => m[1]);
+            const transformed = this.transformExports(code);
+            return `${transformed}
+window.SFSS_SHORTCUTS = { ${names.join(', ')} };`;
+        }
+
         code = code.replace(/import\s+\*\s+as\s+constants\s+from\s+['"]\.\/Constants.js['"];?/g, 'var constants = window.SFSS_CONSTANTS;');
+        code = code.replace(/import\s+\*\s+as\s+Shortcuts\s+from\s+['"]\.\/Shortcuts.js['"];?/g, 'var Shortcuts = window.SFSS_SHORTCUTS;');
         code = code.replace(/import\s*{\s*joinRoom\s*}\s*from\s*['"]\.\.\/trystero.min.js['"];?/g, 'var joinRoom = window.joinRoom;');
         // Remove remaining import lines (avoid clobbering strings containing "import")
         code = code.replace(/^\s*import[^;]+;\s*$/gm, '');

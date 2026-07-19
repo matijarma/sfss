@@ -246,7 +246,6 @@ export class SFSS {
         setTimeout(() => this.storageManager.sweepOrphanImages(this.sidebarManager.imageDB), 5000);
 
         if ('launchQueue' in window) {
-            console.log('File Handling API is supported.');
             launchQueue.setConsumer(async (launchParams) => {
                 if (!launchParams.files || launchParams.files.length === 0) return;
                 for (const fileHandle of launchParams.files) {
@@ -285,7 +284,6 @@ export class SFSS {
         const urlParams = new URLSearchParams(window.location.search);
         const autoJoinRoom = urlParams.get('room');
         if (autoJoinRoom) {
-            console.log("Auto-joining room from URL:", autoJoinRoom);
             window.history.replaceState({}, document.title, window.location.pathname);
             setTimeout(() => this.collabUI.joinFromUrl(autoJoinRoom), 500);
         }
@@ -1326,13 +1324,8 @@ export class SFSS {
         const prompt = window.deferredInstallPrompt;
         if (!prompt) return;
         prompt.prompt();
-        prompt.userChoice.then((choiceResult) => {
-            if (choiceResult.outcome === 'accepted') {
-                console.log('User accepted the install prompt');
-            } else {
-                console.log('User dismissed the install prompt');
-            }
-            window.deferredInstallPrompt = null; 
+        prompt.userChoice.then(() => {
+            window.deferredInstallPrompt = null;
             const installBtn = document.getElementById('install-pwa-btn');
             if(installBtn) installBtn.classList.add('hidden');
             const mobileInstallBtn = document.querySelector('[data-action="install-pwa"]');

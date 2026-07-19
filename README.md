@@ -117,6 +117,22 @@ The codebase is organized into a modular, class-based architecture.
 └── README.md                        # This file.
 ```
 
+## 🧪 Development & Testing
+
+No build step is required; tests need only Node 22+ and a browser.
+
+*   **Node suite** (parsers, serializers, storage logic, protocol reducers, asset-manifest drift):
+    ```
+    node --test "tests/node/*.test.mjs"
+    ```
+*   **Browser suites** (real DOM/IndexedDB — pagination, editor, storage, FDX): serve the repo root with any static server (e.g. `python -m http.server 8123`) and open:
+    *   `http://localhost:8123/tests/browser/test.html`
+    *   `http://localhost:8123/tests/browser/storage-tests.html`
+    *   `http://localhost:8123/tests/browser/fdx-tests.html`
+
+    Each page reports PASS/FAIL in `document.title` and sets `body[data-done="1"]` when finished, so they are automatable (e.g. via Chrome DevTools).
+*   **Manual smoke flows** that automation can't fully cover are listed in `tests/browser/smoke-checklist.md`.
+
 ## 📄 License
 
 This project is distributed under the **MIT License**. See the `LICENSE` section in the app's "Help & Info" modal for more details on third-party licenses.

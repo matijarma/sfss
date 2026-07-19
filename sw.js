@@ -1,7 +1,6 @@
 const queryString = self.location.search;
 const params = new URLSearchParams(queryString);
 const CACHE_NAME = params.get('v');
-console.log("ServiceWorker cache version: " + CACHE_NAME);
 
 // assets/asset-manifest.json is the single source of truth for what gets
 // precached (#19). This minimal shell is used ONLY if that manifest cannot
@@ -43,7 +42,7 @@ self.addEventListener('install', event => {
     const coreUrls = [...new Set(core)];
     const softUrls = [...new Set(soft)].filter(url => !coreUrls.includes(url));
     const cache = await caches.open(CACHE_NAME);
-    console.log('Opened cache and caching app shell (' + coreUrls.length + ' core, ' + softUrls.length + ' optional)');
+    console.log('[SW] Installing cache ' + CACHE_NAME + ' (' + coreUrls.length + ' core, ' + softUrls.length + ' optional)');
     await cache.addAll(coreUrls); // fail-hard: install rejects if any core asset is missing
     const results = await Promise.allSettled(softUrls.map(url => cache.add(url)));
     results.forEach((result, index) => {
@@ -70,7 +69,6 @@ self.addEventListener('activate', event => {
             return Promise.all(
                 cacheNames.map(cacheName => {
                 if (cacheName !== CACHE_NAME) {
-                    console.log('Deleting old cache:', cacheName);
                     return caches.delete(cacheName);
                 }
                 })

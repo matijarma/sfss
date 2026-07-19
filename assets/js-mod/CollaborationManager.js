@@ -66,7 +66,7 @@ export class CollaborationManager {
 
     log(msg, type) {
         if (this.app.collabUI) this.app.collabUI.log(msg, type);
-        else console.log(`[CollabManager] ${msg}`);
+        else if (type === 'error' || type === 'warn') console.warn(`[CollabManager] ${msg}`);
     }
 
     connect(roomId, isHost) {

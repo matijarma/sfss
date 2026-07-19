@@ -45,7 +45,7 @@ export class CollabUI {
             const remoteVideo = document.getElementById('collab-remote-video');
             if (remoteVideo) {
                 remoteVideo.srcObject = stream;
-                remoteVideo.play().catch(e => console.log('Remote play error', e));
+                remoteVideo.play().catch(e => console.warn('Remote play error', e));
                 this.log(`Receiving Video Feed (WebRTC Stream)`, 'success');
                 this.hasRemoteStream = true;
                 // Assume enabled until told otherwise (or wait for state)

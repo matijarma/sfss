@@ -12,7 +12,6 @@ window.showPwaInstallButton = () => {
 window.addEventListener('beforeinstallprompt', (e) => {
     window.deferredInstallPrompt = e;
     window.showPwaInstallButton();
-    console.log(`'beforeinstallprompt' event was fired.`);
 });
 
 (async () => {
@@ -71,7 +70,6 @@ window.addEventListener('beforeinstallprompt', (e) => {
 
         const registerSW = () => {
             navigator.serviceWorker.register('./sw.js?v=' + CACHE_NAME).then(registration => {
-                console.log('SW registered: ', registration);
                 // An update may already be sitting in "waiting" from a previous visit.
                 if (registration.waiting && navigator.serviceWorker.controller) {
                     showUpdateBanner(registration);
@@ -80,18 +78,13 @@ window.addEventListener('beforeinstallprompt', (e) => {
                     const installingWorker = registration.installing;
                     if (installingWorker == null) return;
                     installingWorker.onstatechange = () => {
-                        if (installingWorker.state === 'installed') {
-                            if (navigator.serviceWorker.controller) {
-                                console.log('New content is available; please refresh.');
-                                showUpdateBanner(registration);
-                            } else {
-                                console.log('Content is cached for offline use.');
-                            }
+                        if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            showUpdateBanner(registration);
                         }
                     };
                 };
             }).catch(registrationError => {
-                console.log('SW registration failed: ', registrationError);
+                console.warn('SW registration failed: ', registrationError);
             });
         };
 
