@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RUNNING</title>
+<!--
+  SFSS FDX import/export browser tests (Phase 6b).
+
+  Runs the REAL IOManager.importFDX path (DOMParser + title-page parsing +
+  FDXSerializer.mapFDXParagraphs) against the fdx fixtures, using an app-less
+  mock of the SFSS surface importFDX touches (meta/characters/sceneMeta/
+  boneyard/importJSON). Also round-trips FDXSerializer.buildFDX output back
+  through importFDX with the browser's DOMParser.
+
+  Must be served over HTTP from the app root (module imports need it), e.g.:
+      cd E:\scratch\Sfss\app && python -m http.server 8127
+      -> http://localhost:8127/tests/browser/fdx-tests.html
+
+  Automation contract (same as test.html / storage-tests.html):
+    - window.__results        : [{ name, ok, error }] per test
+    - <ul id="results">        : one <li> per test, class "pass" | "fail"
+    - <div id="summary">       : "X passed, Y failed"
+    - document.body.dataset.done === '1' when the run is complete
+    - document.title           : 'PASS' or 'FAIL' when complete
+-->
+<style>
+  body { font-family: monospace; margin: 1.5rem; background: #fff; color: #111; }
+  ul#results { list-style: none; padding: 0; }
+  ul#results li { padding: 2px 6px; }
+  ul#results li.pass { color: #0a6b2d; }
+  ul#results li.pass::before { content: "PASS  "; font-weight: bold; }
+  ul#results li.fail { color: #b00020; background: #fde8ec; }
+  ul#results li.fail::before { content: "FAIL  "; font-weight: bold; }
+  #summary { margin-top: 1rem; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>SFSS FDX tests</h1>
+<ul id="results"></ul>
+<div id="summary"></div>
+
+<script type="module">
+window.__results = [];
+
+// ---------- tiny assertion helpers ----------
+function assert(cond, msg) {
+    if (!cond) throw new Error(msg || 'assertion failed');
+}
+function assertEqual(actual, expected, msg) {
+    const a = JSON.stringify(actual);
+    const e = JSON.stringify(expected);
+    if (a !== e) throw new Error(`${msg || 'not equal'}: expected ${e}, got ${a}`);
+}
+
+// ---------- module imports ----------
+const constants = await import('../../assets/js-mod/Constants.js');
+const { IOManager } = await import('../../assets/js-mod/IOManager.js');
+const { buildFDX } = await import('../../assets/js-mod/FDXSerializer.js');
+const T = constants.ELEMENT_TYPES;
+
+// ---------- fixtures ----------
+async function fixture(name) {
+    const res = await fetch(`../fixtures/fdx/${name}`);
+    if (!res.ok) throw new Error(`fixture ${name}: HTTP ${res.status}`);
+    return res.text();
+}
+const FIXTURES = {};
+for (const name of ['styled-runs.fdx', 'titlepage-standard.fdx', 'titlepage-legacy-sfss.fdx', 'transitions.fdx']) {
+    FIXTURES[name] = await fixture(name);
+}
+
+// App-less harness: the exact SFSS surface importFDX touches. STALE values
+// everywhere so the full-meta-reset (#15) is actually exercised.
+function mkApp() {
+    const app = {
+        meta: {
+            title: 'STALE TITLE', author: 'Stale Author', contact: 'stale@example.com',
+            showTitlePage: false, showSceneNumbers: true, showDate: true
+        },
+        characters: new Set(['STALE CHARACTER']),
+        sceneMeta: { 'stale-scene': { number: '99' } },
+        boneyard: [{ anchorId: null, text: 'stale boneyard' }],
+        imported: null,
+        async importJSON(data) { app.imported = data; }
+    };
+    return app;
+}
+async function importFixture(name, app = mkApp()) {
+    await new IOManager(app).importFDX(FIXTURES[name]);
+    return app;
+}
+
+// ---------- registry ----------
+const REGISTRY = [];
+function test(name, fn) {
+    REGISTRY.push({ name, fn });
+}
+
+// ---------- importFDX: styled runs -> canonical markers ----------
+
+test('styled-runs.fdx: <Text Style> runs survive as canonical markers', async () => {
+    const app = await importFixture('styled-runs.fdx');
+    const blocks = app.imported.blocks;
+    assertEqual(blocks.map(b => b.type), [T.SLUG, T.ACTION, T.CHARACTER, T.DIALOGUE], 'types');
+    assertEqual(blocks[0].text, 'INT. LAB - NIGHT', 'slug text');
+    assertEqual(blocks[1].text,
+        'The alien **SCREAMS** and *hisses* before it _**explodes**_.',
+        'action markers');
+    assertEqual(blocks[3].text, 'It was never *supposed* to wake up.', 'dialogue markers');
+    assert(app.characters.has('DR. VANCE'), 'character collected');
+    assert(!app.characters.has('STALE CHARACTER'), 'stale characters cleared');
+});
+
+// ---------- importFDX: title pages (#15) ----------
+
+test('titlepage-standard.fdx: positional title page parsed', async () => {
+    const app = await importFixture('titlepage-standard.fdx');
+    assertEqual(app.meta.title, 'THE BIG ONE', 'title from first centered paragraph');
+    assertEqual(app.meta.author, 'Jane Doe', 'author from under "Written by"');
+    assertEqual(app.meta.contact, 'Jane Doe\n555-1234\njane@example.com', 'trailing left paragraphs');
+});
+
+test('titlepage-legacy-sfss.fdx: legacy "Title: X" labels recognized', async () => {
+    const app = await importFixture('titlepage-legacy-sfss.fdx');
+    assertEqual(app.meta.title, 'The Big One', 'legacy title');
+    assertEqual(app.meta.author, 'Jane Doe', 'legacy author');
+    assertEqual(app.meta.contact, 'jane@example.com', 'legacy contact');
+    // Scene Number + SceneProperties still flow into sceneMeta.
+    const slug = app.imported.blocks.find(b => b.type === T.SLUG);
+    assertEqual(app.sceneMeta[slug.id], { number: '1' }, 'scene number kept');
+});
+
+test('full meta reset: no cross-script bleed, display flags back to defaults', async () => {
+    const app = await importFixture('transitions.fdx'); // fixture has NO TitlePage
+    assertEqual(app.meta.title, '', 'stale title cleared');
+    assertEqual(app.meta.author, '', 'stale author cleared');
+    assertEqual(app.meta.contact, '', 'stale contact cleared');
+    assertEqual(app.meta.showTitlePage, true, 'showTitlePage reset');
+    assertEqual(app.meta.showSceneNumbers, false, 'showSceneNumbers reset');
+    assertEqual(app.meta.showDate, false, 'showDate reset');
+    assert(!app.sceneMeta['stale-scene'], 'stale sceneMeta cleared');
+    assertEqual(app.boneyard, [], 'stale boneyard cleared');
+    assertEqual(app.imported.boneyard, [], 'imported payload carries an empty boneyard');
+});
+
+test('import twice: second import fully replaces the first (no merge)', async () => {
+    const app = await importFixture('titlepage-standard.fdx');
+    await importFixture('titlepage-legacy-sfss.fdx', app);
+    assertEqual(app.meta.title, 'The Big One', 'second title wins');
+    assertEqual(app.meta.contact, 'jane@example.com', 'contact replaced, not merged');
+});
+
+// ---------- importFDX: body structure ----------
+
+test('transitions.fdx: paragraph types and scene numbers', async () => {
+    const app = await importFixture('transitions.fdx');
+    const blocks = app.imported.blocks;
+    assertEqual(blocks.map(b => b.type),
+        [T.SLUG, T.ACTION, T.TRANSITION, T.SLUG, T.ACTION, T.TRANSITION], 'block sequence');
+    const slugs = blocks.filter(b => b.type === T.SLUG);
+    assertEqual(app.sceneMeta[slugs[0].id].number, '1A', 'first scene number');
+    assertEqual(app.sceneMeta[slugs[1].id].number, '2', 'second scene number');
+    // Summary/SceneProperties <Text> must never leak into slug text.
+    assertEqual(slugs[0].text, 'EXT. HOUSE - DAY', 'slug text clean');
+});
+
+// ---------- buildFDX -> importFDX round-trip through the real DOMParser ----------
+
+test('buildFDX output round-trips through importFDX (texts, flags, meta)', async () => {
+    const srcBlocks = [
+        { id: 's1', type: T.SLUG, text: 'INT. LAB - NIGHT' },
+        { id: 'a1', type: T.ACTION, text: 'The alien **SCREAMS** and *hisses*.' },
+        { id: 'a2', type: T.ACTION, text: 'THE END', centered: true },
+        { id: 'c1', type: T.CHARACTER, text: 'DR. VANCE (V.O.)' },
+        { id: 'p1', type: T.PARENTHETICAL, text: '(beat)' },
+        { id: 'd1', type: T.DIALOGUE, text: 'It was _**never**_ me.' },
+        { id: 't1', type: T.TRANSITION, text: 'CUT TO:' }
+    ];
+    const xml = buildFDX({
+        meta: { title: 'ROUND TRIP', author: 'A. Uthor', contact: 'line one\nline two' },
+        blocks: srcBlocks,
+        sceneStats: { s1: { page: 1, length: '3/8', number: '1A', description: 'It begins.' } },
+        smartType: { characters: ['DR. VANCE'], locations: ['LAB'], times: ['NIGHT'] }
+    });
+    const app = mkApp();
+    await new IOManager(app).importFDX(xml);
+
+    const blocks = app.imported.blocks;
+    assertEqual(blocks.map(b => b.type), srcBlocks.map(b => b.type), 'types round-trip');
+    assertEqual(blocks.map(b => b.text), srcBlocks.map(b => b.text), 'texts round-trip');
+    assertEqual(blocks.map(b => !!b.centered), srcBlocks.map(b => !!b.centered), 'centered round-trips');
+    assertEqual(app.meta.title, 'ROUND TRIP', 'title round-trips');
+    assertEqual(app.meta.author, 'A. Uthor', 'author round-trips');
+    assertEqual(app.meta.contact, 'line one\nline two', 'contact round-trips');
+    const slug = blocks.find(b => b.type === T.SLUG);
+    assertEqual(app.sceneMeta[slug.id], { number: '1A', description: 'It begins.' }, 'sceneMeta round-trips');
+});
+
+// ---------- runner ----------
+async function run() {
+    const ul = document.getElementById('results');
+    for (const { name, fn } of REGISTRY) {
+        const entry = { name, ok: false, error: null };
+        try {
+            await fn();
+            entry.ok = true;
+        } catch (e) {
+            entry.error = e && e.message ? e.message : String(e);
+        }
+        window.__results.push(entry);
+        const li = document.createElement('li');
+        li.className = entry.ok ? 'pass' : 'fail';
+        li.textContent = entry.ok ? name : `${name} — ${entry.error}`;
+        ul.appendChild(li);
+    }
+    const passed = window.__results.filter(r => r.ok).length;
+    const failed = window.__results.length - passed;
+    document.getElementById('summary').textContent = `${passed} passed, ${failed} failed`;
+    document.title = failed ? 'FAIL' : 'PASS';
+    document.body.dataset.done = '1';
+}
+run();
+</script>
+</body>
+</html>

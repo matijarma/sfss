@@ -1,5 +1,7 @@
 import * as constants from './Constants.js';
-import { escapeXML, formatEighths } from './Utils.js';
+import { formatEighths } from './Utils.js';
+import { plainText } from './InlineMarkup.js';
+import { buildFDX, mapFDXParagraphs } from './FDXSerializer.js';
 
 export class IOManager {
     constructor(sfss) {
@@ -51,78 +53,152 @@ export class IOManager {
             await this.sfss.importJSON({
                 blocks: parsed.blocks,
                 meta: { ...this.sfss.meta, ...parsed.meta },
-                sceneMeta: parsed.sceneMeta
+                sceneMeta: parsed.sceneMeta,
+                boneyard: parsed.boneyard || []
             });
         }
     }
 
+    // FDX import (#15): full meta reset (no cross-script bleed), real
+    // <TitlePage> parsing (standard positional layout AND the legacy SFSS
+    // "Title: X" label format), and <Text Style> runs preserved as canonical
+    // markers via FDXSerializer.mapFDXParagraphs. DOMParser stays here —
+    // the serializer only ever sees plain objects.
     async importFDX(xmlText) {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlText, "text/xml");
         const mainContent = xmlDoc.querySelector('FinalDraft > Content');
         if (!mainContent) { alert("No script content found in FDX."); return; }
-        
-        const paragraphs = mainContent.querySelectorAll("Paragraph");
-        this.sfss.editor.innerHTML = '';
+
+        // FULL reset before reading: title/author/contact AND display flags —
+        // nothing from the previously open script may survive the import.
+        this.sfss.meta = {
+            title: '', author: '', contact: '',
+            showTitlePage: true, showSceneNumbers: false, showDate: false
+        };
         this.sfss.characters.clear();
-        this.sfss.sceneMeta = {}; // Reset scene meta
-        this.sfss.meta.title = xmlDoc.querySelector('Title') ? xmlDoc.querySelector('Title').textContent : ''; 
-        
-        // Try to get Author/Contact from TitlePage if possible (basic check)
-        this.sfss.applySettings();
-        
-        paragraphs.forEach(p => {
-            const type = p.getAttribute("Type");
-            const number = p.getAttribute("Number"); // Read Scene Number
-            let text = Array.from(p.getElementsByTagName("Text")).map(t => t.textContent).join('');
-            if (!text && p.textContent) text = p.textContent;
-            
-            const dzType = constants.FDX_REVERSE_MAP[type] || constants.ELEMENT_TYPES.ACTION;
-            const block = this.sfss.editorHandler.createBlock(dzType, text);
-            
-            if (dzType === constants.ELEMENT_TYPES.SLUG) {
-                // Check Scene Properties
-                const props = p.querySelector('SceneProperties');
-                if (props || number) {
-                     if (!this.sfss.sceneMeta[block.dataset.lineId]) this.sfss.sceneMeta[block.dataset.lineId] = {};
-                     if (number) this.sfss.sceneMeta[block.dataset.lineId].number = number;
-                     if (props) {
-                         const summaryEl = props.querySelector('Summary');
-                         let summary = '';
-                         if (summaryEl) {
-                             // Extract text from all Paragraphs within Summary
-                             summary = Array.from(summaryEl.querySelectorAll('Paragraph')).map(para => {
-                                 return Array.from(para.querySelectorAll('Text')).map(t => t.textContent).join('');
-                             }).join('\n');
-                         }
-                         const title = props.getAttribute('Title');
-                         if (summary) this.sfss.sceneMeta[block.dataset.lineId].description = summary;
-                         else if (title) this.sfss.sceneMeta[block.dataset.lineId].description = title;
-                     }
-                }
-            }
-            if (dzType === constants.ELEMENT_TYPES.CHARACTER) {
-                const clean = this.sfss.editorHandler.getCleanCharacterName(text);
-                if (clean.length > 1) this.sfss.characters.add(clean);
-            }
+        this.sfss.sceneMeta = {};
+        this.sfss.boneyard = [];
+        Object.assign(this.sfss.meta, this.readFDXTitlePage(xmlDoc));
+
+        // Only DIRECT Content children are script paragraphs — Summary
+        // paragraphs nested inside SceneProperties must not become blocks.
+        const paras = Array.from(mainContent.children)
+            .filter(el => el.tagName === 'Paragraph')
+            .map(p => this.fdxParagraphToPlain(p));
+        const mapped = mapFDXParagraphs(paras);
+        mapped.characters.forEach(c => this.sfss.characters.add(c));
+        this.sfss.sceneMeta = mapped.sceneMeta;
+
+        // importJSON applies flags/classes, refreshes the sidebar, saves and
+        // snapshots history — the same path every other import takes.
+        await this.sfss.importJSON({
+            blocks: mapped.blocks,
+            meta: this.sfss.meta,
+            sceneMeta: mapped.sceneMeta,
+            characters: Array.from(this.sfss.characters),
+            boneyard: []
         });
-        
-        this.sfss.sidebarManager.updateSceneList();
-        await this.sfss.save();
-        this.sfss.saveState(true);
+    }
+
+    // One <Paragraph> element -> the plain object mapFDXParagraphs consumes.
+    // Only DIRECT <Text> children are runs (SceneProperties/Summary nest
+    // their own <Text> elements which must not leak into the slug text).
+    fdxParagraphToPlain(p) {
+        const textRuns = Array.from(p.getElementsByTagName('Text'))
+            .filter(t => t.parentNode === p)
+            .map(t => {
+                const style = t.getAttribute('Style') || '';
+                return {
+                    text: t.textContent,
+                    bold: /Bold/i.test(style),
+                    italic: /Italic/i.test(style),
+                    underline: /Underline/i.test(style)
+                };
+            });
+        if (!textRuns.length) {
+            // Degenerate FDX with bare paragraph text (no <Text> children).
+            const direct = Array.from(p.childNodes)
+                .filter(n => n.nodeType === Node.TEXT_NODE)
+                .map(n => n.nodeValue).join('').trim();
+            if (direct) textRuns.push({ text: direct, bold: false, italic: false, underline: false });
+        }
+
+        const plain = {
+            type: p.getAttribute('Type'),
+            number: p.getAttribute('Number'),
+            alignment: p.getAttribute('Alignment'),
+            textRuns
+        };
+
+        const props = Array.from(p.children).find(el => el.tagName === 'SceneProperties');
+        if (props) {
+            const summary = Array.from(props.querySelectorAll('Paragraph')).map(para =>
+                Array.from(para.querySelectorAll('Text')).map(t => t.textContent).join('')
+            ).join('\n').trim();
+            const description = summary || props.getAttribute('Title') || '';
+            if (description) plain.sceneProps = { description };
+        }
+        return plain;
+    }
+
+    // <TitlePage> -> { title?, author?, contact? }. Standard positional
+    // layout: title = first non-empty centered paragraph, author = first
+    // non-empty paragraph after a "Written by"/"by" line (fallback: second
+    // non-empty centered), contact = trailing run of non-centered paragraphs.
+    // Legacy SFSS exports wrote literal "Title:/Author:/Contact:" labels —
+    // those are recognized and stripped instead.
+    readFDXTitlePage(xmlDoc) {
+        const out = {};
+        const content = xmlDoc.querySelector('FinalDraft > TitlePage > Content');
+        if (!content) return out;
+        const paras = Array.from(content.children)
+            .filter(el => el.tagName === 'Paragraph')
+            .map(p => ({
+                centered: (p.getAttribute('Alignment') || 'Left') === 'Center',
+                text: Array.from(p.getElementsByTagName('Text')).map(t => t.textContent).join('')
+            }));
+
+        let legacy = false;
+        paras.forEach(p => {
+            const m = p.text.match(/^(Title|Author|Contact):\s*(.*)$/i);
+            if (!m) return;
+            legacy = true;
+            const key = m[1].toLowerCase();
+            out[key] = out[key] ? out[key] + '\n' + m[2] : m[2];
+        });
+        if (legacy) return out;
+
+        const centered = paras.filter(p => p.centered && p.text.trim() !== '');
+        if (centered.length) out.title = centered[0].text.trim();
+
+        const byIdx = paras.findIndex(p => /^(written\s+)?by$/i.test(p.text.trim()));
+        if (byIdx !== -1) {
+            const after = paras.slice(byIdx + 1).find(p => p.text.trim() !== '');
+            if (after) out.author = after.text.trim();
+        } else if (centered.length > 1) {
+            out.author = centered[1].text.trim();
+        }
+
+        const contactLines = [];
+        for (let i = paras.length - 1; i >= 0; i--) {
+            if (paras[i].centered) break;
+            if (paras[i].text.trim() !== '') contactLines.unshift(paras[i].text.trim());
+        }
+        if (contactLines.length) out.contact = contactLines.join('\n');
+        return out;
     }
 
     async downloadFDX() {
         await this.sfss.storageManager.updateBackupTimestamp(this.sfss.activeScriptId);
         await this.sfss.checkBackupStatus();
 
+        const blocks = this.sfss.exportToJSONStructure().blocks || [];
+
         // 1. Scene stats from the shared geometry engine (R1). Length is
         // normalized ("1 3/8", never "16/8" — R28), Page is the start page.
-        const sceneNumberMap = {};
-        Object.keys(this.sfss.sceneMeta).forEach(id => {
-            if (this.sfss.sceneMeta[id].number) sceneNumberMap[id] = this.sfss.sceneMeta[id].number;
-        });
-
+        // sceneMeta numbers/descriptions ride along in the same map so
+        // buildFDX stays a pure function of its input.
         const sceneStats = {};
         this.sfss.geometry.getScenePagination().scenes.forEach(scene => {
             sceneStats[scene.id] = {
@@ -130,93 +206,57 @@ export class IOManager {
                 length: formatEighths(scene.eighths, 'fdx')
             };
         });
+        Object.keys(this.sfss.sceneMeta).forEach(id => {
+            const m = this.sfss.sceneMeta[id];
+            if (!m || (!m.number && !m.description)) return;
+            if (!sceneStats[id]) sceneStats[id] = { page: 1, length: '1/8' };
+            if (m.number) sceneStats[id].number = m.number;
+            if (m.description) sceneStats[id].description = m.description;
+        });
 
-        // 2. Build SmartType Lists
+        // 2. SmartType lists. Location parsing fixed (#16): strip the
+        // INT./EXT./EST./I/E prefix from the slug, split the remainder on
+        // " - " — the LAST segment is the time of day, the rest joined back
+        // together is the location. Marker/note text never leaks in.
         const characters = new Set();
         const locations = new Set();
         const times = new Set();
         const extensions = new Set();
-        
-        this.sfss.editor.querySelectorAll('.script-line').forEach(block => {
-            const type = this.sfss.editorHandler.getBlockType(block);
-            const text = block.textContent.trim();
-            if (type === constants.ELEMENT_TYPES.CHARACTER) {
+
+        blocks.forEach(block => {
+            const text = plainText(block.text || '').trim();
+            if (block.type === constants.ELEMENT_TYPES.CHARACTER) {
                 const clean = this.sfss.editorHandler.getCleanCharacterName(text);
                 if (clean.length > 1) characters.add(clean);
                 const extMatch = text.match(/\((.*?)\)/);
                 if (extMatch) extensions.add(extMatch[1]);
-            } else if (type === constants.ELEMENT_TYPES.SLUG) {
-                const parts = text.split('-');
-                if (parts.length > 0) locations.add(parts[0].trim());
-                if (parts.length > 1) times.add(parts[parts.length - 1].trim());
-            }
-        });
-        
-        // 3. Generate XML
-        let xml = `<?xml version="1.0" encoding="UTF-8" standalone="no" ?>\n<FinalDraft DocumentType="Script" Template="No" Version="1">\n<Content>\n`;
-        let autoSceneIndex = 1;
-        
-        this.sfss.editor.querySelectorAll('.script-line').forEach(block => {
-            const type = this.sfss.editorHandler.getBlockType(block);
-            const fdxType = constants.FDX_MAP[type] || 'Action';
-            const text = this.escapeXML(block.textContent);
-            const id = block.dataset.lineId;
-            let openTag = `<Paragraph Type="${fdxType}">`;
-            
-            if (type === constants.ELEMENT_TYPES.SLUG) {
-                const stats = sceneStats[id] || { page: 1, length: "1/8" };
-                const num = sceneNumberMap[id] || autoSceneIndex;
-                const metaDesc = this.sfss.sceneMeta[id] && this.sfss.sceneMeta[id].description ? this.escapeXML(this.sfss.sceneMeta[id].description) : '';
-                
-                openTag = `<Paragraph Type="${fdxType}" Number="${num}">`;
-                openTag += `<SceneProperties Length="${stats.length}" Page="${stats.page}" Title="">
-`;
-                if (metaDesc) {
-                    openTag += `<Summary>
-`;
-                    const descLines = this.sfss.sceneMeta[id].description.split('\n');
-                    descLines.forEach(line => {
-                        openTag += `<Paragraph Alignment="Left" FirstIndent="0.00" Leading="Regular" LeftIndent="0.00" RightIndent="1.39" SpaceBefore="0" Spacing="1" StartsNewPage="No">
-`;
-                        openTag += `<Text AdornmentStyle="0" Background="#FFFFFFFFFFFF" Color="#000000000000" Font="Courier Final Draft" RevisionID="0" Size="12" Style="">${this.escapeXML(line)}</Text>
-`;
-                        openTag += `</Paragraph>
-`;
-                    });
-                    openTag += `</Summary>
-`;
+            } else if (block.type === constants.ELEMENT_TYPES.SLUG) {
+                const stripped = text.replace(/^(INT\.?\/EXT|I\/E|INT|EXT|EST)[. ]+/i, '').trim();
+                if (!stripped) return;
+                const parts = stripped.split(' - ');
+                if (parts.length > 1) {
+                    times.add(parts[parts.length - 1].trim());
+                    locations.add(parts.slice(0, -1).join(' - ').trim());
+                } else {
+                    locations.add(stripped);
                 }
-                openTag += `</SceneProperties>`;
-                autoSceneIndex++;
             }
-            xml += `${openTag}\n<Text>${text}</Text>\n</Paragraph>\n`;
         });
-        
-        xml += `</Content>\n`;
-        
-        // 4. Metadata Blocks
-        xml += `<TitlePage>\n<Content>\n`;
-        xml += `<Paragraph Alignment="Center"><Text>Title: ${this.escapeXML(this.sfss.meta.title)}</Text></Paragraph>\n`;
-        xml += `<Paragraph Alignment="Center"><Text>Author: ${this.escapeXML(this.sfss.meta.author)}</Text></Paragraph>\n`;
-        xml += `<Paragraph Alignment="Center"><Text>Contact: ${this.escapeXML(this.sfss.meta.contact)}</Text></Paragraph>\n`;
-        xml += `</Content>\n</TitlePage>\n`;
-        
-        xml += `<SmartType>\n`;
-        const addList = (name, set) => {
-            xml += `<${name}>\n`;
-            set.forEach(item => xml += `<${name.slice(0, -1)}>${this.escapeXML(item)}</${name.slice(0, -1)}>
-`);
-            xml += `</${name}>
-`;
-        };
-        addList('Characters', characters);
-        addList('Locations', locations);
-        addList('Times', times);
-        addList('Extensions', extensions);
-        xml += `</SmartType>
-`;
-        xml += `</FinalDraft>`;
-        
+
+        // 3. All XML construction is delegated to the pure serializer
+        // (proper positional title page — no literal "Title:" labels).
+        const xml = buildFDX({
+            meta: this.sfss.meta,
+            blocks,
+            sceneStats,
+            smartType: {
+                characters: Array.from(characters),
+                locations: Array.from(locations),
+                times: Array.from(times),
+                extensions: Array.from(extensions)
+            }
+        });
+
         const blob = new Blob([xml], {type: 'text/xml'});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
@@ -258,7 +298,4 @@ export class IOManager {
         a.click();
     }
 
-    escapeXML(unsafe) {
-        return escapeXML(unsafe || '');
-    }
 }

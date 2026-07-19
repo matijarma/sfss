@@ -13,6 +13,7 @@
 import * as constants from './Constants.js';
 import * as Shortcuts from './Shortcuts.js';
 import { escapeHtml } from './Utils.js';
+import { serializeBlockElement } from './InlineMarkup.js';
 import { toast } from './Toast.js';
 import { computeBackupWarning, pruneSceneMeta } from './StorageLogic.js';
 import { TabGuard } from './TabGuard.js';
@@ -56,6 +57,10 @@ export class SFSS {
             showTitlePage: true, showSceneNumbers: false, showDate: false
         };
         this.sceneMeta = {};
+        // Multi-line /* boneyard */ spans lifted out of Fountain imports:
+        // [{ anchorId, text }]. Never shown in the editor; round-trips
+        // through JSON export and FountainParser.generate.
+        this.boneyard = [];
 
         this.canExit = false;
 
@@ -1414,19 +1419,22 @@ export class SFSS {
             this.scriptData.meta = this.meta;
             this.scriptData.sceneMeta = this.sceneMeta;
             this.scriptData.characters = Array.from(this.characters);
+            this.scriptData.boneyard = this.boneyard || [];
             return this.scriptData;
         }
+        // serializeBlockElement is THE DOM->JSON seam: paren re-wrapping plus
+        // the optional centered/tight/pageBreak flags read back from the DOM.
         const blocks = [];
         this.editor.querySelectorAll('.script-line').forEach(node => {
-            let text = node.textContent;
-            const type = this.editorHandler.getBlockType(node);
-            if (type === constants.ELEMENT_TYPES.PARENTHETICAL) {
-                if (!text.startsWith('(')) text = '(' + text;
-                if (!text.endsWith(')')) text = text + ')';
-            }
-            blocks.push({ type: type, text: text, id: node.dataset.lineId });
+            blocks.push(serializeBlockElement(node));
         });
-        return { meta: this.meta, sceneMeta: this.sceneMeta, blocks: blocks, characters: Array.from(this.characters) };
+        return {
+            meta: this.meta,
+            sceneMeta: this.sceneMeta,
+            blocks: blocks,
+            characters: Array.from(this.characters),
+            boneyard: this.boneyard || []
+        };
     }
 
     typewriterEffect(element, text) {
@@ -1447,14 +1455,29 @@ export class SFSS {
         typeChar();
     }
 
+    // DOM side of the canonical flag round-trip: `sc-centered` class +
+    // data-tight/data-page-break attributes (serializeBlockElement reads the
+    // same three back). Toggle semantics matter on the update path — undo,
+    // collab and re-imports must be able to REMOVE a flag, not just add it.
+    applyBlockFlags(blockEl, blockData) {
+        blockEl.classList.toggle('sc-centered', !!blockData.centered);
+        if (blockData.tight) blockEl.dataset.tight = 'true';
+        else delete blockEl.dataset.tight;
+        if (blockData.pageBreak) blockEl.dataset.pageBreak = 'true';
+        else delete blockEl.dataset.pageBreak;
+    }
+
     async importJSON(data, fromLoad = false, animate = false, activeLineId = null) {
-        if (!data.blocks) return; 
+        if (!data.blocks) return;
         if (data.meta) {
             this.meta = { ...this.meta, ...data.meta };
         }
         if (data.sceneMeta) {
             this.sceneMeta = data.sceneMeta;
         }
+        // Boneyard is replaced wholesale (never merged) so a script without
+        // one can never inherit a previous script's spans.
+        this.boneyard = Array.isArray(data.boneyard) ? data.boneyard : [];
 
         const newBlockMap = new Map(data.blocks.map(b => [b.id, b]));
         const existingBlocks = Array.from(this.editor.querySelectorAll('.script-line'));
@@ -1502,6 +1525,8 @@ export class SFSS {
                     lastChangedBlock = blockEl;
                 }
 
+                this.applyBlockFlags(blockEl, blockData);
+
                 if (previousNode) {
                     if (blockEl.previousElementSibling !== previousNode) {
                         this.editor.insertBefore(blockEl, previousNode.nextSibling);
@@ -1518,7 +1543,8 @@ export class SFSS {
                 }
                 blockEl = this.editorHandler.createBlock(blockData.type, displayText);
                 blockEl.dataset.lineId = blockData.id;
-                
+                this.applyBlockFlags(blockEl, blockData);
+
                 if (previousNode) {
                     this.editor.insertBefore(blockEl, previousNode.nextSibling);
                 } else {

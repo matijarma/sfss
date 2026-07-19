@@ -32,6 +32,8 @@ const APP_SHELL_URLS = [
   'assets/js-mod/GeometryManager.js',
   'assets/js-mod/StorageLogic.js',
   'assets/js-mod/TabGuard.js',
+  'assets/js-mod/FDXSerializer.js',
+  'assets/js-mod/BatonProtocol.js',
   'assets/js-mod/EditorHandler.js',
   'assets/js-mod/PageRenderer.js',
   'assets/js-mod/PrintManager.js',

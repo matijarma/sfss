@@ -217,6 +217,7 @@ ${jsBundle}
             'assets/js-mod/Shortcuts.js',
             'assets/js-mod/GeometryManager.js',
             'assets/js-mod/StorageLogic.js',
+            'assets/js-mod/FDXSerializer.js',
             'assets/js-mod/TabGuard.js',
             'assets/js-mod/IDBHelper.js',
             'assets/js-mod/PageRenderer.js',
@@ -233,7 +234,7 @@ ${jsBundle}
         ];
 
         if (features.media) order.push('assets/js-mod/MediaPlayer.js');
-        if (features.collab) order.push('assets/trystero.min.js', 'assets/js-mod/CollaborationManager.js', 'assets/js-mod/CollabUI.js');
+        if (features.collab) order.push('assets/trystero.min.js', 'assets/js-mod/BatonProtocol.js', 'assets/js-mod/CollaborationManager.js', 'assets/js-mod/CollabUI.js');
 
         order.push('assets/js-mod/PrintManager.js');
         order.push('assets/js-mod/SFSS.js');
