@@ -613,6 +613,127 @@ test('counters: plainText strips markers and [[notes]] from word counts', async 
     assertEqual(words, ['bold', 'word'], 'surviving words');
 });
 
+// ---------- Phase 8: A4 end-to-end ----------
+
+// Fresh GeometryManager over a fake app; used by the paper tests. Callers
+// must restore US_LETTER (the :root --page-* vars are global).
+async function makeGeometry(blocks) {
+    const { GeometryManager } = await import('../../assets/js-mod/GeometryManager.js');
+    return new GeometryManager({ exportToJSONStructure: () => ({ blocks }), sceneMeta: {} });
+}
+
+test('A4 parity: pageCount and per-scene eighths identical on Letter and A4', async () => {
+    await document.fonts.ready;
+    const gm = await makeGeometry(fixtureBlocks());
+    try {
+        const letter = gm.getScenePagination({ fresh: true });
+        assert(letter.pageCount >= 4, `fixture too small: ${letter.pageCount} page(s)`);
+        gm.setPaperSize('A4_EMULATION');
+        assertEqual(gm.renderer.paperConfig.cssSize, 'A4', 'renderer paper switched');
+        const a4 = gm.getScenePagination({ fresh: true });
+        assertEqual(a4.pageCount, letter.pageCount, 'A4 vs Letter page count');
+        assertEqual(a4.scenes.map(s => s.eighths), letter.scenes.map(s => s.eighths), 'per-scene eighths');
+        assertEqual(a4.totalEighths, letter.totalEighths, 'total eighths');
+    } finally { gm.setPaperSize('US_LETTER'); }
+});
+
+test('A4 CSS vars: .page box follows setPaperSize (8.27in ~ 793.92px, back to 816px)', async () => {
+    const gm = await makeGeometry([]);
+    const wrap = document.createElement('div');
+    Object.assign(wrap.style, { position: 'absolute', left: '-99999px', top: '0' });
+    const page = document.createElement('div');
+    page.className = 'page';
+    wrap.appendChild(page);
+    document.body.appendChild(wrap);
+    try {
+        gm.setPaperSize('A4_EMULATION');
+        const rootVars = getComputedStyle(document.documentElement);
+        assertEqual(rootVars.getPropertyValue('--page-width').trim(), '8.27in', ':root --page-width');
+        assertEqual(rootVars.getPropertyValue('--page-pad-bottom').trim(), '1.69in', ':root --page-pad-bottom');
+        const a4 = getComputedStyle(page);
+        const a4W = parseFloat(a4.width);
+        assert(Math.abs(a4W - 793.92) <= 1, `.page width on A4 is ${a4W}px (expected ~793.92px)`);
+        // Live width stays 6.0in: 8.27 - 1.5 - 0.77 (parity margins).
+        const liveW = a4W - parseFloat(a4.paddingLeft) - parseFloat(a4.paddingRight);
+        assert(Math.abs(liveW - 576) <= 1, `A4 live width is ${liveW}px (expected 576px = 6in)`);
+
+        gm.setPaperSize('US_LETTER');
+        const letterW = parseFloat(getComputedStyle(page).width);
+        assert(Math.abs(letterW - 816) <= 1, `.page width on Letter is ${letterW}px (expected 816px)`);
+    } finally { wrap.remove(); gm.setPaperSize('US_LETTER'); }
+});
+
+test('A4 meta round-trip: paperSize survives export -> import; legacy import resets to Letter', async () => {
+    const { SFSS } = await import('../../assets/js-mod/SFSS.js');
+    const { GeometryManager } = await import('../../assets/js-mod/GeometryManager.js');
+
+    // Real SFSS.prototype import/export over a stubbed environment: only the
+    // collaborators importJSON/exportToJSONStructure touch are provided, and
+    // applySettings is narrowed to its Phase 8 geometry-restore line.
+    const makeApp = () => {
+        const app = Object.create(SFSS.prototype);
+        app.meta = {
+            title: '', author: '', contact: '',
+            showTitlePage: false, showSceneNumbers: false, showDate: false,
+            paperSize: 'US_LETTER'
+        };
+        app.sceneMeta = {};
+        app.boneyard = [];
+        app.characters = new Set();
+        app.editor = document.createElement('div');
+        app.treatmentManager = { isActive: false };
+        app.sidebarManager = { updateSceneList: () => {}, updateSidebarHeader: () => {} };
+        app.mediaPlayer = { updatePlaylist: () => {} };
+        app.editorHandler = {
+            createBlock: (type, text) => {
+                const el = document.createElement('div');
+                el.className = `script-line ${type}`;
+                el.textContent = text || '';
+                return el;
+            },
+            getBlockType: (el) => Array.from(el.classList).find(c => c.startsWith('sc-')),
+            setBlockType: (el, type) => { el.className = `script-line ${type}`; },
+            maybeDecorate: () => {}
+        };
+        app.geometry = new GeometryManager(app);
+        app.applySettings = function () {
+            if (this.geometry) this.geometry.setPaperSize(this.meta.paperSize || 'US_LETTER');
+        };
+        return app;
+    };
+
+    const a = makeApp();
+    const b = makeApp();
+    try {
+        await a.importJSON({
+            meta: { title: 'Round Trip' },
+            blocks: [
+                { id: 'rt1', type: 'sc-slug', text: 'INT. ROUNDTRIP - DAY' },
+                { id: 'rt2', type: 'sc-action', text: 'Beat.' }
+            ]
+        }, true);
+        assertEqual(a.meta.paperSize, 'US_LETTER', 'meta without paperSize defaults to US Letter');
+
+        a.meta.paperSize = 'A4_EMULATION';
+        const exported = JSON.parse(JSON.stringify(a.exportToJSONStructure()));
+        assertEqual(exported.meta.paperSize, 'A4_EMULATION', 'export carries paperSize');
+
+        await b.importJSON(exported, true);
+        assertEqual(b.meta.paperSize, 'A4_EMULATION', 'import restores paperSize');
+        assertEqual(b.geometry.renderer.paperConfig.cssSize, 'A4', 'geometry follows imported paperSize');
+        assertEqual(b.editor.querySelectorAll('.script-line').length, 2, 'blocks imported');
+
+        // Legacy scripts (no paperSize in meta) reset to US Letter even when
+        // the previously open script was A4.
+        delete exported.meta.paperSize;
+        await b.importJSON(exported, true);
+        assertEqual(b.meta.paperSize, 'US_LETTER', 'legacy import defaults to US Letter');
+        assertEqual(b.geometry.renderer.paperConfig.cssSize, 'letter', 'geometry reset to Letter');
+    } finally {
+        (await makeGeometry([])).setPaperSize('US_LETTER');
+    }
+});
+
 // ---------- runner ----------
 async function run() {
     const ul = document.getElementById('results');

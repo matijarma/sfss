@@ -71,8 +71,14 @@ export const PAPER_CONFIGS = {
         name: "A4 (US Emulation)",
         cssSize: "A4",
         dimensions: { width: 8.27, height: 11.69 },
-        margins: { top: 1.0, bottom: 1.7, left: 1.5, right: 0.8 },
-        liveArea: { width: 5.97, height: 8.99 }
+        // Parity deviation from the spec's rounded margin figures (1.7 / 0.8):
+        // bottom 1.69in and right 0.77in make the live text area EXACTLY
+        // 6.0in x 9.0in — identical to US Letter, so pagination (page count,
+        // splits, eighths) is the same on both papers. The spec's own
+        // constant-live-area axiom ("The Unit ... must remain constant")
+        // outranks its rounded literals; the physical difference is < 1mm.
+        margins: { top: 1.0, bottom: 1.69, left: 1.5, right: 0.77 },
+        liveArea: { width: 6.0, height: 9.0 }
     }
 };
 

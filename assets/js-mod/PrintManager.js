@@ -84,6 +84,19 @@ export class PrintManager {
             }
         });
 
+        // Paper size (Letter/A4) is per-script meta, not print-local config:
+        // route through app.setPaperSize so Page View, geometry and print
+        // all switch together; the preview re-renders on 'sfss-geometry'
+        // cadence via scheduleRender.
+        this.controls.addEventListener('click', (e) => {
+            const paperBtn = e.target.closest('.paper-size-toggle');
+            if (!paperBtn || paperBtn.disabled) return;
+            this.app.setPaperSize(paperBtn.dataset.paperSize).then(() => {
+                this.syncPaperSizeToggle();
+                this.scheduleRender(50);
+            });
+        });
+
         this.controls.addEventListener('click', (e) => {
             const btn = e.target.closest('.print-toggle');
             if (!btn || btn.disabled || btn.classList.contains('disabled')) return;
@@ -204,7 +217,17 @@ export class PrintManager {
             }
         }
         this.syncToggleGroups();
+        this.syncPaperSizeToggle();
         this.syncReportCharacterSelect();
+    }
+
+    // Reflects meta.paperSize (per-script, owned by SFSS) on the Letter/A4
+    // toggle — deliberately outside the print-local config plumbing.
+    syncPaperSizeToggle() {
+        const active = this.app.meta.paperSize || 'US_LETTER';
+        this.controls.querySelectorAll('.paper-size-toggle').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.paperSize === active);
+        });
     }
 
     scheduleRender(delay = 100) {
@@ -537,8 +560,10 @@ export class PrintManager {
             node.style.setProperty('--treat-section-gap', `${profile.sectionGapPx}px`);
             node.style.setProperty('--treat-visual-floor', `${profile.visualFloorPx}px`);
             node.style.setProperty('--treat-column-gap', `${profile.columnGapPx}px`);
-            node.style.setProperty('--page-width', `${profile.pageWidthIn}in`);
-            node.style.setProperty('--page-height', `${profile.pageHeightIn}in`);
+            // NOTE: --page-width/--page-height are NOT written here. Those
+            // names belong to GeometryManager.applyGeometryCssVariables()
+            // (the screenplay .page box for the active paper size); treatment
+            // pages size themselves via --treat-page-* and inline styles.
         });
     }
 
@@ -690,8 +715,13 @@ export class PrintManager {
 
     getTreatmentProfile(layout, isLandscape, sides = 'single') {
         const inch = 96;
-        const pageWidthIn = layout === 'booklet' ? 5.5 : (isLandscape ? 11 : 8.5);
-        const pageHeightIn = layout === 'booklet' ? 8.5 : (isLandscape ? 8.5 : 11);
+        // Sheet dimensions follow the active paper config (8.5x11 US Letter
+        // or 8.27x11.69 A4); booklet = half sheet, landscape = rotated.
+        const paper = this.app.pageRenderer?.paperConfig || constants.PAPER_CONFIGS.US_LETTER;
+        const sheetW = paper.dimensions.width;
+        const sheetH = paper.dimensions.height;
+        const pageWidthIn = layout === 'booklet' ? sheetH / 2 : (isLandscape ? sheetH : sheetW);
+        const pageHeightIn = layout === 'booklet' ? sheetW : (isLandscape ? sheetW : sheetH);
         const paddingIn = layout === 'booklet' ? 0.55 : 0.7;
         const sectionGapPx = layout === 'booklet' ? 10 : 14;
 
@@ -722,7 +752,7 @@ export class PrintManager {
             columnGapPx: sectionGapPx,
             visualFloorPx,
             sides,
-            thumbBase: { width: 8.5 * inch, height: 11 * inch }
+            thumbBase: { width: sheetW * inch, height: sheetH * inch }
         };
     }
 
@@ -1621,11 +1651,14 @@ export class PrintManager {
         clone.classList.add('thumb-page', 'embedded-scene-page');
         const wrapper = document.createElement('div');
         wrapper.className = 'scene-page-clone';
-        const baseWidth = 8.5 * 96;
+        // Embedded script pages are .page clones: their box follows the
+        // active paper (via the --page-* vars), so the scaling math must too.
+        const paper = this.app.pageRenderer?.paperConfig || constants.PAPER_CONFIGS.US_LETTER;
+        const baseWidth = paper.dimensions.width * 96;
         const availableWidth = Math.max(1, profile.pageWidthPx - profile.paddingPx * 2);
         const scale = Math.min(1, availableWidth / baseWidth);
-        const scaledWidthIn = 8.5 * scale;
-        const scaledHeightIn = 11 * scale;
+        const scaledWidthIn = paper.dimensions.width * scale;
+        const scaledHeightIn = paper.dimensions.height * scale;
         wrapper.style.width = `${scaledWidthIn}in`;
         wrapper.style.height = `${scaledHeightIn}in`;
         wrapper.style.transform = `scale(${scale})`;
@@ -1740,14 +1773,18 @@ export class PrintManager {
         clone.style.boxShadow = 'none';
 
         const isLandscape = clone.classList.contains('landscape');
-        const fallbackWidth = isLandscape ? 11 : 8.5;
-        const fallbackHeight = isLandscape ? 8.5 : 11;
+        // Script .page clones carry no inline size — their box is the active
+        // paper's, so the fallbacks (and the half-sheet slot width) must
+        // follow the paper config, not US Letter literals.
+        const paper = this.app.pageRenderer?.paperConfig || constants.PAPER_CONFIGS.US_LETTER;
+        const fallbackWidth = isLandscape ? paper.dimensions.height : paper.dimensions.width;
+        const fallbackHeight = isLandscape ? paper.dimensions.width : paper.dimensions.height;
         const pageWidthIn = parseFloat(clone.style.width) || fallbackWidth;
         const pageHeightIn = parseFloat(clone.style.height) || fallbackHeight;
         clone.style.width = `${pageWidthIn}in`;
         clone.style.height = `${pageHeightIn}in`;
 
-        const targetWidthIn = 5.5;
+        const targetWidthIn = paper.dimensions.height / 2;
         const scale = Math.min(1, targetWidthIn / pageWidthIn);
         wrapper.style.transform = `scale(${scale})`;
         wrapper.style.width = `${pageWidthIn}in`;
@@ -1911,8 +1948,12 @@ export class PrintManager {
         const isReport = this.mode === 'report';
         const isLandscape = isTreatment && this.config.treatment.orientation === 'landscape';
         
-        let sizeRule = 'letter portrait';
-        if (isBooklet || isLandscape) sizeRule = 'letter landscape';
+        // Dynamic @page (R4): the physical sheet follows the active paper
+        // config ("letter" or "A4"), so the print dialog preselects the
+        // script's paper instead of hardcoded US Letter.
+        const paper = this.app.pageRenderer?.paperConfig || constants.PAPER_CONFIGS.US_LETTER;
+        let sizeRule = `${paper.cssSize} portrait`;
+        if (isBooklet || isLandscape) sizeRule = `${paper.cssSize} landscape`;
 
         const css = `
             @page { size: ${sizeRule}; margin: 0; }

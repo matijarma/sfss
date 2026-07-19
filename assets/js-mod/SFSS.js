@@ -54,7 +54,10 @@ export class SFSS {
         this.characters = new Set();
         this.meta = {
             title: '', author: '', contact: '',
-            showTitlePage: true, showSceneNumbers: false, showDate: false
+            showTitlePage: true, showSceneNumbers: false, showDate: false,
+            // Per-script paper size ('US_LETTER' | 'A4_EMULATION') — travels
+            // with the export JSON like every other meta field.
+            paperSize: 'US_LETTER'
         };
         this.sceneMeta = {};
         // Multi-line /* boneyard */ spans lifted out of Fountain imports:
@@ -1235,9 +1238,27 @@ export class SFSS {
         this.updateSceneNumbersInEditor(); 
     }
 
+    // Switches the per-script paper size (meta.paperSize) and pushes it
+    // through the shared geometry engine: CSS --page-* vars, cache
+    // invalidation and the 'sfss-geometry' broadcast all happen inside
+    // GeometryManager.setPaperSize; persistSettings repaginates Page View
+    // and saves. No-op for unknown names or when the paper is unchanged.
+    async setPaperSize(name) {
+        if (!constants.PAPER_CONFIGS[name]) return;
+        const current = this.meta.paperSize || 'US_LETTER';
+        if (current === name && this.geometry.renderer.paperConfig === constants.PAPER_CONFIGS[name]) return;
+        this.meta.paperSize = name;
+        this.geometry.setPaperSize(name);
+        this.isDirty = true;
+        await this.persistSettings();
+    }
+
     applySettings() {
         document.title = this.meta.title || 'Untitled Screenplay';
         this.sidebarManager.updateSidebarHeader();
+        // Restore the per-script paper on load/import (GeometryManager
+        // no-ops when the paper is already active).
+        if (this.geometry) this.geometry.setPaperSize(this.meta.paperSize || 'US_LETTER');
         
         this.editor.classList.toggle('show-scene-numbers', this.meta.showSceneNumbers);
         this.pageViewContainer.classList.toggle('show-scene-numbers', this.meta.showSceneNumbers);
@@ -1510,6 +1531,9 @@ export class SFSS {
         if (!data.blocks) return;
         if (data.meta) {
             this.meta = { ...this.meta, ...data.meta };
+            // paperSize is per-script: absence in the incoming meta means US
+            // Letter, never the previously open script's paper.
+            if (!data.meta.paperSize) this.meta.paperSize = 'US_LETTER';
         }
         if (data.sceneMeta) {
             this.sceneMeta = data.sceneMeta;

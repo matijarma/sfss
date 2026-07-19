@@ -673,7 +673,33 @@ export class SidebarManager {
         document.getElementById('meta-title-popup').value = this.app.meta.title;
         document.getElementById('meta-author-popup').value = this.app.meta.author;
         document.getElementById('meta-contact-popup').value = this.app.meta.contact;
+        this._ensurePaperSizeSelect().value = this.app.meta.paperSize || 'US_LETTER';
         document.getElementById('script-meta-popup').classList.remove('hidden');
+    }
+
+    // Injects the per-script paper-size <select> into the script-meta popup
+    // on first open (options come straight from Constants.PAPER_CONFIGS).
+    _ensurePaperSizeSelect() {
+        let select = document.getElementById('meta-paper-size-popup');
+        if (select) return select;
+        const wrap = document.createElement('div');
+        const label = document.createElement('label');
+        label.className = 'settings-label';
+        label.textContent = 'Paper Size';
+        select = document.createElement('select');
+        select.id = 'meta-paper-size-popup';
+        select.className = 'settings-input';
+        Object.entries(constants.PAPER_CONFIGS).forEach(([key, cfg]) => {
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = cfg.name;
+            select.appendChild(opt);
+        });
+        wrap.appendChild(label);
+        wrap.appendChild(select);
+        const column = document.querySelector('#script-meta-popup .popup-flex-column-gap');
+        (column || document.getElementById('script-meta-popup')).appendChild(wrap);
+        return select;
     }
 
     closeScriptMetaPopup() {
@@ -684,7 +710,13 @@ export class SidebarManager {
         this.app.meta.title = document.getElementById('meta-title-popup').value;
         this.app.meta.author = document.getElementById('meta-author-popup').value;
         this.app.meta.contact = document.getElementById('meta-contact-popup').value;
-        
+
+        // Paper size routes through setPaperSize (geometry + CSS vars +
+        // repagination); a no-op when unchanged, and the save below persists
+        // it with the rest of the meta either way.
+        const paperSelect = document.getElementById('meta-paper-size-popup');
+        if (paperSelect) await this.app.setPaperSize(paperSelect.value);
+
         this.app.isDirty = true;
         await this.app.save();
 

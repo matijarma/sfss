@@ -563,6 +563,16 @@
                                 <option value="booklet">Booklet (Imposed)</option>
                             </select>
                         </div>
+                        <!-- Paper size is a per-script setting (meta.paperSize), NOT
+                             print-local config: it routes through app.setPaperSize so
+                             Page View and every geometry consumer match the print. -->
+                        <div class="prepprinttoggles mt-1">
+                            <span class="text-sm">Paper:</span>
+                            <div class="toggle-group">
+                                <button class="toggle-btn paper-size-toggle" data-paper-size="US_LETTER" title="US Letter (8.5 × 11 in)">Letter</button>
+                                <button class="toggle-btn paper-size-toggle" data-paper-size="A4_EMULATION" title="A4 (210 × 297 mm) — US text geometry, identical pagination">A4</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="settings-section border-top-light pt-1 mt-1">

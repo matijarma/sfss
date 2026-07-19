@@ -32,15 +32,19 @@ div#printingdiv { display: none }
     font-size: 12pt;
     line-height: 1.0;
 
-    /* Default US Letter Dimensions */
-    width: 8.5in;
-    height: 11in;
+    /* Physical page box for the ACTIVE paper size: GeometryManager writes
+       the --page-* variables on :root (US Letter at boot, A4 emulation when
+       meta.paperSize says so). Fallbacks = US Letter. The live text area is
+       6.0in x 9.0in on EVERY paper (parity margins in Constants), so
+       pagination is identical across papers. */
+    width: var(--page-width, 8.5in);
+    height: var(--page-height, 11in);
 
     /* Strict Screenplay Margins */
-    padding-top: 1.0in;
-    padding-bottom: 1.0in;
-    padding-left: 1.5in;
-    padding-right: 1.0in;
+    padding-top: var(--page-pad-top, 1.0in);
+    padding-bottom: var(--page-pad-bottom, 1.0in);
+    padding-left: var(--page-pad-left, 1.5in);
+    padding-right: var(--page-pad-right, 1.0in);
 
     box-sizing: border-box;
     margin: 0 auto 2rem auto;
@@ -1139,8 +1143,9 @@ div#printingdiv { display: none }
         border: none !important;
     }
     .report-print-page .embedded-scene-page {
-        width: 8.5in !important;
-        height: 11in !important;
+        /* Embedded .page clones follow the active paper size */
+        width: var(--page-width, 8.5in) !important;
+        height: var(--page-height, 11in) !important;
         page-break-after: auto !important;
         break-after: auto !important;
     }

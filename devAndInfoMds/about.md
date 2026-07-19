@@ -23,11 +23,12 @@ SFSS features a custom pagination and formatting engine (`PageRenderer.js`) tune
 
 ### 📝 Writing Experience
 *   **Context-Aware Shortcuts:**
-    *   `Enter`/`Tab`: Per-element transitions are configurable; a cycle shortcut rotates element classes.
+    *   `Enter`/`Tab`: Per-element transitions are configurable; `Ctrl+E` cycles the element type in place; `Ctrl+S` saves.
+*   **Fountain Authoring:** Forces (`.slug`, `@Name`, `!action`, `> transition`, `> centered <`), inline `**bold**` / `*italic*` / `_underline_` (Ctrl+B/I/U) with visible dimmed markers, and `[[notes]]` that never print or skew counts.
 *   **Smart Autocomplete:** Character suggestions, suffix completions, and "next speaker" hints.
 *   **Focus Controls:** Sidebar auto-hide, dropdown/horizontal type selectors, and page-view toggle.
 *   **Dark Mode:** Built-in high-contrast dark theme for late-night writing sessions.
-*   **Print Prep Modal:** One-stop modal for printing scripts, treatments, or reports with facing/booklet layouts, watermarks, and scene-aware pagination.
+*   **Print Prep Modal:** One-stop modal for printing scripts, treatments, or reports with facing/booklet layouts, watermarks, Letter/A4 paper, and scene-aware pagination.
 
 ### 📋 Treatment & Planning Mode
 A dedicated **Treatment Mode** allows you to outline and structure your story before writing the script:

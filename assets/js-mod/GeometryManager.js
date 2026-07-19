@@ -97,7 +97,12 @@ export class GeometryManager {
         }, 300);
     }
 
+    // Switches the shared renderer's paper, rewrites the --page-* CSS
+    // variables and rebroadcasts geometry. No-op when the paper is unchanged
+    // (applySettings calls this on every load/import).
     setPaperSize(name) {
+        const config = constants.PAPER_CONFIGS[name];
+        if (!config || config === this.renderer.paperConfig) return;
         this.renderer.setPaperSize(name);
         this.invalidate();
         this.applyGeometryCssVariables();
@@ -129,5 +134,18 @@ export class GeometryManager {
             style.setProperty(`--sc-width-${name}`, toCss(indent.width));
         });
         style.setProperty('--sc-line', `${this.renderer.lineHeightPx}px`);
+
+        // Physical page box for the ACTIVE paper (A4 end-to-end): print.css
+        // .page consumes these via var(--page-*, <US Letter fallback>), so
+        // Page View, print preview and the renderer's offscreen layout root
+        // all switch papers together. The live area stays 6.0in x 9.0in on
+        // every paper (parity margins in Constants.PAPER_CONFIGS).
+        const paper = this.renderer.paperConfig;
+        style.setProperty('--page-width', `${paper.dimensions.width}in`);
+        style.setProperty('--page-height', `${paper.dimensions.height}in`);
+        style.setProperty('--page-pad-top', `${paper.margins.top}in`);
+        style.setProperty('--page-pad-right', `${paper.margins.right}in`);
+        style.setProperty('--page-pad-bottom', `${paper.margins.bottom}in`);
+        style.setProperty('--page-pad-left', `${paper.margins.left}in`);
     }
 }

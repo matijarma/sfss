@@ -10,7 +10,8 @@ The application is a writing studio built around three primary modes: **Write** 
 
 -   ### 📝 **Writing & Editing**
     -   **Industry Formatting:** Custom `PageRenderer.js` virtual pagination targets 12pt Courier, standard margins, scene numbers, and print-oriented spacing.
-    -   **Contextual Shortcuts:** `Enter`/`Tab` transitions are configurable per element; cycling shortcut toggles element types in place.
+    -   **Contextual Shortcuts:** `Enter`/`Tab` transitions are configurable per element; `Ctrl+E` cycles element types in place; `Ctrl+S` saves.
+    -   **Fountain Authoring:** forces (`.slug`, `@Name`, `!action`, `> transition`, `> centered <`), inline `**bold**`/`*italic*`/`_underline_` via Ctrl+B/I/U (markers visible in the editor, hidden in output), `[[notes]]` excluded from print and counts.
     -   **Page View:** Switchable paginated view mirrors printed pages; print uses the same geometry.
     -   **Smart Autocomplete:** Character-name autocomplete + suffix suggestions; predictive “suggested character” hints.
     -   **Customizable Keymap:** Per-element `Enter`/`Tab` mappings persisted to LocalStorage; theme toggle.
@@ -45,9 +46,9 @@ The application is a writing studio built around three primary modes: **Write** 
 
 ## 📌 Current State & Limitations
 -   **Local-first only:** Scene images and YouTube track links live in the browser (IndexedDB/LocalStorage) and are **not exported** with `.fdx/.fountain/.txt`; backups should use `.json`.
--   **Autosave model:** Content writes to LocalStorage immediately and is debounced into IndexedDB; power-loss between writes can leave LocalStorage ahead of IDB until the next save.
+-   **Autosave model:** Content writes to LocalStorage immediately and is debounced into IndexedDB, with an unload-time flush and a single-writer lock across browser tabs (a second tab opens read-only with a takeover option).
 -   **Collaboration:** Baton-passing model — exactly one writer at a time; peers without the baton are read-only and mobile peers join as spectators. Sessions speak collab protocol v2, so **both peers must run an up-to-date SFSS** (an older client's messages are ignored with a reload prompt). **Scene images stay on their author's device**: `sceneMeta` syncs across the session but the image blobs never leave the browser that added them — the other peer sees the rest of the scene data and missing images render gracefully. No app-layer encryption beyond WebRTC DTLS-SRTP. When a session empties out it waits 60 seconds for a reconnection before ending.
--   **Pagination heuristics:** `PageRenderer` enforces 12 pt Courier geometry but uses JS height measurement; complex orphan/widow cases may still need polish.
+-   **Pagination:** one shared engine paginates Page View, print, reports, and FDX export identically (orphan/widow rules, `(MORE)`/`(CONT'D)`, scene-heading carry), covered by a browser test suite. Letter and A4 share identical pagination by design (constant live text area).
 -   **Media playback:** Scene music relies on YouTube oEmbed/iframe; it requires network access even though the rest of the app is offline-capable. Portable builds replace metadata playback with clickable links.
 -   **Portable build scope:** The single-file export removes Collaboration and the Media Player for `file://` compatibility; core editor/print/treatment/report features remain.
 
