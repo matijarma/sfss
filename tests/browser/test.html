@@ -20,6 +20,11 @@
   Adding tests (later phases): append entries to the REGISTRY array below with
   test('name', async () => { ... }). Nothing else needs to change.
 -->
+<!-- Pagination tests measure real .page geometry: load the same sheets the app
+     loads (same cascade order: fonts -> editor -> print). -->
+<link rel="stylesheet" href="../../assets/googlefonts.css">
+<link rel="stylesheet" href="../../assets/css/editor.css">
+<link rel="stylesheet" href="../../assets/css/print.css">
 <style>
   body { font-family: monospace; margin: 1.5rem; background: #fff; color: #111; }
   ul#results { list-style: none; padding: 0; }
@@ -93,6 +98,234 @@ test('DOMParser parses styled-runs.fdx and finds styled Text runs', async () => 
     assertEqual(styled[0].textContent, 'SCREAMS', 'bold run text');
 });
 
+// ---------- Phase 3: pagination (PageRenderer) ----------
+
+// Mirrors PageRenderer's CONTD_RE semantics: trailing "(CONT'D)" on a cue.
+const CONTD_RE = /\(CONT'D\)\s*$/i;
+let blockSeq = 0;
+
+function makeBlock(type, text) {
+    const div = document.createElement('div');
+    div.className = `script-line ${type}`;
+    div.dataset.lineId = `t${++blockSeq}`;
+    div.textContent = text;
+    return div;
+}
+
+// Deterministic filler prose (no randomness — the determinism test depends on it).
+function loremWords(n, seed = 1) {
+    const bank = ['the', 'quick', 'brown', 'fox', 'jumps', 'over', 'a', 'lazy', 'dog',
+        'with', 'remarkable', 'speed', 'and', 'grace', 'while', 'night', 'falls',
+        'slowly', 'across', 'this', 'valley', 'floor'];
+    const out = [];
+    for (let i = 0; i < n; i++) out.push(bank[(i * 7 + seed) % bank.length]);
+    return out.join(' ');
+}
+
+// Renders `blocks` through a fresh PageRenderer into an on-DOM offscreen stage.
+// Callers must stage.remove() in a finally block.
+async function paginate(blocks) {
+    await document.fonts.ready; // font swap mid-run would skew measurements
+    const { PageRenderer } = await import('../../assets/js-mod/PageRenderer.js');
+    const renderer = new PageRenderer();
+    const stage = document.createElement('div');
+    Object.assign(stage.style, { position: 'absolute', left: '-99999px', top: '0', width: '8.5in' });
+    document.body.appendChild(stage);
+    renderer.render(blocks, stage, {});
+    const pages = Array.from(stage.querySelectorAll('.page'));
+    return { renderer, stage, pages };
+}
+
+const wrappersOf = (pages) => pages.map(p => p.querySelector('.content-wrapper'));
+const nonSynthetic = (wrapper) => Array.from(wrapper.children).filter(el => !el.hasAttribute('data-synthetic'));
+const joinText = (els) => els.map(el => el.textContent.trim()).filter(Boolean).join(' ');
+
+// Every element must end within the live area (contentHeightPx + 1px epsilon,
+// + 0.5px for fractional client rects). Checked against the page origin so
+// margins collapsing through the content wrapper are included.
+function assertNoOverflow(renderer, pages) {
+    const limit = renderer.contentHeightPx + 1.5;
+    pages.forEach((page, pi) => {
+        const liveTop = page.getBoundingClientRect().top + renderer.marginTopPx;
+        for (const el of page.querySelector('.content-wrapper').children) {
+            const bottom = el.getBoundingClientRect().bottom - liveTop;
+            assert(bottom <= limit,
+                `page ${pi + 1}: "${el.textContent.slice(0, 40)}" bottom ${bottom.toFixed(1)}px > ${limit}px`);
+        }
+    });
+}
+
+function assertNoPageEndsWithSlug(pages) {
+    wrappersOf(pages).forEach((w, i) => {
+        const last = w.lastElementChild;
+        assert(last && !last.classList.contains('sc-slug'), `page ${i + 1} ends with a scene heading`);
+    });
+}
+
+function dialogueFixture() {
+    return [
+        makeBlock('sc-slug', 'INT. WAREHOUSE - NIGHT'),
+        makeBlock('sc-character', 'JOHN'),
+        makeBlock('sc-dialogue', loremWords(600))
+    ];
+}
+
+test('pagination: 600-word dialogue paginates lossless, nothing overflows', async () => {
+    const blocks = dialogueFixture();
+    const source = joinText(blocks);
+    const { renderer, stage, pages } = await paginate(blocks);
+    try {
+        assert(pages.length >= 2, `expected >= 2 pages, got ${pages.length}`);
+        const rendered = joinText(wrappersOf(pages).flatMap(nonSynthetic));
+        assert(rendered === source,
+            `non-synthetic text join differs from source (${rendered.length} vs ${source.length} chars)`);
+        assertNoOverflow(renderer, pages);
+        assertNoPageEndsWithSlug(pages);
+    } finally { stage.remove(); }
+});
+
+test('pagination: ~3-page action paginates lossless, nothing overflows', async () => {
+    const blocks = [
+        makeBlock('sc-slug', 'EXT. DESERT - DAY'),
+        makeBlock('sc-action', loremWords(1800, 5))
+    ];
+    const source = joinText(blocks);
+    const { renderer, stage, pages } = await paginate(blocks);
+    try {
+        assert(pages.length >= 3, `expected >= 3 pages, got ${pages.length}`);
+        const rendered = joinText(wrappersOf(pages).flatMap(nonSynthetic));
+        assert(rendered === source,
+            `non-synthetic text join differs from source (${rendered.length} vs ${source.length} chars)`);
+        assertNoOverflow(renderer, pages);
+        assertNoPageEndsWithSlug(pages);
+    } finally { stage.remove(); }
+});
+
+test('pagination: dialogue splits end with (MORE), continuations open with (CONT\'D)', async () => {
+    const { stage, pages } = await paginate(dialogueFixture());
+    try {
+        assert(pages.length >= 2, `expected >= 2 pages, got ${pages.length}`);
+        const wrappers = wrappersOf(pages);
+        wrappers.forEach((w, i) => {
+            if (i < wrappers.length - 1) {
+                const last = w.lastElementChild;
+                assert(last.classList.contains('sc-more'), `page ${i + 1} does not end with .sc-more`);
+                assert(last.dataset.synthetic === 'true', `(MORE) on page ${i + 1} not marked synthetic`);
+                assert(last.textContent === '(MORE)', `unexpected (MORE) text: "${last.textContent}"`);
+            }
+            if (i > 0) {
+                const first = w.firstElementChild;
+                assert(first.dataset.synthetic === 'true', `continuation cue on page ${i + 1} not synthetic`);
+                assert(CONTD_RE.test(first.textContent), `page ${i + 1} does not open with a (CONT'D) cue`);
+                assert(first.textContent.startsWith('JOHN'), `continuation cue lost the character name`);
+            }
+        });
+    } finally { stage.remove(); }
+});
+
+test('pagination: unsplittable dialogue bumps whole with zero (CONT\'D)', async () => {
+    // 51 lines of slug+filler leave ~2 lines: too little for cue + 2 lines +
+    // (MORE), so the block must move whole — and must NOT gain a (CONT'D).
+    const blocks = [makeBlock('sc-slug', 'INT. ROOM - DAY')];
+    for (let i = 0; i < 25; i++) blocks.push(makeBlock('sc-action', `Filler line ${i + 1}.`));
+    blocks.push(makeBlock('sc-character', 'JOHN'));
+    blocks.push(makeBlock('sc-dialogue', loremWords(40, 2)));
+    const { stage, pages } = await paginate(blocks);
+    try {
+        assertEqual(pages.length, 2, 'page count');
+        assertEqual(stage.querySelectorAll('.sc-more').length, 0, '(MORE) count');
+        const contd = Array.from(stage.querySelectorAll('.content-wrapper > *'))
+            .filter(el => CONTD_RE.test(el.textContent));
+        assertEqual(contd.length, 0, "(CONT'D) count");
+        const first = wrappersOf(pages)[1].firstElementChild;
+        assertEqual(first.textContent, 'JOHN', 'bumped cue text');
+        assert(!first.hasAttribute('data-synthetic'), 'bumped cue must not be synthetic');
+    } finally { stage.remove(); }
+});
+
+test('pagination: page breaks before a slug that cannot carry 2 lines', async () => {
+    // 25 one-line actions leave ~3 lines: slug + 2-line probe cannot fit,
+    // so the break lands BEFORE the slug.
+    const blocks = [];
+    for (let i = 0; i < 25; i++) blocks.push(makeBlock('sc-action', `Filler line ${i + 1}.`));
+    blocks.push(makeBlock('sc-slug', 'INT. BASEMENT - NIGHT'));
+    blocks.push(makeBlock('sc-character', 'MARA'));
+    blocks.push(makeBlock('sc-dialogue', loremWords(60, 3)));
+    const { stage, pages } = await paginate(blocks);
+    try {
+        assertEqual(pages.length, 2, 'page count');
+        assertNoPageEndsWithSlug(pages);
+        const p2 = wrappersOf(pages)[1];
+        assert(p2.firstElementChild.classList.contains('sc-slug'), 'page 2 must open with the slug');
+    } finally { stage.remove(); }
+});
+
+test('pagination: slug stranded by a bumped block is carried to the next page', async () => {
+    // 24 filler lines leave room for slug + exactly 2 lines (probe passes), but
+    // the dialogue then needs cue + 2 lines + (MORE) — it bumps whole, and the
+    // slug must travel with it instead of dangling as the last line.
+    const blocks = [];
+    for (let i = 0; i < 24; i++) blocks.push(makeBlock('sc-action', `Filler line ${i + 1}.`));
+    blocks.push(makeBlock('sc-slug', 'INT. BASEMENT - NIGHT'));
+    blocks.push(makeBlock('sc-character', 'MARA'));
+    blocks.push(makeBlock('sc-dialogue', loremWords(60, 4)));
+    const { stage, pages } = await paginate(blocks);
+    try {
+        assertEqual(pages.length, 2, 'page count');
+        assertNoPageEndsWithSlug(pages);
+        const p2 = wrappersOf(pages)[1];
+        assert(p2.firstElementChild.classList.contains('sc-slug'), 'page 2 must open with the carried slug');
+        assertEqual(stage.querySelectorAll('.sc-more').length, 0, '(MORE) count');
+        assert(!CONTD_RE.test(p2.children[1].textContent), 'carried block must not gain (CONT\'D)');
+    } finally { stage.remove(); }
+});
+
+test('pagination: no split fragment is shorter than 2 lines (widow rule)', async () => {
+    // Both fixtures split a single long source node, so every rendered
+    // dialogue/action element is a split fragment and must be >= 2 lines.
+    for (const [blocks, cls] of [
+        [dialogueFixture(), '.sc-dialogue'],
+        [[makeBlock('sc-slug', 'EXT. DESERT - DAY'), makeBlock('sc-action', loremWords(1800, 7))], '.sc-action']
+    ]) {
+        const { renderer, stage, pages } = await paginate(blocks);
+        try {
+            assert(pages.length >= 2, `expected a split, got ${pages.length} page(s)`);
+            const minPx = 2 * renderer.lineHeightPx - 1;
+            stage.querySelectorAll(`.content-wrapper > ${cls}`).forEach(el => {
+                assert(el.offsetHeight >= minPx,
+                    `${cls} fragment is ${el.offsetHeight}px (< 2 lines): "${el.textContent.slice(0, 40)}"`);
+            });
+        } finally { stage.remove(); }
+    }
+});
+
+test('pagination: rendering is deterministic', async () => {
+    const blocks = dialogueFixture();
+    const a = await paginate(blocks);
+    const htmlA = a.stage.innerHTML;
+    a.stage.remove();
+    const b = await paginate(blocks);
+    const htmlB = b.stage.innerHTML;
+    b.stage.remove();
+    assert(htmlA === htmlB, 'two renders of the same source produced different DOM');
+});
+
+test('pagination: 10000-word action paginates under 1500ms', async () => {
+    const blocks = [
+        makeBlock('sc-slug', 'EXT. WASTELAND - DAY'),
+        makeBlock('sc-action', loremWords(10000, 11))
+    ];
+    await document.fonts.ready;
+    const t0 = performance.now();
+    const { stage, pages } = await paginate(blocks);
+    const ms = Math.round(performance.now() - t0);
+    try {
+        window.__paginationPerfMs = ms;
+        assert(pages.length >= 10, `expected >= 10 pages, got ${pages.length}`);
+        assert(ms < 1500, `pagination took ${ms}ms (budget 1500ms)`);
+    } finally { stage.remove(); }
+});
+
 // ---------- runner ----------
 async function run() {
     const ul = document.getElementById('results');
@@ -112,7 +345,9 @@ async function run() {
     }
     const passed = window.__results.filter(r => r.ok).length;
     const failed = window.__results.length - passed;
-    document.getElementById('summary').textContent = `${passed} passed, ${failed} failed`;
+    let summary = `${passed} passed, ${failed} failed`;
+    if (window.__paginationPerfMs != null) summary += ` | 10k-word pagination: ${window.__paginationPerfMs}ms`;
+    document.getElementById('summary').textContent = summary;
     document.title = failed ? 'FAIL' : 'PASS';
     document.body.dataset.done = '1';
 }

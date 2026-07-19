@@ -90,7 +90,7 @@ export class PageRenderer {
                 const tryNodes = probe ? [...nodes, probe] : nodes;
                 let placed = this._tryPlace(contentWrapper, tryNodes);
                 if (!placed && contentWrapper.childElementCount > 0) {
-                    newPage();
+                    this._breakPage(contentWrapper, newPage);
                     placed = this._tryPlace(contentWrapper, tryNodes);
                 }
                 if (placed) {
@@ -111,7 +111,7 @@ export class PageRenderer {
                 if (!split && contentWrapper.childElementCount > 0) {
                     // Not enough room to split here: bump the WHOLE block to the
                     // next page, unchanged — bumped blocks never get (CONT'D) (R6).
-                    newPage();
+                    this._breakPage(contentWrapper, newPage);
                     placed = this._tryPlace(contentWrapper, nodes);
                     if (placed) continue;
                     split = this._splitDialogue(contentWrapper, nodes);
@@ -143,7 +143,7 @@ export class PageRenderer {
                 ? this._splitTextNode(contentWrapper, [], nodes[0], [])
                 : { success: false };
             if (!split.success && contentWrapper.childElementCount > 0) {
-                newPage();
+                this._breakPage(contentWrapper, newPage);
                 placed = this._tryPlace(contentWrapper, nodes);
                 if (placed) continue;
                 if (nodes.length === 1) {
@@ -236,19 +236,40 @@ export class PageRenderer {
     }
 
     // Bottom edge of `node` relative to the top of the page's live area.
-    // The content wrapper is NOT a positioned element, so offsetTop is relative
-    // to the .page (position: relative). Measuring against the page origin also
-    // catches top margins that collapse through the (padding-less) wrapper.
+    // Walks the offset chain up to the .page (position: relative), so it is
+    // correct whether or not .content-wrapper is itself positioned (layout.css
+    // makes it position: relative), and it measures against the page origin —
+    // catching top margins that collapse through the (padding-less) wrapper.
     _contentBottom(contentWrapper, node) {
         const page = contentWrapper.parentElement;
-        if (node.offsetParent === page) {
-            return node.offsetTop - this.marginTopPx + node.offsetHeight;
+        let top = node.offsetTop;
+        let anchor = node.offsetParent;
+        while (anchor && anchor !== page && page.contains(anchor)) {
+            top += anchor.offsetTop;
+            anchor = anchor.offsetParent;
         }
-        if (node.offsetParent === contentWrapper) {
-            return node.offsetTop + node.offsetHeight;
+        if (anchor === page) {
+            return top - this.marginTopPx + node.offsetHeight;
         }
         // Fallback for exotic contexts: geometric difference.
         return node.getBoundingClientRect().bottom - contentWrapper.getBoundingClientRect().top;
+    }
+
+    // Break to a fresh page because the current block is being bumped whole.
+    // The slug-carry probe only reserves 2 lines, but a bumped block may have
+    // needed more (dialogue splits need cue + 2 lines + (MORE); action splits
+    // can fail the widow rule) — so a bump can strand a scene heading as the
+    // last line of the old page. Carry that slug over with the block (R5).
+    // The slug travels only when something else remains above it.
+    _breakPage(contentWrapper, newPage) {
+        const last = contentWrapper.lastElementChild;
+        const carry = (last &&
+            contentWrapper.childElementCount > 1 &&
+            last.classList.contains(constants.ELEMENT_TYPES.SLUG)) ? last : null;
+        if (carry) carry.remove();
+        const wrapper = newPage();
+        if (carry) wrapper.appendChild(carry);
+        return wrapper;
     }
 
     // Probe used by the slug-carry rule (R5): an empty element with the classes
