@@ -511,6 +511,108 @@ test('pageBreak: `===` block forces a new page and renders nothing', async () =>
     });
 });
 
+// ---------- Phase 7: authoring (markers, forces, reorder, counters) ----------
+
+test('markup editor: decorateBlock keeps textContent, styles + dims markers', async () => {
+    const { decorateBlock } = await import('../../assets/js-mod/InlineMarkup.js');
+    const el = makeBlock('sc-action', 'a **b** c');
+    document.body.appendChild(el);
+    try {
+        assert(decorateBlock(el) === true, 'decorateBlock reported no change');
+        assertEqual(el.textContent, 'a **b** c', 'textContent must stay byte-identical (markers visible)');
+        assert(el.querySelector('.fmt-b'), 'no .fmt-b span produced');
+        assertEqual(el.querySelectorAll('.fmt-marker').length, 2, 'dimmed marker span count');
+        assertEqual(el.querySelector('.fmt-b').textContent, '**b**', 'markers live inside the styled span');
+    } finally { el.remove(); }
+});
+
+test('markup editor: toggleEmphasis wrap/unwrap round-trips text + selection offsets', async () => {
+    const { toggleEmphasis } = await import('../../assets/js-mod/InlineMarkup.js');
+    const el = makeBlock('sc-dialogue', 'hello world');
+    document.body.appendChild(el);
+    try {
+        const wrapped = toggleEmphasis(el, 'b', 0, 5);
+        assertEqual(el.textContent, '**hello** world', 'wrapped text');
+        assertEqual([wrapped.selStart, wrapped.selEnd], [2, 7], 'selection offsets after wrap');
+        assertEqual(window.getSelection().toString(), 'hello', 'live selection still covers the word');
+        const unwrapped = toggleEmphasis(el, 'b', wrapped.selStart, wrapped.selEnd);
+        assertEqual(el.textContent, 'hello world', 'unwrap restored the original text');
+        assertEqual([unwrapped.selStart, unwrapped.selEnd], [0, 5], 'selection offsets after unwrap');
+        assertEqual(window.getSelection().toString(), 'hello', 'live selection preserved after unwrap');
+    } finally { el.remove(); window.getSelection().removeAllRanges(); }
+});
+
+test('forces: ".int rooftop" -> SLUG (dot stripped), "@McClane" -> CHARACTER keeping case', async () => {
+    const { EditorHandler } = await import('../../assets/js-mod/EditorHandler.js');
+    // checkForces exercised directly on a synthetic block via a stubbed
+    // handler (the real constructor wires the whole editor).
+    const makeStub = () => {
+        const stub = Object.create(EditorHandler.prototype);
+        stub.saved = 0;
+        stub.app = { saveState: () => { stub.saved++; } };
+        stub.popupState = { active: false };
+        stub.updateContext = () => {};
+        stub.predictCharacter = () => {};
+        stub.showTypeHint = () => {};
+        stub.setCaret = () => {};
+        return stub;
+    };
+
+    const slugStub = makeStub();
+    const b1 = makeBlock('sc-action', '.int rooftop');
+    assert(slugStub.checkForces(b1, b1.textContent) === true, 'dot force did not fire');
+    assert(b1.classList.contains('sc-slug'), '".int rooftop" must become a SLUG');
+    assertEqual(b1.textContent, 'int rooftop', 'leading dot must be stripped');
+    assert(slugStub.saved >= 1, 'history must be snapshotted before the conversion');
+
+    // Ellipsis guard: '..'/'. ' prefixes never force.
+    const b2 = makeBlock('sc-action', '...and then');
+    assert(makeStub().checkForces(b2, b2.textContent) === false, 'ellipsis must not force a slug');
+    assert(b2.classList.contains('sc-action'), 'ellipsis block type must not change');
+
+    const charStub = makeStub();
+    const b3 = makeBlock('sc-action', '@McClane');
+    assert(charStub.checkForces(b3, b3.textContent) === true, '@ force did not fire');
+    assert(b3.classList.contains('sc-character'), '"@McClane" must become a CHARACTER');
+    assertEqual(b3.textContent, 'McClane', '@ stripped, typed case kept');
+    assertEqual(b3.dataset.forced, 'true', 'data-forced must suppress auto-uppercase until blur');
+});
+
+test('treatment: moveSceneTo moves scene 0 below scene 2 with all its blocks', async () => {
+    const { TreatmentManager } = await import('../../assets/js-mod/TreatmentManager.js');
+    const blocks = [
+        { id: 'a', type: 'sc-slug', text: 'INT. A - DAY' },
+        { id: 'a1', type: 'sc-action', text: 'Alpha action.' },
+        { id: 'b', type: 'sc-slug', text: 'INT. B - DAY' },
+        { id: 'b1', type: 'sc-action', text: 'Beta action.' },
+        { id: 'c', type: 'sc-slug', text: 'INT. C - DAY' },
+        { id: 'c1', type: 'sc-action', text: 'Gamma action.' }
+    ];
+    let saved = 0;
+    const sfss = {
+        scriptData: { blocks },
+        isDirty: false,
+        saveState: () => { saved++; },
+        treatmentRenderer: { renderFromData: () => {} },
+        editor: document.createElement('div')
+    };
+    const tm = new TreatmentManager(sfss);
+    tm.moveSceneTo(0, 2);
+    assertEqual(blocks.map(x => x.id), ['b', 'b1', 'c', 'c1', 'a', 'a1'], 'block order after moveSceneTo(0, 2)');
+    assertEqual(saved, 2, 'reorder must snapshot history before AND after the splice');
+    assert(sfss.isDirty === true, 'reorder must mark the script dirty');
+    // Chevron path delegates to moveSceneTo: one step back up.
+    tm.moveScene(2, -1);
+    assertEqual(blocks.map(x => x.id), ['b', 'b1', 'a', 'a1', 'c', 'c1'], 'block order after chevron moveScene(2, -1)');
+});
+
+test('counters: plainText strips markers and [[notes]] from word counts', async () => {
+    const { plainText } = await import('../../assets/js-mod/InlineMarkup.js');
+    const words = plainText('**bold** [[note]] word').trim().split(/\s+/).filter(Boolean);
+    assertEqual(words.length, 2, 'word count of "**bold** [[note]] word"');
+    assertEqual(words, ['bold', 'word'], 'surviving words');
+});
+
 // ---------- runner ----------
 async function run() {
     const ul = document.getElementById('results');

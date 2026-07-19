@@ -14,7 +14,7 @@ import * as constants from './Constants.js';
 import * as Shortcuts from './Shortcuts.js';
 import { escapeHtml } from './Utils.js';
 import { serializeBlockElement } from './InlineMarkup.js';
-import { toast } from './Toast.js';
+import { toast, confirmAction } from './Toast.js';
 import { computeBackupWarning, pruneSceneMeta } from './StorageLogic.js';
 import { TabGuard } from './TabGuard.js';
 import { ModalManager } from './ModalManager.js';
@@ -256,7 +256,7 @@ export class SFSS {
                         await this.ioManager.importIntoNewScript(file.name, fileText);
                     } catch (err) {
                         console.error('Error handling file:', err);
-                        alert('Could not open file: ' + err.message);
+                        toast('Could not open file: ' + err.message, { type: 'error' });
                     }
                 }
             });
@@ -460,7 +460,15 @@ export class SFSS {
         document.getElementById('install-pwa-btn').addEventListener('click', () => this.promptInstall());
         
         document.getElementById('toggle-selector-view-btn').addEventListener('click', () => this.toggleSelectorView());
-        
+
+        // Centered toggle (ACTION blocks): mousedown preventDefault keeps the
+        // editor focused/selection intact so the click can read the caret.
+        const centeredBtn = document.getElementById('toolbar-centered');
+        if (centeredBtn) {
+            centeredBtn.addEventListener('mousedown', (e) => e.preventDefault());
+            centeredBtn.addEventListener('click', () => this.editorHandler.toggleCentered());
+        }
+
         document.getElementById('toolbar-scene-numbers').addEventListener('click', () => {
              this.meta.showSceneNumbers = !this.meta.showSceneNumbers;
              this.persistSettings(); 
@@ -1088,9 +1096,13 @@ export class SFSS {
         clearTimeout(this.historyTimeout);
         const saveFn = () => {
             const currentState = this.exportToJSONStructure();
+            // In Treatment mode exportToJSONStructure returns the LIVE
+            // scriptData object; entries must be immutable snapshots or
+            // later in-place edits (scene reorder!) corrupt the history.
+            const snapshot = JSON.stringify(currentState);
             const caret = this.treatmentManager.isActive ? null : this.editorHandler.getCaretPosition();
             const latest = this.historyIndex >= 0 ? this.history[this.historyIndex] : null;
-            if (latest && JSON.stringify(currentState) === JSON.stringify(latest.data)) {
+            if (latest && snapshot === (latest.json ?? JSON.stringify(latest.data))) {
                 // Content unchanged: only refresh the caret so undo lands on
                 // the most recent position (never truncate the redo tail).
                 if (caret) latest.caret = caret;
@@ -1099,7 +1111,7 @@ export class SFSS {
             if (this.historyIndex < this.history.length - 1) {
                 this.history = this.history.slice(0, this.historyIndex + 1);
             }
-            this.history.push({ data: currentState, caret });
+            this.history.push({ data: JSON.parse(snapshot), json: snapshot, caret });
             this.historyIndex = this.history.length - 1;
             // Cap undo depth (#6): drop the oldest entry on overflow.
             const MAX_HISTORY = 100;
@@ -1139,8 +1151,10 @@ export class SFSS {
         try {
             // Await the full import so its trailing saveState(true) runs while
             // isRestoring is still set (it used to fire afterwards and
-            // truncate the redo tail).
-            await this.importJSON(entry.data);
+            // truncate the redo tail). Restore from a FRESH parse: handing
+            // entry.data itself to importJSON would make it the live
+            // scriptData in Treatment mode and re-alias the history entry.
+            await this.importJSON(entry.json ? JSON.parse(entry.json) : entry.data);
         } finally {
             this.isRestoring = false;
         }
@@ -1403,15 +1417,37 @@ export class SFSS {
             data.sceneMeta = pruned;
         }
 
+        this._setSaveStatus('saving');
         await this.storageManager.saveScript(this.activeScriptId, data);
-        const status = document.getElementById('save-status');
-        status.style.opacity = '1';
-        setTimeout(() => {
-            // Keep the indicator visible while a persist failure is flagged
-            // (StorageManager attaches a '!' hint on IDB write errors).
-            if (!status.querySelector('.persist-error-hint')) status.style.opacity = '0';
-        }, 2000);
+        this._setSaveStatus('saved', new Date());
         this.isDirty = false;
+    }
+
+    // Save-indicator state machine (C6): 'Saving…' while the write is in
+    // flight, then a persistent low-opacity 'Saved HH:MM' (full timestamp in
+    // the title attribute). The persist-failure '!' hint that StorageManager
+    // attaches on IDB errors always wins: while it is present the indicator
+    // stays fully visible and keeps the failure explanation as its title.
+    _setSaveStatus(state, when) {
+        const status = document.getElementById('save-status');
+        if (!status) return;
+        let text = status.querySelector('.save-status-text');
+        if (!text) {
+            text = document.createElement('span');
+            text.className = 'save-status-text';
+            status.appendChild(text);
+        }
+        const failed = !!status.querySelector('.persist-error-hint');
+        if (state === 'saving') {
+            text.textContent = ' Saving…';
+            status.style.opacity = '1';
+            return;
+        }
+        const hh = String(when.getHours()).padStart(2, '0');
+        const mm = String(when.getMinutes()).padStart(2, '0');
+        text.textContent = ` Saved ${hh}:${mm}`;
+        if (!failed) status.title = 'Last saved ' + when.toLocaleString();
+        status.style.opacity = failed ? '1' : '0.55';
     }
 
     exportToJSONStructure(forceDOM = false) {
@@ -1450,6 +1486,9 @@ export class SFSS {
                 element._typewriterTimeout = setTimeout(typeChar, speed);
             } else {
                 element._typewriterTimeout = null;
+                // Decoration is suppressed while the animation owns the
+                // block; apply it once the full text has landed.
+                this.editorHandler.maybeDecorate(element);
             }
         };
         typeChar();
@@ -1526,6 +1565,9 @@ export class SFSS {
                 }
 
                 this.applyBlockFlags(blockEl, blockData);
+                // Re-decorate inline markers (no-op while a typewriter
+                // animation owns the block — it decorates on completion).
+                this.editorHandler.maybeDecorate(blockEl);
 
                 if (previousNode) {
                     if (blockEl.previousElementSibling !== previousNode) {
@@ -1544,6 +1586,7 @@ export class SFSS {
                 blockEl = this.editorHandler.createBlock(blockData.type, displayText);
                 blockEl.dataset.lineId = blockData.id;
                 this.applyBlockFlags(blockEl, blockData);
+                this.editorHandler.maybeDecorate(blockEl);
 
                 if (previousNode) {
                     this.editor.insertBefore(blockEl, previousNode.nextSibling);
@@ -1633,7 +1676,7 @@ export class SFSS {
             deleteBtn.className = 'btn-icon btn-icon-faded'; 
             deleteBtn.onclick = async (e) => {
                 e.stopPropagation();
-                if (confirm(`Are you sure you want to delete "${title}"? This cannot be undone.`)) {
+                if (confirmAction(`Delete "${title}"? This cannot be undone.`)) {
                     const nextId = await this.storageManager.deleteScript(id);
                     if (this.activeScriptId === id) {
                         await this.loadScript(nextId);

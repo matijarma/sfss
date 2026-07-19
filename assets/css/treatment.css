@@ -31,12 +31,53 @@ body.mode-switching #main-area {
 }
 
 .treatment-scene-block.dragging {
-    opacity: 0.8;
+    opacity: 0.5;
     transform: scale(1.02);
     box-shadow: 0 10px 25px rgba(0,0,0,0.15);
     z-index: 100;
     cursor: grabbing;
 }
+
+/* Drag-to-reorder (C7): single reusable drop slot indicator + grip handle. */
+.drop-indicator {
+    height: 3px;
+    background: var(--accent);
+    border-radius: 2px;
+    margin: 4px 0;
+    pointer-events: none;
+}
+
+.drag-handle { cursor: grab; }
+.drag-handle:active { cursor: grabbing; }
+
+/* Empty state (C10): card-sized invitation when the script has no scenes. */
+.treatment-empty-state {
+    max-width: 700px;
+    margin: 2rem auto;
+    padding: 3rem 2rem;
+    background: var(--bg-paper);
+    border: 1px dashed var(--border-color);
+    border-radius: 8px;
+    text-align: center;
+    color: var(--text-meta);
+}
+
+.treatment-empty-msg {
+    margin-bottom: 1rem;
+    font-size: 1rem;
+}
+
+.treatment-empty-add {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 0.5rem 1.25rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.treatment-empty-add:hover { filter: brightness(1.1); }
 
 /* --- Reorder Controls --- */
 .treatment-reorder-controls {

@@ -2,6 +2,7 @@ import * as constants from './Constants.js';
 import { formatEighths } from './Utils.js';
 import { plainText } from './InlineMarkup.js';
 import { buildFDX, mapFDXParagraphs } from './FDXSerializer.js';
+import { toast } from './Toast.js';
 
 export class IOManager {
     constructor(sfss) {
@@ -17,6 +18,7 @@ export class IOManager {
         a.href = URL.createObjectURL(blob);
         a.download = `${this.sfss.meta.title || 'script'}.json`;
         a.click();
+        toast('Exported JSON backup', { type: 'success' });
     }
 
     uploadFile(input) {
@@ -28,7 +30,7 @@ export class IOManager {
                 await this.importIntoNewScript(file.name, e.target.result);
             } catch (err) {
                 console.error(err);
-                alert('Invalid file format or error importing.');
+                toast('Invalid file format or error importing.', { type: 'error' });
             }
         };
         reader.readAsText(file);
@@ -43,7 +45,8 @@ export class IOManager {
         await this.sfss.storageManager.saveScript(newScript.id, newScript.content);
         await this.sfss.loadScript(newScript.id, newScript);
         if (fileName.endsWith('.fdx')) {
-            await this.importFDX(text);
+            const ok = await this.importFDX(text);
+            if (ok === false) return; // importFDX already reported the error
         } else if (fileName.endsWith('.json')) {
             await this.sfss.importJSON(JSON.parse(text));
         } else {
@@ -57,6 +60,7 @@ export class IOManager {
                 boneyard: parsed.boneyard || []
             });
         }
+        toast(`Imported "${this.sfss.meta.title || fileName}"`, { type: 'success' });
     }
 
     // FDX import (#15): full meta reset (no cross-script bleed), real
@@ -68,7 +72,7 @@ export class IOManager {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlText, "text/xml");
         const mainContent = xmlDoc.querySelector('FinalDraft > Content');
-        if (!mainContent) { alert("No script content found in FDX."); return; }
+        if (!mainContent) { toast('No script content found in FDX.', { type: 'error' }); return false; }
 
         // FULL reset before reading: title/author/contact AND display flags —
         // nothing from the previously open script may survive the import.
@@ -262,6 +266,7 @@ export class IOManager {
         a.href = URL.createObjectURL(blob);
         a.download = `${this.sfss.meta.title || 'script'}.fdx`;
         a.click();
+        toast('Exported Final Draft (.fdx)', { type: 'success' });
     }
 
     async downloadFountain() {
@@ -271,7 +276,7 @@ export class IOManager {
             const data = this.sfss.exportToJSONStructure();
             if (!this.sfss.fountainParser) {
                 console.error("FountainParser not initialized");
-                alert("Internal Error: Fountain Parser not loaded.");
+                toast('Internal Error: Fountain Parser not loaded.', { type: 'error' });
                 return;
             }
             const fountainText = this.sfss.fountainParser.generate(data);
@@ -280,9 +285,10 @@ export class IOManager {
             a.href = URL.createObjectURL(blob);
             a.download = `${this.sfss.meta.title || 'script'}.fountain`;
             a.click();
+            toast('Exported Fountain (.fountain)', { type: 'success' });
         } catch (e) {
             console.error("Download Fountain Error:", e);
-            alert("Failed to generate Fountain file.");
+            toast('Failed to generate Fountain file.', { type: 'error' });
         }
     }
 
@@ -296,6 +302,7 @@ export class IOManager {
         a.href = URL.createObjectURL(blob);
         a.download = `${this.sfss.meta.title || 'script'}.txt`;
         a.click();
+        toast('Exported plain text (.txt)', { type: 'success' });
     }
 
 }

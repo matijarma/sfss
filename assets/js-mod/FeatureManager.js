@@ -1,3 +1,5 @@
+import { toast } from './Toast.js';
+
 export class FeatureManager {
     constructor(app) {
         this.app = app;
@@ -193,7 +195,7 @@ export class FeatureManager {
     createCollabManagerStub() {
         return {
             __isStub: true,
-            connect: () => alert('Collaboration is disabled in this configuration. Enable it in App Builder to use.'),
+            connect: () => toast('Collaboration is disabled in this configuration. Enable it in App Builder to use.', { type: 'error' }),
             disconnect: () => {},
             stopMedia: () => {},
             toggleAudio: () => {},
@@ -210,7 +212,7 @@ export class FeatureManager {
     createCollabUIStub() {
         return {
             __isStub: true,
-            openModal: () => alert('Collaboration is disabled in this configuration. Enable it in App Builder to use.'),
+            openModal: () => toast('Collaboration is disabled in this configuration. Enable it in App Builder to use.', { type: 'error' }),
             joinFromUrl: () => {}
         };
     }

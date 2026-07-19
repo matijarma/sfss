@@ -2,6 +2,7 @@ import * as constants from './Constants.js';
 import { IDBHelper } from './IDBHelper.js';
 import { escapeHtml, formatEighths, generateLineId } from './Utils.js';
 import { toast } from './Toast.js';
+import { plainText } from './InlineMarkup.js';
 
 export class SidebarManager {
     constructor(app) {
@@ -222,7 +223,8 @@ export class SidebarManager {
         let isCharacter = false;
         sceneElements.forEach(el => {
             const type = this.app.editorHandler.getBlockType(el);
-            const text = el.textContent || '';
+            // Emphasis markers and [[notes]] never skew word/char counts.
+            const text = plainText(el.textContent || '');
 
             if (stats[type]) {
                 const textStats = this._calculateTextStats(text);
@@ -546,7 +548,7 @@ export class SidebarManager {
                     const text = await navigator.clipboard.readText();
                     pasteHandler(text);
                 } catch(err) {
-                    alert('Could not read clipboard. Please try pasting with Ctrl+V.');
+                    toast('Could not read clipboard. Please try pasting with Ctrl+V.', { type: 'error' });
                 }
             });
              dropZone.addEventListener('paste', (e) => {
@@ -704,6 +706,15 @@ export class SidebarManager {
             isDataMode = true;
         } else {
             slugs = Array.from(this.app.editor.querySelectorAll(`.${constants.ELEMENT_TYPES.SLUG}`));
+        }
+
+        // Empty state (C10): no scene headings anywhere yet.
+        if (slugs.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'scene-list-empty';
+            empty.textContent = 'No scenes yet — start with INT. or EXT.';
+            this.sceneList.appendChild(empty);
+            return;
         }
 
         // One geometry lookup for the whole list — same engine in both modes.

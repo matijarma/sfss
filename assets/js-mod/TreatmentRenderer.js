@@ -1,10 +1,15 @@
 import * as constants from './Constants.js';
 import { formatEighths } from './Utils.js';
+import { toast } from './Toast.js';
 
 export class TreatmentRenderer {
     constructor(app) {
         this.app = app;
         this.container = null;
+        // Drag-to-reorder state (C7): index of the scene being dragged, plus
+        // one reusable indicator element shared by every drag.
+        this._dragIndex = null;
+        this._dropIndicator = null;
     }
 
     // Scene geometry from the shared engine (R1): slug lineId -> scene entry.
@@ -77,8 +82,16 @@ export class TreatmentRenderer {
     renderFromData(blocks, container) {
         this.container = container;
         this.container.innerHTML = '';
-        this.currentBlocks = blocks; 
-        
+        this.currentBlocks = blocks;
+
+        // Container-level DnD targets (bound once — the container is the
+        // persistent editor element; innerHTML resets don't clear these).
+        if (!container._sfssDndBound) {
+            container._sfssDndBound = true;
+            container.addEventListener('dragover', (e) => this._handleDragOver(e));
+            container.addEventListener('drop', (e) => this._handleDrop(e));
+        }
+
         this.renderScriptMetainTreatment(container);
 
         let currentSceneBlock = null;
@@ -107,6 +120,24 @@ export class TreatmentRenderer {
         });
         if (currentSceneBlock) scenes.push(currentSceneBlock);
 
+        // Empty state (C10): no scenes yet — offer the first one.
+        if (scenes.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'treatment-empty-state';
+            const msg = document.createElement('div');
+            msg.className = 'treatment-empty-msg';
+            msg.textContent = 'No scenes yet.';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'treatment-empty-add';
+            btn.innerHTML = '<i class="fas fa-plus"></i> Add first scene';
+            btn.onclick = () => this.app.treatmentManager.addSceneHeading(null);
+            empty.appendChild(msg);
+            empty.appendChild(btn);
+            this.container.appendChild(empty);
+            return;
+        }
+
         // Durations from the shared geometry engine (R1) — one lookup for the
         // whole pass, formatted via Utils.formatEighths.
         const geoById = this._getGeometryById();
@@ -117,6 +148,65 @@ export class TreatmentRenderer {
             const blockEl = this.createSceneBlock(scene, meta, index, scenes.length);
             this.container.appendChild(blockEl);
         });
+    }
+
+    // ---------- Drag-to-reorder (C7) ----------
+    // Dragging is gated to the grip handle (mousedown arms block.draggable)
+    // so text selection/editing inside cards is never hijacked. A single
+    // reusable indicator marks the drop slot before/after the nearest card.
+
+    _getDropIndicator() {
+        if (!this._dropIndicator) {
+            this._dropIndicator = document.createElement('div');
+            this._dropIndicator.className = 'drop-indicator';
+        }
+        return this._dropIndicator;
+    }
+
+    _removeDropIndicator() {
+        if (this._dropIndicator && this._dropIndicator.parentNode) this._dropIndicator.remove();
+    }
+
+    _handleDragOver(e) {
+        if (this._dragIndex === null) return;
+        e.preventDefault(); // required to allow a drop
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        const cards = Array.from(this.container.querySelectorAll('.treatment-scene-block'));
+        if (cards.length === 0) return;
+        // Nearest card by pointer Y vs card midpoint.
+        let target = cards[cards.length - 1];
+        let before = false;
+        for (const card of cards) {
+            const rect = card.getBoundingClientRect();
+            if (e.clientY < rect.top + rect.height / 2) {
+                target = card;
+                before = true;
+                break;
+            }
+        }
+        const indicator = this._getDropIndicator();
+        target.parentNode.insertBefore(indicator, before ? target : target.nextSibling);
+    }
+
+    _handleDrop(e) {
+        if (this._dragIndex === null) return;
+        e.preventDefault();
+        const from = this._dragIndex;
+        this._dragIndex = null;
+        const cards = Array.from(this.container.querySelectorAll('.treatment-scene-block'));
+        const indicator = this._dropIndicator;
+        let to = cards.length - 1;
+        if (indicator && indicator.parentNode) {
+            // Cards above the drop slot (the dragged card is still in the
+            // DOM during the drag, so discount it when it sits above).
+            let above = 0;
+            for (const card of cards) {
+                if (indicator.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_PRECEDING) above++;
+            }
+            to = above > from ? above - 1 : above;
+        }
+        this._removeDropIndicator();
+        if (to !== from) this.app.treatmentManager.moveSceneTo(from, to);
     }
 
     renderScriptMetainTreatment(container) {
@@ -243,6 +333,44 @@ export class TreatmentRenderer {
         
         controls.appendChild(upBtn);
         controls.appendChild(downBtn);
+
+        // Grip-gated HTML5 drag (desktop only): the card only becomes
+        // draggable while the handle is pressed, so selecting/editing the
+        // card's text can never start a drag.
+        if (!document.body.classList.contains('mobile-view')) {
+            const grip = document.createElement('button');
+            grip.type = 'button';
+            grip.className = 'reorder-btn drag-handle';
+            grip.title = 'Drag to reorder';
+            grip.innerHTML = '<i class="fas fa-grip-vertical"></i>';
+            grip.onclick = (e) => e.stopPropagation();
+            grip.addEventListener('mousedown', () => {
+                block.draggable = true;
+                const disarm = () => {
+                    block.draggable = false;
+                    document.removeEventListener('mouseup', disarm);
+                };
+                document.addEventListener('mouseup', disarm);
+            });
+            controls.appendChild(grip);
+
+            block.addEventListener('dragstart', (e) => {
+                if (!block.draggable) { e.preventDefault(); return; }
+                this._dragIndex = index;
+                block.classList.add('dragging');
+                if (e.dataTransfer) {
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', String(index));
+                }
+            });
+            block.addEventListener('dragend', () => {
+                block.draggable = false;
+                block.classList.remove('dragging');
+                this._removeDropIndicator();
+                this._dragIndex = null;
+            });
+        }
+
         block.appendChild(controls);
 
         // --- Header (Complex Layout) ---
@@ -782,7 +910,7 @@ export class TreatmentRenderer {
                     }
                     this.app.sidebarManager.saveSceneMeta(scene.slug.id); // Triggers refresh
                 } else {
-                    alert('Invalid YouTube URL');
+                    toast('Invalid YouTube URL', { type: 'error' });
                 }
             }
             wrapper.remove();

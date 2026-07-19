@@ -148,17 +148,24 @@ export class TreatmentManager {
         this.sfss.treatmentRenderer.refreshScene(slugId);
     }
 
-    addSceneHeading(slugId) {
+    // slugId === null appends a scene at the end of the script (used by the
+    // treatment empty state's "Add first scene" button).
+    addSceneHeading(slugId = null) {
         if (!this.sfss.scriptData) return;
         const blocks = this.sfss.scriptData.blocks;
-        const slugIndex = blocks.findIndex(b => b.id === slugId);
-        if (slugIndex === -1) return;
-        
-        let endIndex = slugIndex + 1;
-        while (endIndex < blocks.length && blocks[endIndex].type !== constants.ELEMENT_TYPES.SLUG) {
-            endIndex++;
+
+        let endIndex;
+        if (slugId === null) {
+            endIndex = blocks.length;
+        } else {
+            const slugIndex = blocks.findIndex(b => b.id === slugId);
+            if (slugIndex === -1) return;
+            endIndex = slugIndex + 1;
+            while (endIndex < blocks.length && blocks[endIndex].type !== constants.ELEMENT_TYPES.SLUG) {
+                endIndex++;
+            }
         }
-        
+
         blocks.splice(endIndex, 0, {
             type: constants.ELEMENT_TYPES.SLUG,
             text: 'INT. ',
@@ -199,8 +206,15 @@ export class TreatmentManager {
         this.sfss.treatmentRenderer.refreshScene(slugId);
     }
 
+    // Chevron buttons: one step up/down. Same splice logic as drag-drop.
     moveScene(index, direction) {
-        if (!this.sfss.scriptData) return;
+        this.moveSceneTo(index, index + direction);
+    }
+
+    // Scene ranges over scriptData.blocks: each starts at its slug and ends
+    // before the next slug. Blocks before the first slug belong to no scene
+    // and never move.
+    _getSceneRanges() {
         const sceneRanges = [];
         let currentStart = 0;
         let currentSlug = null;
@@ -216,44 +230,49 @@ export class TreatmentManager {
         if (currentSlug) {
             sceneRanges.push({ start: currentStart, end: this.sfss.scriptData.blocks.length, id: currentSlug.id });
         }
-        
-        if (index < 0 || index >= sceneRanges.length) return;
-        const targetIndex = index + direction;
-        if (targetIndex < 0 || targetIndex >= sceneRanges.length) return;
-        
-        const sourceRange = sceneRanges[index];
-        const targetRange = sceneRanges[targetIndex];
-        const sourceBlocks = this.sfss.scriptData.blocks.slice(sourceRange.start, sourceRange.end);
-        
-        this.sfss.scriptData.blocks.splice(sourceRange.start, sourceRange.end - sourceRange.start);
-        const newTargetSlugIndex = this.sfss.scriptData.blocks.findIndex(b => b.id === targetRange.id);
-        
-        let insertIndex;
-        if (direction === -1) {
-            insertIndex = newTargetSlugIndex;
-        } else {
-            let nextSlugIndex = -1;
-            for (let i = newTargetSlugIndex + 1; i < this.sfss.scriptData.blocks.length; i++) {
-                if (this.sfss.scriptData.blocks[i].type === constants.ELEMENT_TYPES.SLUG) {
-                    nextSlugIndex = i;
-                    break;
-                }
-            }
-            if (nextSlugIndex === -1) {
-                insertIndex = this.sfss.scriptData.blocks.length;
-            } else {
-                insertIndex = nextSlugIndex;
-            }
+        return sceneRanges;
+    }
+
+    // Moves the scene at fromIndex so it ends up at toIndex in the final
+    // scene order (C7 drag-to-reorder; moveScene delegates here).
+    moveSceneTo(fromIndex, toIndex) {
+        if (!this.sfss.scriptData) return;
+        const sceneRanges = this._getSceneRanges();
+        if (fromIndex < 0 || fromIndex >= sceneRanges.length) return;
+        toIndex = Math.max(0, Math.min(toIndex, sceneRanges.length - 1));
+        if (toIndex === fromIndex) return;
+
+        // Baseline snapshot BEFORE the splice (treatment edits are in-place,
+        // so without it the first reorder would have no state to undo to);
+        // the post-splice snapshot below makes the reorder one undo step.
+        this.sfss.saveState(true);
+
+        const blocks = this.sfss.scriptData.blocks;
+        const sourceRange = sceneRanges[fromIndex];
+        const sourceBlocks = blocks.slice(sourceRange.start, sourceRange.end);
+        blocks.splice(sourceRange.start, sourceRange.end - sourceRange.start);
+
+        // The scene that should follow the moved one (position toIndex among
+        // the remaining scenes) marks the insertion point; past the end means
+        // append after the last scene.
+        const remaining = sceneRanges.filter((_, i) => i !== fromIndex);
+        let insertIndex = blocks.length;
+        if (toIndex < remaining.length) {
+            const anchorIdx = blocks.findIndex(b => b.id === remaining[toIndex].id);
+            if (anchorIdx !== -1) insertIndex = anchorIdx;
         }
-        
-        this.sfss.scriptData.blocks.splice(insertIndex, 0, ...sourceBlocks);
+        blocks.splice(insertIndex, 0, ...sourceBlocks);
+
         this.sfss.isDirty = true;
+        // Snapshot the reorder so a single undo restores the old order
+        // (was missing from the chevron path — C7).
+        this.sfss.saveState(true);
         this.sfss.geometry?.requestUpdate();
-        this.sfss.treatmentRenderer.renderFromData(this.sfss.scriptData.blocks, this.sfss.editor);
-        
+        this.sfss.treatmentRenderer.renderFromData(blocks, this.sfss.editor);
+
         setTimeout(() => {
-            const blocks = this.sfss.editor.querySelectorAll('.treatment-scene-block');
-            if (blocks[targetIndex]) blocks[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const cards = this.sfss.editor.querySelectorAll('.treatment-scene-block');
+            if (cards[toIndex]) cards[toIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 50);
     }
 

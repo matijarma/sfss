@@ -1,6 +1,15 @@
 import * as constants from './Constants.js';
 import { generateLineId } from './Utils.js';
-import { getTextOffset, setTextOffset } from './InlineMarkup.js';
+import { getTextOffset, setTextOffset, decorateBlock, toggleEmphasis, plainText } from './InlineMarkup.js';
+import { toast } from './Toast.js';
+
+// Emphasis v1 scope: uppercase-rewritten types (SLUG/CHARACTER/TRANSITION)
+// are excluded from marker decoration and Ctrl+B/I/U.
+const EMPHASIS_TYPES = [
+    constants.ELEMENT_TYPES.ACTION,
+    constants.ELEMENT_TYPES.DIALOGUE,
+    constants.ELEMENT_TYPES.PARENTHETICAL
+];
 
 export class EditorHandler {
     constructor(app) {
@@ -11,6 +20,7 @@ export class EditorHandler {
         this.popupState = { active: false, type: null, selectedIndex: 0, options: [], targetBlock: null };
         this.activePopupCleanup = null;
         this.sceneListUpdateTimeout = null;
+        this.isComposing = false;
 
         this.init();
     }
@@ -21,6 +31,13 @@ export class EditorHandler {
         this.app.editor.addEventListener('input', this.handleInput.bind(this));
         this.app.editor.addEventListener('mouseup', this.updateContext.bind(this));
         this.app.editor.addEventListener('paste', this.handlePaste.bind(this));
+        // Never decorate mid-IME-composition: rebuilding the block's DOM
+        // would break the composition session. Decorate once it commits.
+        this.app.editor.addEventListener('compositionstart', () => { this.isComposing = true; });
+        this.app.editor.addEventListener('compositionend', () => {
+            this.isComposing = false;
+            this.maybeDecorate(this.getCurrentBlock());
+        });
         // Newlines are always represented as new blocks (the keydown handlers
         // create them); never let the browser insert <br>/paragraphs, which
         // the textContent-based export would silently drop.
@@ -30,8 +47,35 @@ export class EditorHandler {
             }
         });
         this.app.editor.addEventListener('focusout', (e) => {
-            if (e.target.classList && e.target.classList.contains('script-line')) this.sanitizeBlock(e.target);
+            if (e.target.classList && e.target.classList.contains('script-line')) {
+                this.handleBlockBlur(e.target);
+            } else if (e.target === this.app.editor &&
+                       (!e.relatedTarget || !this.app.editor.contains(e.relatedTarget))) {
+                // contenteditable hosts receive the focus events, not their
+                // child lines: commit the block that held the caret and clear
+                // every force-suppression flag (data-forced lives "until blur").
+                const block = this.getCurrentBlock();
+                if (block) this.handleBlockBlur(block);
+                this.app.editor.querySelectorAll('[data-forced]').forEach(b => delete b.dataset.forced);
+            }
         }, true);
+    }
+
+    // Blur commit point: `>`-forces resolve, strays are sanitized, and the
+    // data-forced suppression flag (set by live @/! forces) is cleared.
+    handleBlockBlur(block) {
+        this.checkCommitForces(block);
+        this.sanitizeBlock(block);
+        delete block.dataset.forced;
+    }
+
+    // Marker decoration (visible, iA-Writer style) for types in emphasis v1
+    // scope. No-ops mid-IME-composition and while a collab typewriter
+    // animation owns the block (SFSS.typewriterEffect decorates on finish).
+    maybeDecorate(block) {
+        if (!block || this.isComposing || block._typewriterTimeout) return false;
+        if (!EMPHASIS_TYPES.includes(this.getBlockType(block))) return false;
+        return decorateBlock(block);
     }
 
     // Span-safe caret helpers: offsets are character offsets into
@@ -85,6 +129,7 @@ export class EditorHandler {
                 if(currentBlock.textContent.trim() === '') {
                     currentBlock.textContent = line;
                     this.setBlockType(currentBlock, type);
+                    this.maybeDecorate(currentBlock);
                 } else {
                     currentBlock = this.createBlock(type, line, currentBlock);
                 }
@@ -130,13 +175,22 @@ export class EditorHandler {
         if (block) {
             const currentType = this.getBlockType(block);
             this.app.topSelector.value = currentType;
-            
+
             // Sync Horizontal Selector
             const hzNodes = document.querySelectorAll('.hz-node');
             if (hzNodes.length > 0) {
                 hzNodes.forEach(node => {
                     node.classList.toggle('active', node.dataset.value === currentType);
                 });
+            }
+
+            // Centered toggle: enabled for ACTION blocks, lit when the
+            // current block carries sc-centered.
+            const centeredBtn = document.getElementById('toolbar-centered');
+            if (centeredBtn) {
+                const isAction = currentType === constants.ELEMENT_TYPES.ACTION;
+                centeredBtn.disabled = !isAction;
+                centeredBtn.classList.toggle('active', isAction && block.classList.contains('sc-centered'));
             }
 
             const popup = document.getElementById('scene-settings-popup');
@@ -150,8 +204,9 @@ export class EditorHandler {
                 }
             }
         }
-        const text = this.app.editor.innerText;
-        document.getElementById('stats-words').textContent = `Words: ${text.trim().split(/\s+/).length}`;
+        // Markers and [[notes]] never skew the word count (plan item 13).
+        const text = plainText(this.app.editor.innerText).trim();
+        document.getElementById('stats-words').textContent = `Words: ${text ? text.split(/\s+/).length : 0}`;
         // stats-pages is updated by the 'sfss-geometry' event listener in
         // SFSS.bindEventListeners (single pagination engine — R1).
     }
@@ -172,6 +227,14 @@ export class EditorHandler {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
             e.preventDefault();
             this.app.redo();
+            return;
+        }
+
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && { b: 'b', i: 'i', u: 'u' }[e.key.toLowerCase()]) {
+            // ALWAYS suppressed — native execCommand <b>/<i>/<u> must never
+            // enter the DOM, even for types outside emphasis v1 scope.
+            e.preventDefault();
+            this.toggleEmphasisAtSelection(e.key.toLowerCase());
             return;
         }
 
@@ -269,6 +332,9 @@ export class EditorHandler {
         const handleNav = (key) => {
             e.preventDefault();
             this.sanitizeBlock(block);
+            // Re-read the type: a commit force just before handleNav('enter')
+            // may have converted the block (ACTION -> TRANSITION/centered).
+            const type = this.getBlockType(block);
             const nextType = this.app.keymap[type] ? this.app.keymap[type][key] : null;
 
             if (!isEmpty) {
@@ -345,6 +411,9 @@ export class EditorHandler {
         }
 
         if (e.key === 'Enter' && !e.shiftKey) {
+            // Commit-time forces ('> text' / '> text <') resolve before the
+            // keymap transition so the NEW type picks the next block.
+            this.checkCommitForces(block);
             handleNav('enter');
         }
 
@@ -378,6 +447,135 @@ export class EditorHandler {
         return newBlock;
     }
 
+    // Ctrl+B/I/U seam: computes character offsets of the current selection
+    // (span-safe pre-range math, same convention as getTextOffset) and hands
+    // them to InlineMarkup.toggleEmphasis. Empty selection inserts a marker
+    // pair with the caret in between (toggleMarkers handles it).
+    toggleEmphasisAtSelection(kind) {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const blockOf = (node) => {
+            if (!node) return null;
+            if (node.nodeType === 3) node = node.parentNode;
+            return node.closest ? node.closest('.script-line') : null;
+        };
+        const anchorBlock = blockOf(sel.anchorNode);
+        const focusBlock = blockOf(sel.focusNode);
+        if (!anchorBlock || !focusBlock) return;
+        if (anchorBlock !== focusBlock) {
+            toast('Select within a single line to format');
+            return;
+        }
+        const block = anchorBlock;
+        if (!EMPHASIS_TYPES.includes(this.getBlockType(block))) return;
+
+        const range = sel.getRangeAt(0);
+        const pre = range.cloneRange();
+        pre.selectNodeContents(block);
+        pre.setEnd(range.startContainer, range.startOffset);
+        const selStart = pre.toString().length;
+        const selEnd = selStart + range.toString().length;
+
+        toggleEmphasis(block, kind, selStart, selEnd);
+        this.app.saveState(true);
+    }
+
+    // Fountain forces, live variant (plan D5): '@' / '!' / '.' prefixes
+    // convert the block as soon as a real character follows the marker.
+    // History is snapshotted BEFORE the mutation so one undo restores the
+    // literal typed text. Returns true if a conversion happened.
+    checkForces(block, text) {
+        if (!block || this.popupState.active || block.dataset.forced) return false;
+        const type = this.getBlockType(block);
+
+        // '@' -> Character, typed case kept. data-forced suppresses the
+        // keyup auto-uppercase rewrite until the block blurs.
+        if (type !== constants.ELEMENT_TYPES.CHARACTER && /^@./.test(text)) {
+            this._applyForce(block, constants.ELEMENT_TYPES.CHARACTER, text.slice(1), true, 'Character');
+            return true;
+        }
+        // '!' -> Action. data-forced suppresses reclassification (the
+        // INT./EXT. auto-slug) so "!INT. HOUSE" stays action.
+        if (/^!./.test(text)) {
+            this._applyForce(block, constants.ELEMENT_TYPES.ACTION, text.slice(1), true, 'Action');
+            return true;
+        }
+        // '.' -> Scene Heading. Ellipsis-guarded: '..' and '. ' never force.
+        if (type !== constants.ELEMENT_TYPES.SLUG && /^\.(?![. ])./.test(text)) {
+            this._applyForce(block, constants.ELEMENT_TYPES.SLUG, text.slice(1), false, 'Scene Heading');
+            return true;
+        }
+        return false;
+    }
+
+    _applyForce(block, newType, newText, setForced, label) {
+        const offset = getTextOffset(block);
+        this.app.saveState(true); // pre-conversion snapshot -> one-step undo
+        block.textContent = newText;
+        this.setBlockType(block, newType);
+        if (setForced) block.dataset.forced = 'true';
+        if (offset !== null) this.setCaret(block, Math.max(0, offset - 1));
+        this.showTypeHint(block, label);
+    }
+
+    // Fountain forces, commit variant (Enter/blur): '> text <' -> centered
+    // action, '> text' -> transition. Only plain ACTION blocks convert —
+    // typing '>' inside dialogue stays literal.
+    checkCommitForces(block) {
+        if (!block) return false;
+        if (this.getBlockType(block) !== constants.ELEMENT_TYPES.ACTION) return false;
+        const text = block.textContent;
+
+        let m = text.match(/^>\s*(.+?)\s*<$/);
+        if (m) {
+            this.app.saveState(true);
+            block.textContent = m[1];
+            block.classList.add('sc-centered');
+            this.maybeDecorate(block);
+            this.setCaret(block, block.textContent.length);
+            this.showTypeHint(block, 'Centered');
+            return true;
+        }
+        m = text.match(/^>\s*(.+)/);
+        if (m) {
+            this.app.saveState(true);
+            block.textContent = m[1].trim().toUpperCase();
+            this.setBlockType(block, constants.ELEMENT_TYPES.TRANSITION);
+            this.setCaret(block, block.textContent.length);
+            this.showTypeHint(block, 'Transition');
+            return true;
+        }
+        return false;
+    }
+
+    // Transient chip ("Scene Heading", "Transition", ...) shown next to a
+    // just-force-converted block; CSS animation fades it out (~1.2s).
+    showTypeHint(block, label) {
+        const wrapper = document.getElementById('editor-wrapper');
+        if (!wrapper || !block.getBoundingClientRect) return;
+        const chip = document.createElement('div');
+        chip.className = 'type-hint';
+        chip.textContent = label;
+        const rect = block.getBoundingClientRect();
+        const parentRect = wrapper.getBoundingClientRect();
+        chip.style.top = (rect.top - parentRect.top) + 'px';
+        chip.style.left = Math.max(0, rect.left - parentRect.left) + 'px';
+        wrapper.appendChild(chip);
+        setTimeout(() => chip.remove(), 1300);
+    }
+
+    // Toolbar centered toggle (ACTION blocks only): flip the sc-centered
+    // class and snapshot — serializeBlockElement reads the class back as the
+    // canonical `centered` flag on export.
+    toggleCentered() {
+        const block = this.getCurrentBlock();
+        if (!block || this.getBlockType(block) !== constants.ELEMENT_TYPES.ACTION) return;
+        this.app.saveState(true);
+        block.classList.toggle('sc-centered');
+        this.app.saveState(true);
+        this.updateContext();
+    }
+
     handleInput(e) {
         this.app.resetCycleState();
         // Trigger autocomplete for suffixes if user types '(' in Character
@@ -387,21 +585,39 @@ export class EditorHandler {
                 this.triggerSuffixAutocomplete(block);
             }
         }
+        // Re-decorate inline markers as they are typed. e.target is the
+        // contenteditable host on real input events; fall back to selection.
+        const block = (e.target && e.target.closest && e.target.closest('.script-line')) || this.getCurrentBlock();
+        this.maybeDecorate(block);
     }
 
     handleKeyup(e) {
         if (this.popupState.active && this.popupState.type === 'selector') return;
         const block = this.getCurrentBlock();
         if (!block) return;
-        const type = this.getBlockType(block);
-        const text = block.textContent;
+        let type = this.getBlockType(block);
+        let text = block.textContent;
 
-        if ((text.toUpperCase().startsWith('INT.') || text.toUpperCase().startsWith('EXT.')) && type !== constants.ELEMENT_TYPES.SLUG) {
+        // Fountain forces run BEFORE the INT./EXT. auto-slug so an explicit
+        // marker always wins; a conversion changes type/text mid-pass. Only
+        // editing keys count ("on next typed char") — merely navigating into
+        // a block with a literal '@'/'!'/'.' prefix must not convert it.
+        const isEditKey = e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete';
+        if (isEditKey && !this.isComposing && this.checkForces(block, text)) {
+            type = this.getBlockType(block);
+            text = block.textContent;
+        }
+
+        if (!block.dataset.forced &&
+            (text.toUpperCase().startsWith('INT.') || text.toUpperCase().startsWith('EXT.')) && type !== constants.ELEMENT_TYPES.SLUG) {
             this.setBlockType(block, constants.ELEMENT_TYPES.SLUG);
+            type = constants.ELEMENT_TYPES.SLUG;
         }
 
         if ([constants.ELEMENT_TYPES.SLUG, constants.ELEMENT_TYPES.CHARACTER, constants.ELEMENT_TYPES.TRANSITION].includes(type)) {
-            if (text !== text.toUpperCase()) {
+            // data-forced (an '@' force keeping typed case) suspends the
+            // uppercase rewrite until the block blurs.
+            if (!block.dataset.forced && text !== text.toUpperCase()) {
                 const offset = getTextOffset(block);
                 block.textContent = text.toUpperCase();
                 if (offset !== null) this.setCaret(block, offset);
@@ -681,6 +897,7 @@ export class EditorHandler {
         div.className = `script-line ${type}`;
         div.dataset.lineId = generateLineId();
         div.textContent = text;
+        if (text) this.maybeDecorate(div); // imported/pasted text may carry markers
         if (insertAfterNode && insertAfterNode.parentNode === this.app.editor) this.app.editor.insertBefore(div, insertAfterNode.nextSibling);
         else this.app.editor.appendChild(div);
         if (type === constants.ELEMENT_TYPES.CHARACTER && text === '') this.predictCharacter(div);

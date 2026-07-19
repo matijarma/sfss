@@ -103,6 +103,45 @@
     text-align: center;
 }
 
+/* INLINE MARKUP DECORATION (iA-Writer style: markers stay VISIBLE, dimmed).
+   InlineMarkup.decorateBlock builds nested spans carrying fmt-b/fmt-i/fmt-u
+   combinations; block.textContent stays byte-identical to the model text. */
+.fmt-b { font-weight: bold; }
+.fmt-i { font-style: italic; }
+.fmt-u { text-decoration: underline; }
+.fmt-note {
+    background: var(--bg-muted, rgba(128, 128, 128, .15));
+    border-radius: 2px;
+    opacity: .85;
+}
+.fmt-marker { opacity: .4; }
+
+/* Transient force-conversion hint ("Scene Heading", "Transition", ...):
+   absolutely positioned chip inside #editor-wrapper, fading out ~1.2s. */
+.type-hint {
+    position: absolute;
+    transform: translateY(-115%);
+    background: var(--accent, #2563eb);
+    color: #fff;
+    font-family: var(--font-ui, sans-serif);
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 60;
+    animation: type-hint-fade 1.2s ease forwards;
+}
+
+@keyframes type-hint-fade {
+    0%   { opacity: .95; }
+    65%  { opacity: .9; }
+    100% { opacity: 0; }
+}
+
 /* SCENE NUMBERS */
 .show-scene-numbers .sc-slug {
     counter-increment: scene;
