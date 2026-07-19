@@ -1,3 +1,5 @@
+import { escapeHtml as sharedEscapeHtml } from './Utils.js';
+
 export class SingleFileGenerator {
     constructor(featureManager) {
         this.featureManager = featureManager;
@@ -208,6 +210,12 @@ ${jsBundle}
     getJsFiles(features) {
         const order = [
             'assets/js-mod/Constants.js',
+            'assets/js-mod/Utils.js',
+            'assets/js-mod/InlineMarkup.js',
+            'assets/js-mod/Toast.js',
+            'assets/js-mod/ModalManager.js',
+            'assets/js-mod/Shortcuts.js',
+            'assets/js-mod/StorageLogic.js',
             'assets/js-mod/IDBHelper.js',
             'assets/js-mod/PageRenderer.js',
             'assets/js-mod/ScrollbarManager.js',
@@ -624,12 +632,7 @@ class FeatureManager {
     }
 
     escapeHtml(text) {
-        return (text || '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
+        return sharedEscapeHtml(text || '');
     }
 
     escapeScript(code) {
@@ -724,4 +727,5 @@ class CollabUI {
     }
 }
 
-window.SingleFileGenerator = SingleFileGenerator;
+// Guarded so the module stays import-safe under Node (test harness).
+if (typeof window !== 'undefined') window.SingleFileGenerator = SingleFileGenerator;

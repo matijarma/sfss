@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<FinalDraft DocumentType="Script" Template="No" Version="1">
+<Content>
+<Paragraph Type="Scene Heading">
+<Text>INT. LAB - NIGHT</Text>
+</Paragraph>
+<Paragraph Type="Action">
+<Text>The alien </Text>
+<Text Style="Bold">SCREAMS</Text>
+<Text> and </Text>
+<Text Style="Italic">hisses</Text>
+<Text> before it </Text>
+<Text Style="Bold+Underline">explodes</Text>
+<Text>.</Text>
+</Paragraph>
+<Paragraph Type="Character">
+<Text>DR. VANCE</Text>
+</Paragraph>
+<Paragraph Type="Dialogue">
+<Text>It was never </Text>
+<Text Style="Italic">supposed</Text>
+<Text> to wake up.</Text>
+</Paragraph>
+</Content>
+</FinalDraft>

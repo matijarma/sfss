@@ -36,4 +36,4 @@ SFSS now ships with a Feature Manager and a built-in portable generator:
 * Keep portable compatibility in mind:
   * Avoid `fetch`ing local files in portable mode unless they are already inlined.
   * Ensure UI gracefully hides/marks features unavailable in portable builds.
-* Update docs and Feature Management UI whenever new toggles or portable constraints are introduced.*** End Patch
+* Update docs and Feature Management UI whenever new toggles or portable constraints are introduced.

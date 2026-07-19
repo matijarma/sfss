@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<FinalDraft DocumentType="Script" Template="No" Version="1">
+<Content>
+<Paragraph Type="Scene Heading" Number="1A">
+<SceneProperties Length="2/8" Page="1" Title=""></SceneProperties>
+<Text>EXT. HOUSE - DAY</Text>
+</Paragraph>
+<Paragraph Type="Action">
+<Text>They arrive at the porch.</Text>
+</Paragraph>
+<Paragraph Type="Transition">
+<Text>CUT TO:</Text>
+</Paragraph>
+<Paragraph Type="Scene Heading" Number="2">
+<SceneProperties Length="1/8" Page="1" Title=""></SceneProperties>
+<Text>INT. HOUSE - DAY</Text>
+</Paragraph>
+<Paragraph Type="Action">
+<Text>Dust everywhere.</Text>
+</Paragraph>
+<Paragraph Type="Transition">
+<Text>FADE OUT.</Text>
+</Paragraph>
+</Content>
+</FinalDraft>

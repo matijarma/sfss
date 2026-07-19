@@ -1315,3 +1315,34 @@ aside#sidebar.open #hide-sidebar-btn {
 .opacity-50 { opacity: 0.5; }
 .mr-1 { margin-right: 0.25rem; }
 .ml-1 { margin-left: 0.25rem; }
+
+/* --- TOASTS (shared notification system, Toast.js) --- */
+#toast-container {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    z-index: 3000;
+    pointer-events: none;
+}
+#toast-container .toast {
+    background: var(--text-main);
+    color: var(--bg-paper);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    max-width: 80vw;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.3s, transform 0.3s;
+}
+#toast-container .toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+#toast-container .toast-success { background: #2e7d32; color: #fff; }
+#toast-container .toast-error { background: #c62828; color: #fff; }

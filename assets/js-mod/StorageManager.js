@@ -1,4 +1,6 @@
 import { IDBHelper } from './IDBHelper.js';
+import { reconcileScript, mergeScriptLists } from './StorageLogic.js';
+import { generateLineId } from './Utils.js';
 
 export class StorageManager {
     constructor(app) {
@@ -52,32 +54,17 @@ export class StorageManager {
             }
 
             // Merge in unsaved changes from LocalStorage
+            const lsEntries = [];
             Object.keys(localStorage).forEach(key => {
                 if (key.startsWith('sfss_autosave_')) {
                     const id = key.replace('sfss_autosave_', '');
                     try {
-                        const localData = JSON.parse(localStorage.getItem(key));
-                        // If IDB has it, merge if newer. If not, add it.
-                        if (scriptsDict[id]) {
-                            if (new Date(localData.lastSavedAt) > new Date(scriptsDict[id].lastSavedAt)) {
-                                scriptsDict[id].content = localData.content;
-                                scriptsDict[id].lastSavedAt = localData.lastSavedAt;
-                            }
-                        } else {
-                            // Only in LS
-                            scriptsDict[id] = {
-                                id: id,
-                                content: localData.content,
-                                lastSavedAt: localData.lastSavedAt,
-                                createdAt: localData.lastSavedAt, // Estimate
-                                lastBackupAt: null
-                            };
-                        }
+                        lsEntries.push({ id, data: JSON.parse(localStorage.getItem(key)) });
                     } catch(e) {}
                 }
             });
 
-            return scriptsDict;
+            return mergeScriptLists(scriptsDict, lsEntries);
         } catch (e) {
             console.error("Error fetching scripts:", e);
             return {};
@@ -102,31 +89,8 @@ export class StorageManager {
             console.error("Error reading from IDB", e);
         }
 
-        // 3. Reconcile
-        if (localScript && dbScript) {
-            // If LocalStorage is newer, use its content but keep IDB metadata
-            if (new Date(localScript.lastSavedAt) > new Date(dbScript.lastSavedAt)) {
-                return {
-                    ...dbScript,
-                    content: localScript.content,
-                    lastSavedAt: localScript.lastSavedAt
-                };
-            }
-            return dbScript;
-        }
-
-        // If only in LS
-        if (localScript) {
-             return {
-                id: scriptId,
-                content: localScript.content,
-                lastSavedAt: localScript.lastSavedAt,
-                createdAt: localScript.lastSavedAt, // Estimate
-                lastBackupAt: null
-            };
-        }
-
-        return dbScript;
+        // 3. Reconcile (pure logic in StorageLogic.js, covered by node tests)
+        return reconcileScript(scriptId, localScript, dbScript);
     }
 
     async saveScript(scriptId, scriptContent) {
@@ -219,7 +183,7 @@ export class StorageManager {
                 meta: { title: `Untitled ${dateStr}`, author: '', contact: '' },
                 sceneMeta: {},
                 blocks: [
-                    { type: 'sc-slug', text: 'INT. ', id: `line-${Math.random().toString(36).substring(2, 11)}` }
+                    { type: 'sc-slug', text: 'INT. ', id: generateLineId() }
                 ],
                 characters: []
             },

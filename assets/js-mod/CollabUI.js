@@ -1,3 +1,5 @@
+import { escapeHtml } from './Utils.js';
+
 export class CollabUI {
     constructor(app) {
         this.app = app;
@@ -634,7 +636,7 @@ export class CollabUI {
         const now = new Date().toLocaleTimeString([], { hour12: false });
         const entry = document.createElement('div');
         entry.className = `log-entry ${type}`;
-        entry.innerHTML = `<span class="log-time">${now}</span> ${msg}`;
+        entry.innerHTML = `<span class="log-time">${now}</span> ${escapeHtml(msg)}`;
         
         consoleEl.appendChild(entry);
         consoleEl.scrollTop = consoleEl.scrollHeight;

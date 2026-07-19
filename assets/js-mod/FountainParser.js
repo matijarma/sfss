@@ -1,4 +1,5 @@
 import * as constants from './Constants.js';
+import { generateLineId } from './Utils.js';
 
 export class FountainParser {
     constructor() {}
@@ -76,7 +77,7 @@ export class FountainParser {
             }
 
             // Generate ID
-            const id = `line-${Math.random().toString(36).substring(2, 11)}`;
+            const id = generateLineId();
 
             // --- FORCED ELEMENTS ---
             if (trimmed.startsWith('.')) {

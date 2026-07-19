@@ -1,4 +1,5 @@
 import * as constants from './Constants.js';
+import { generateLineId } from './Utils.js';
 
 export class EditorHandler {
     constructor(app) {
@@ -650,7 +651,7 @@ export class EditorHandler {
     createBlock(type, text = '', insertAfterNode = null) {
         const div = document.createElement('div');
         div.className = `script-line ${type}`;
-        div.dataset.lineId = `line-${Math.random().toString(36).substring(2, 11)}`;
+        div.dataset.lineId = generateLineId();
         div.textContent = text;
         if (insertAfterNode && insertAfterNode.parentNode === this.app.editor) this.app.editor.insertBefore(div, insertAfterNode.nextSibling);
         else this.app.editor.appendChild(div);

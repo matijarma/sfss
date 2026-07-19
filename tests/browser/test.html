@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RUNNING</title>
+<!--
+  SFSS in-browser test runner (Phase 0).
+
+  Must be served over HTTP from the app root (module imports + fetch need it), e.g.:
+      cd E:\scratch\Sfss\app && python -m http.server 8123
+      -> http://localhost:8123/tests/browser/test.html
+
+  Automation contract (for Chrome-DevTools-MCP / headless drivers):
+    - window.__results        : [{ name, ok, error }] per test
+    - <ul id="results">        : one <li> per test, class "pass" | "fail"
+    - <div id="summary">       : "X passed, Y failed"
+    - document.body.dataset.done === '1' when the run is complete
+    - document.title           : 'PASS' or 'FAIL' when complete
+
+  Adding tests (later phases): append entries to the REGISTRY array below with
+  test('name', async () => { ... }). Nothing else needs to change.
+-->
+<style>
+  body { font-family: monospace; margin: 1.5rem; background: #fff; color: #111; }
+  ul#results { list-style: none; padding: 0; }
+  ul#results li { padding: 2px 6px; }
+  ul#results li.pass { color: #0a6b2d; }
+  ul#results li.pass::before { content: "PASS  "; font-weight: bold; }
+  ul#results li.fail { color: #b00020; background: #fde8ec; }
+  ul#results li.fail::before { content: "FAIL  "; font-weight: bold; }
+  #summary { margin-top: 1rem; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>SFSS browser tests</h1>
+<ul id="results"></ul>
+<div id="summary"></div>
+
+<script type="module">
+window.__results = [];
+
+// ---------- tiny assertion helpers ----------
+function assert(cond, msg) {
+    if (!cond) throw new Error(msg || 'assertion failed');
+}
+function assertEqual(actual, expected, msg) {
+    const a = JSON.stringify(actual);
+    const e = JSON.stringify(expected);
+    if (a !== e) throw new Error(`${msg || 'not equal'}: expected ${e}, got ${a}`);
+}
+
+// ---------- registry ----------
+// Later phases: keep appending test(...) entries here.
+const REGISTRY = [];
+function test(name, fn) {
+    REGISTRY.push({ name, fn });
+}
+
+// ---------- Phase 0 seed tests ----------
+
+test('Constants.js imports and ELEMENT_TYPES has 6 entries', async () => {
+    const mod = await import('../../assets/js-mod/Constants.js');
+    assert(mod.ELEMENT_TYPES, 'ELEMENT_TYPES export missing');
+    assertEqual(Object.keys(mod.ELEMENT_TYPES).length, 6, 'ELEMENT_TYPES entry count');
+    assertEqual(mod.ELEMENT_TYPES.SLUG, 'sc-slug', 'SLUG class name');
+});
+
+test('FountainParser parses simple.fountain (fetched fixture)', async () => {
+    const { FountainParser } = await import('../../assets/js-mod/FountainParser.js');
+    const res = await fetch('../fixtures/fountain/simple.fountain');
+    assert(res.ok, `fetch failed: ${res.status}`);
+    const text = await res.text();
+    const { blocks, meta } = new FountainParser().parse(text);
+    assertEqual(blocks.length, 11, 'block count');
+    assertEqual([blocks[0].type, blocks[0].text], ['sc-slug', 'INT. KITCHEN - DAY'], 'first block');
+    assertEqual(blocks[3].type, 'sc-parenthetical', 'parenthetical detected');
+    assertEqual(blocks[6].type, 'sc-transition', 'transition detected');
+    assertEqual([blocks[10].type, blocks[10].text], ['sc-dialogue', 'Found it.'], 'last block');
+    assertEqual(meta, {}, 'no title page meta');
+});
+
+test('DOMParser parses styled-runs.fdx and finds styled Text runs', async () => {
+    const res = await fetch('../fixtures/fdx/styled-runs.fdx');
+    assert(res.ok, `fetch failed: ${res.status}`);
+    const xml = await res.text();
+    const doc = new DOMParser().parseFromString(xml, 'text/xml');
+    assert(!doc.querySelector('parsererror'), 'XML parse error');
+    assertEqual(doc.documentElement.nodeName, 'FinalDraft', 'root element');
+    const styled = Array.from(doc.querySelectorAll('Text')).filter(t => t.getAttribute('Style'));
+    assertEqual(styled.length, 4, 'styled run count');
+    assertEqual(styled.map(t => t.getAttribute('Style')),
+        ['Bold', 'Italic', 'Bold+Underline', 'Italic'], 'styles in document order');
+    assertEqual(styled[0].textContent, 'SCREAMS', 'bold run text');
+});
+
+// ---------- runner ----------
+async function run() {
+    const ul = document.getElementById('results');
+    for (const { name, fn } of REGISTRY) {
+        const entry = { name, ok: false, error: null };
+        try {
+            await fn();
+            entry.ok = true;
+        } catch (e) {
+            entry.error = e && e.message ? e.message : String(e);
+        }
+        window.__results.push(entry);
+        const li = document.createElement('li');
+        li.className = entry.ok ? 'pass' : 'fail';
+        li.textContent = entry.ok ? name : `${name} — ${entry.error}`;
+        ul.appendChild(li);
+    }
+    const passed = window.__results.filter(r => r.ok).length;
+    const failed = window.__results.length - passed;
+    document.getElementById('summary').textContent = `${passed} passed, ${failed} failed`;
+    document.title = failed ? 'FAIL' : 'PASS';
+    document.body.dataset.done = '1';
+}
+run();
+</script>
+</body>
+</html>

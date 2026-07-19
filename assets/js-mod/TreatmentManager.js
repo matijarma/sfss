@@ -1,4 +1,5 @@
 import * as constants from './Constants.js';
+import { generateLineId } from './Utils.js';
 
 export class TreatmentManager {
     constructor(sfss) {
@@ -116,7 +117,7 @@ export class TreatmentManager {
         const newBlocks = newTexts.map(t => ({
             type: constants.ELEMENT_TYPES.ACTION,
             text: t,
-            id: `line-${Math.random().toString(36).substring(2, 11)}`
+            id: generateLineId()
         }));
         
         blocks.splice(insertIndex, countToRemove, ...newBlocks);
@@ -139,7 +140,7 @@ export class TreatmentManager {
         blocks.splice(endIndex, 0, {
             type: constants.ELEMENT_TYPES.TRANSITION,
             text: 'CUT TO:',
-            id: `line-${Math.random().toString(36).substring(2, 11)}`
+            id: generateLineId()
         });
         this.sfss.isDirty = true;
         this.sfss.treatmentRenderer.refreshScene(slugId);
@@ -159,7 +160,7 @@ export class TreatmentManager {
         blocks.splice(endIndex, 0, {
             type: constants.ELEMENT_TYPES.SLUG,
             text: 'INT. ',
-            id: `line-${Math.random().toString(36).substring(2, 11)}`
+            id: generateLineId()
         });
         this.sfss.isDirty = true;
         this.refreshView();
@@ -185,7 +186,7 @@ export class TreatmentManager {
             charBlock = {
                 type: constants.ELEMENT_TYPES.ACTION,
                 text: `Characters: ${charName}`,
-                id: `line-${Math.random().toString(36).substring(2, 11)}`
+                id: generateLineId()
             };
             blocks.splice(targetIndex, 0, charBlock);
         }

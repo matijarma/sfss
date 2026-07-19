@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<FinalDraft DocumentType="Script" Template="No" Version="1">
+<Content>
+<Paragraph Type="Scene Heading" Number="1"><SceneProperties Length="1/8" Page="1" Title=""></SceneProperties>
+<Text>INT. OFFICE - DAY</Text>
+</Paragraph>
+<Paragraph Type="Action">
+<Text>A phone rings, unanswered.</Text>
+</Paragraph>
+</Content>
+<TitlePage>
+<Content>
+<Paragraph Alignment="Center"><Text>Title: The Big One</Text></Paragraph>
+<Paragraph Alignment="Center"><Text>Author: Jane Doe</Text></Paragraph>
+<Paragraph Alignment="Center"><Text>Contact: jane@example.com</Text></Paragraph>
+</Content>
+</TitlePage>
+<SmartType>
+<Characters>
+<Character>JANE</Character>
+</Characters>
+<Locations>
+<Location>INT. OFFICE</Location>
+</Locations>
+<Times>
+<Time>DAY</Time>
+</Times>
+<Extensions>
+<Extension>V.O.</Extension>
+</Extensions>
+</SmartType>
+</FinalDraft>

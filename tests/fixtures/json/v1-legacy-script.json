@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "title": "Legacy Fixture",
+    "author": "Jane Doe",
+    "contact": "jane@example.com",
+    "showTitlePage": true,
+    "showSceneNumbers": false,
+    "showDate": false
+  },
+  "sceneMeta": {
+    "line-aaa111aaa": { "number": "1", "description": "John burns the coffee." },
+    "line-ddd444ddd": { "number": "2" }
+  },
+  "blocks": [
+    { "type": "sc-slug", "text": "INT. KITCHEN - DAY", "id": "line-aaa111aaa" },
+    { "type": "sc-action", "text": "JOHN stands at the counter, pouring coffee.", "id": "line-bbb222bbb" },
+    { "type": "sc-character", "text": "JOHN", "id": "line-ccc333ccc" },
+    { "type": "sc-parenthetical", "text": "(muttering)", "id": "line-ccc333cc2" },
+    { "type": "sc-dialogue", "text": "Not again.", "id": "line-ccc333cc3" },
+    { "type": "sc-transition", "text": "CUT TO:", "id": "line-ccc333cc4" },
+    { "type": "sc-slug", "text": "EXT. BACKYARD - DAY", "id": "line-ddd444ddd" },
+    { "type": "sc-action", "text": "MARY digs a small hole near the fence.", "id": "line-eee555eee" },
+    { "type": "sc-character", "text": "MARY", "id": "line-fff666fff" },
+    { "type": "sc-dialogue", "text": "Found it.", "id": "line-fff666ff2" }
+  ],
+  "characters": ["JOHN", "MARY"]
+}

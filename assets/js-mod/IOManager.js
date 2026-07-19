@@ -1,4 +1,5 @@
 import * as constants from './Constants.js';
+import { escapeXML } from './Utils.js';
 
 export class IOManager {
     constructor(sfss) {
@@ -288,53 +289,7 @@ export class IOManager {
         a.click();
     }
 
-    printScript() {
-        if (!this.sfss.pageViewActive) this.sfss.togglePageView();
-        const style = document.createElement('style');
-        style.id = 'print-style';
-        let headerContent = (this.sfss.meta.title || 'Untitled Screenplay').replace(/"/g, "'");
-        if (this.sfss.meta.showDate) {
-            headerContent += ` / ${new Date().toLocaleDateString()}`;
-        }
-        style.innerHTML = `@media print { 
-                                @page { 
-                                    size: letter;
-                                    margin-top: 1.0in;
-                                    margin-bottom: 1.0in;
-                                    margin-left: 1.5in;
-                                    margin-right: 1.0in;
-                                    @top-right { 
-                                        content: "${headerContent}"; 
-                                        font-size: 12pt; 
-                                        font-family: 'Courier Prime', monospace; 
-                                        color: #333;
-                                    } 
-                                    @bottom-center { 
-                                        content: counter(page); 
-                                        font-size: 12pt; 
-                                        font-family: 'Courier Prime', monospace; color: #333; 
-                                    } 
-                                } 
-                                @page :first { 
-                                    @top-right { content: normal; } 
-                                    @bottom-center { content: normal; } 
-                                } 
-                            }`;
-        document.head.appendChild(style);
-        window.print();
-        const printStyle = document.getElementById('print-style');
-        if (printStyle) printStyle.remove();
-    }
-
     escapeXML(unsafe) {
-        return unsafe.replace(/[<>&'"']/g, c => {
-            switch (c) {
-                case '<': return '&lt;';
-                case '>': return '&gt;';
-                case '&': return '&amp;';
-                case '\'': return '&apos;';
-                case '"': return '&quot;';
-            }
-        });
+        return escapeXML(unsafe || '');
     }
 }

@@ -11,6 +11,7 @@
  */
 
 import * as constants from './Constants.js';
+import { escapeHtml } from './Utils.js';
 import { SidebarManager } from './SidebarManager.js';
 import { EditorHandler } from './EditorHandler.js';
 import { ScrollbarManager } from './ScrollbarManager.js';
@@ -185,7 +186,11 @@ export class SFSS {
     async init() {
         this.measureLineHeight();
         this.pageRenderer = new PageRenderer(this.lineHeight);
-        
+
+        // One-time cleanup: these caches were written but never read anywhere.
+        localStorage.removeItem('sfss_meta');
+        localStorage.removeItem('sfss_scene_meta');
+
         // Theme initialization logic now relies on SettingsManager (or we keep this init check here as it reads CSS/Media)
         const storedTheme = localStorage.getItem('sfss_theme');
         if (storedTheme === 'dark' || (!storedTheme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -202,11 +207,6 @@ export class SFSS {
         this.initMenu('screenplay-menu-container', 'screenplay-menu-dropdown');
         this.initMenu('documents-menu-container', 'documents-menu-dropdown');
         this.initMenu('app-menu-container', 'app-menu-dropdown');
-
-        window.onafterprint = () => {
-            const printStyle = document.getElementById('print-style');
-            if (printStyle) printStyle.remove();
-        };
 
         new ScrollbarManager('#scroll-area');
         document.querySelectorAll('.modal-body').forEach(el => new ScrollbarManager(el));
@@ -325,7 +325,7 @@ export class SFSS {
             if (isActive) item.classList.add('bg-scene-hover'); 
             item.style.fontSize = '0.8rem';
             const activeText = isActive ? ' <span class="text-accent text-xs">(Open)</span>' : '';
-            item.innerHTML = `<div class="font-bold">${title}${activeText}</div><div class="text-xs opacity-50">${date}</div>`;
+            item.innerHTML = `<div class="font-bold">${escapeHtml(title)}${activeText}</div><div class="text-xs opacity-50">${date}</div>`;
             item.onclick = async () => {
                 document.getElementById('mobile-welcome-modal').classList.add('hidden');
                 await this.loadScript(id);
@@ -1086,7 +1086,6 @@ export class SFSS {
     async persistSettings() {
         const currentTopId = this.getCurrentScrollElement();
         this.applySettings();
-        localStorage.setItem('sfss_meta', JSON.stringify(this.meta));
         this.saveState(true);
         await this.save();
         if (this.pageViewActive) {

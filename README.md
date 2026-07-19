@@ -105,7 +105,6 @@ The codebase is organized into a modular, class-based architecture.
 │   │   ├── SettingsManager.js       # Keymaps, theme, and preferences.
 │   │   ├── FountainParser.js        # Fountain parsing/generation.
 │   │   ├── ScrollbarManager.js      # Styled scrollbar helper.
-│   │   ├── MobileApp.js             # Mobile bootstrap/runtime.
 │   │   ├── Constants.js             # Defines element types and other static configs.
 │   │   └── IDBHelper.js             # A wrapper for IndexedDB operations.
 │   │

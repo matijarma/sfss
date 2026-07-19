@@ -6,10 +6,6 @@ export class TreatmentRenderer {
         this.container = null;
     }
 
-    render(container) {
-        // Legacy entry point
-    }
-    
     refreshScene(sceneId) {
         if (!this.container) return;
         const oldBlock = this.container.querySelector(`.treatment-scene-block[data-scene-id="${sceneId}"]`);

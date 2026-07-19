@@ -1,5 +1,6 @@
 import * as constants from './Constants.js';
 import { PageRenderer } from './PageRenderer.js';
+import { escapeHtml, formatEighths } from './Utils.js';
 
 export class PrintManager {
     constructor(app) {
@@ -396,13 +397,13 @@ export class PrintManager {
         page.innerHTML = `
             <div style="text-align: center; margin-top: 3in; color: black;">
                 <div style="font-family: 'Courier Prime'; font-weight: bold; font-size: 24pt; text-decoration: underline; margin-bottom: 2in; text-transform: uppercase;">
-                    ${this.app.meta.title || 'UNTITLED'}
+                    ${escapeHtml(this.app.meta.title || 'UNTITLED')}
                 </div>
                 <div style="font-family: 'Courier Prime'; font-size: 12pt; margin-bottom: 0.5in;">written by</div>
-                <div style="font-family: 'Courier Prime'; font-size: 14pt; margin-bottom: 2in;">${this.app.meta.author || ''}</div>
+                <div style="font-family: 'Courier Prime'; font-size: 14pt; margin-bottom: 2in;">${escapeHtml(this.app.meta.author || '')}</div>
             </div>
             <div style="position: absolute; bottom: 1in; left: 1.5in; font-family: 'Courier Prime'; font-size: 12pt; text-align: left; line-height: 1.2; color: black;">
-                ${(this.app.meta.contact || '').replace(/\n/g, '<br>')}
+                ${escapeHtml(this.app.meta.contact || '').replace(/\n/g, '<br>')}
             </div>
         `;
         return page;
@@ -574,8 +575,8 @@ export class PrintManager {
         const header = document.createElement('div');
         header.className = 'overview-header';
         header.innerHTML = `
-            <div class="overview-title">${title}</div>
-            <div class="overview-author">${author ? `by ${author}` : ''}</div>
+            <div class="overview-title">${escapeHtml(title)}</div>
+            <div class="overview-author">${author ? `by ${escapeHtml(author)}` : ''}</div>
             <div class="overview-date">${new Date().toLocaleDateString()}</div>
         `;
         page.appendChild(header);
@@ -601,8 +602,8 @@ export class PrintManager {
             row.className = 'index-row compact';
             row.innerHTML = `
                 <div class="index-num">${scene.number}.</div>
-                <div class="index-title" title="${scene.slugText}">${(scene.slugText || 'Untitled').toUpperCase()}</div>
-                <div class="index-meta">${scene.lengthLabel || scene.pageRange || '-'}</div>
+                <div class="index-title" title="${escapeHtml(scene.slugText || '')}">${escapeHtml((scene.slugText || 'Untitled').toUpperCase())}</div>
+                <div class="index-meta">${escapeHtml(scene.lengthLabel || scene.pageRange || '-')}</div>
             `;
             grid.appendChild(row);
         });
@@ -1325,10 +1326,10 @@ export class PrintManager {
             header.innerHTML = `
                 <div class="doc-title-block">
                     <div class="doc-label">Treatment</div>
-                    <div class="doc-title">${(this.app.meta.title || 'Untitled Screenplay').toUpperCase()}</div>
+                    <div class="doc-title">${escapeHtml((this.app.meta.title || 'Untitled Screenplay').toUpperCase())}</div>
                 </div>
                 <div class="doc-submeta">
-                    ${this.app.meta.author ? `<div>${this.app.meta.author}</div>` : ''}
+                    ${this.app.meta.author ? `<div>${escapeHtml(this.app.meta.author)}</div>` : ''}
                     <div>${new Date().toLocaleDateString()}</div>
                 </div>
             `;
@@ -1344,7 +1345,7 @@ export class PrintManager {
         const iconWrap = document.createElement('div');
         iconWrap.className = 'scene-icon-pill';
         if (scene.meta?.icon) {
-            iconWrap.innerHTML = `<i class="${scene.meta.icon}"></i>`;
+            iconWrap.innerHTML = `<i class="${escapeHtml(scene.meta.icon)}"></i>`;
         } else {
             iconWrap.innerHTML = `<i class="fas fa-icons"></i>`;
             iconWrap.classList.add('scene-icon-placeholder');
@@ -1536,11 +1537,11 @@ export class PrintManager {
         header.innerHTML = `
             <div class="doc-title-block">
                 <div class="doc-label">Report</div>
-                <div class="doc-title">${title || 'Report'}</div>
-                ${subtitle ? `<div class="doc-submeta">${subtitle}</div>` : ''}
+                <div class="doc-title">${escapeHtml(title || 'Report')}</div>
+                ${subtitle ? `<div class="doc-submeta">${escapeHtml(subtitle)}</div>` : ''}
             </div>
             <div class="doc-submeta">
-                ${this.app.meta.title ? `<div>${(this.app.meta.title || '').toUpperCase()}</div>` : ''}
+                ${this.app.meta.title ? `<div>${escapeHtml((this.app.meta.title || '').toUpperCase())}</div>` : ''}
                 <div>${new Date().toLocaleDateString()}</div>
             </div>
         `;

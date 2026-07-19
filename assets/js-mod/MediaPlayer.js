@@ -1,3 +1,5 @@
+import { escapeHtml, extractYouTubeVideoId } from './Utils.js';
+
 export class MediaPlayer {
     constructor(app) {
         this.app = app;
@@ -163,15 +165,7 @@ export class MediaPlayer {
     }
 
     extractYouTubeVideoId(url) {
-        if (!url) return null;
-        try {
-            const urlObj = new URL(url);
-            let videoId = urlObj.hostname === 'youtu.be' 
-                ? urlObj.pathname.slice(1).split('/')[0] 
-                : urlObj.searchParams.get('v');
-            if (videoId && /^[a-zA-Z0-9_-]{11}$/.test(videoId)) return videoId;
-        } catch (e) { /* not a valid URL */ }
-        return null;
+        return extractYouTubeVideoId(url);
     }
 
     updatePlayerIndicator(index) {
@@ -207,7 +201,7 @@ export class MediaPlayer {
             }
         }
         
-        this.playerIndicator.innerHTML = `<span class="marquee-text">${text}</span>`;
+        this.playerIndicator.innerHTML = `<span class="marquee-text">${escapeHtml(text)}</span>`;
         this.playerIndicator.title = title;
     }
 

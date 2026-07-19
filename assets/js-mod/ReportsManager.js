@@ -1,5 +1,6 @@
 import * as constants from './Constants.js';
 import { PageRenderer } from './PageRenderer.js';
+import { escapeHtml, formatEighths } from './Utils.js';
 
 export class ReportsManager {
     constructor(app) {
@@ -144,7 +145,7 @@ export class ReportsManager {
                 this.downloadPdfBtn.classList.remove('hidden');
             } catch (e) {
                 console.error("Report Generation Error:", e);
-                this.outputArea.innerHTML = `<div class="report-error">Error: ${e.message}</div>`;
+                this.outputArea.innerHTML = `<div class="report-error">Error: ${escapeHtml(e.message)}</div>`;
             }
         }, 100);
     }
@@ -436,6 +437,7 @@ export class ReportsManager {
             }
         });
         flushScene();
+        stats.totalScenes = globalSceneIndex;
 
         stats.monologues.sort((a, b) => b.words - a.words);
         return stats;
@@ -443,9 +445,12 @@ export class ReportsManager {
 
     renderPieChart(label, data, colors) {
         const total = Object.values(data).reduce((a, b) => a + b, 0);
+        if (total === 0) {
+            return `<div class="chart-container-flex"><div class="text-faded text-sm">No data yet</div></div>`;
+        }
         let conicStops = [];
         let currentDeg = 0;
-        
+
         Object.entries(data).forEach(([key, val], idx) => {
             const deg = (val / total) * 360;
             const color = colors[idx % colors.length];
@@ -453,11 +458,21 @@ export class ReportsManager {
             currentDeg += deg;
         });
 
+        // Largest-remainder rounding so legend percentages always sum to 100.
+        const entries = Object.entries(data);
+        const exact = entries.map(([, val]) => (val / total) * 100);
+        const floors = exact.map(Math.floor);
+        let leftover = 100 - floors.reduce((a, b) => a + b, 0);
+        exact.map((v, i) => [v - floors[i], i])
+            .sort((a, b) => b[0] - a[0])
+            .slice(0, leftover)
+            .forEach(([, i]) => floors[i]++);
+
         const chartStyle = `background: conic-gradient(${conicStops.join(', ')}); width: 80px; height: 80px; border-radius: 50%;`;
-        const legendHtml = Object.entries(data).map(([key, val], idx) => `
+        const legendHtml = entries.map(([key], idx) => `
             <div class="chart-legend-row">
                 <span class="chart-legend-dot" style="background:${colors[idx % colors.length]};"></span>
-                <span>${key} (${Math.round(val/total*100)}%)</span>
+                <span>${escapeHtml(key)} (${floors[idx]}%)</span>
             </div>
         `).join('');
 
@@ -472,7 +487,7 @@ export class ReportsManager {
     renderCharacterBadge(name, isSpeaking) {
         const color = this.charColors[name] || '#666';
         const className = isSpeaking ? 'badge-custom' : 'badge-custom-outline';
-        return `<span class="badge ${className}" style="--badge-color: ${color}" title="${isSpeaking ? 'Speaking' : 'Non-Speaking'}">${name}</span>`;
+        return `<span class="badge ${className}" style="--badge-color: ${color}" title="${isSpeaking ? 'Speaking' : 'Non-Speaking'}">${escapeHtml(name)}</span>`;
     }
 
     renderScriptReport(data) {
@@ -531,7 +546,7 @@ export class ReportsManager {
                                 <tbody>
                                     ${sortedChars.map(c => `
                                         <tr>
-                                            <td class="font-bold" style="color:${this.charColors[c.name]};">${c.name}</td>
+                                            <td class="font-bold" style="color:${this.charColors[c.name]};">${escapeHtml(c.name)}</td>
                                             <td class="text-center font-mono">${c.speakingScenes}</td>
                                             <td class="text-center font-mono text-faded">${c.nonSpeakingScenes}</td>
                                             <td class="text-right font-mono">${c.words}</td>
@@ -565,7 +580,7 @@ export class ReportsManager {
                                 <tr>
                                     <td class="text-faded text-sm">${s.number}</td>
                                     <td class="font-mono text-sm">${this.formatEighths(s.eighths)}</td>
-                                    <td class="font-bold text-sm truncate" title="${s.title}">${s.title}</td>
+                                    <td class="font-bold text-sm truncate" title="${escapeHtml(s.title)}">${escapeHtml(s.title)}</td>
                                     <td>
                                         <div class="flex-wrap-gap-4">
                                             ${badges.join('')}
@@ -584,10 +599,10 @@ export class ReportsManager {
                         ${data.monologues.slice(0, 4).map(m => `
                              <div class="stat-item monologue-item">
                                 <div class="flex-justify-between-full">
-                                    <span class="font-bold" style="color:${this.charColors[m.speaker]}">${m.speaker}</span>
+                                    <span class="font-bold" style="color:${this.charColors[m.speaker]}">${escapeHtml(m.speaker)}</span>
                                     <span class="text-faded text-sm">Sc ${m.scene} • ${m.words}w</span>
                                 </div>
-                                <div class="text-italic-faded">"${m.text}"</div>
+                                <div class="text-italic-faded">"${escapeHtml(m.text)}"</div>
                              </div>
                         `).join('')}
                     </div>
@@ -604,7 +619,7 @@ export class ReportsManager {
         return `
             <div class="report-container">
                 <div class="report-header">
-                    <h2 style="color:${this.charColors[data.name]}">${data.name}</h2>
+                    <h2 style="color:${this.charColors[data.name]}">${escapeHtml(data.name)}</h2>
                     <div class="flex-gap-05">
                          <span class="badge speaking">${data.scenesSpeaking} Speaking Scenes</span>
                          <span class="badge non-speaking">${data.scenesNonSpeaking} Non-Speaking</span>
@@ -632,7 +647,7 @@ export class ReportsManager {
                         <table class="report-table">
                             ${sortedInteractions.map(([name, count]) => `
                                 <tr>
-                                    <td>${name}</td>
+                                    <td>${escapeHtml(name)}</td>
                                     <td class="text-right font-mono">${count} exchanges</td>
                                 </tr>
                             `).join('')}
@@ -644,7 +659,7 @@ export class ReportsManager {
                          <h3>Stats</h3>
                          <div class="stat-item">
                             <span>Scene Presence</span>
-                            <span class="font-mono">${Math.round((data.scenes.length / (this.app.editor.querySelectorAll('.sc-slug').length || 1))*100)}% of Script</span>
+                            <span class="font-mono">${Math.round((data.scenes.length / (data.totalScenes || 1)) * 100)}% of Script</span>
                          </div>
                     </div>
                 </div>
@@ -664,7 +679,7 @@ export class ReportsManager {
                             ${data.scenes.map(s => `
                                 <tr>
                                     <td class="text-faded">${s.number}</td>
-                                    <td class="font-bold text-sm truncate" title="${s.title}">${s.title}</td>
+                                    <td class="font-bold text-sm truncate" title="${escapeHtml(s.title)}">${escapeHtml(s.title)}</td>
                                     <td class="text-center">
                                         <span class="badge ${s.type === 'speaking' ? 'speaking' : 'non-speaking'}">
                                             ${s.type}
@@ -681,10 +696,7 @@ export class ReportsManager {
     }
 
     formatEighths(e) {
-        if (e < 8) return `${e}/8`;
-        const p = Math.floor(e/8);
-        const rem = e % 8;
-        return rem === 0 ? `${p}pg` : `${p} ${rem}/8`;
+        return formatEighths(e);
     }
 
     formatScriptReportTxt(data) {
@@ -820,13 +832,13 @@ export class ReportsManager {
 
     renderCharacterDialogues(character, dialogueData = []) {
         if (!dialogueData.length) return '<div class="report-section"><h3>Dialogues</h3><div class="report-error">No dialogue found for this character.</div></div>';
-        const escape = (str = '') => str.replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const blocksToHtml = (blocks) => blocks.map(b => {
             const cls = `script-line ${b.type} ${b.isTarget ? '' : 'counterpart-line'}`.trim();
-            const speakerLabel = b.type === constants.ELEMENT_TYPES.CHARACTER ? escape(b.speaker || '') : '';
-            const text = escape(b.text || '');
+            const speakerLabel = b.type === constants.ELEMENT_TYPES.CHARACTER ? escapeHtml(b.speaker || '') : '';
+            const text = escapeHtml(b.text || '');
             if (b.type === constants.ELEMENT_TYPES.CHARACTER) return `<div class="${cls}">${speakerLabel}</div>`;
-            if (b.type === constants.ELEMENT_TYPES.PARENTHETICAL) return `<div class="${cls}">(${text})</div>`;
+            // Parens come from the global .sc-parenthetical::before/::after CSS
+            // rules — baking them in here doubled them.
             return `<div class="${cls}">${text}</div>`;
         }).join('');
 

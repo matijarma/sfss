@@ -1,5 +1,6 @@
 import * as constants from './Constants.js';
 import { IDBHelper } from './IDBHelper.js';
+import { escapeHtml, generateLineId } from './Utils.js';
 
 export class SidebarManager {
     constructor(app) {
@@ -331,9 +332,9 @@ export class SidebarManager {
         header.innerHTML = `
             <div class="scene-item-main scene-item-main-flex">
                 ${iconHtml}
-                <div title="${sceneTitle}">
-                    <span class="opacity-50 mr-1 scene-number-editable ${colorClass}" contenteditable="true">${displaySceneNumber || ''}</span>
-                    <span class="ml-1">${sceneTitle}</span>
+                <div title="${escapeHtml(sceneTitle)}">
+                    <span class="opacity-50 mr-1 scene-number-editable ${colorClass}" contenteditable="true">${escapeHtml(displaySceneNumber || '')}</span>
+                    <span class="ml-1">${escapeHtml(sceneTitle)}</span>
                 </div>
             </div>
             ${pageCountHtml}
@@ -380,12 +381,12 @@ export class SidebarManager {
                 <div class="meta-grid">
                     <div class="col-span-full">
                         <label class="settings-label" for="scene-description-input"><i class="fas fa-align-left fa-fw"></i> Description:</label>
-                        <textarea id="scene-description-input" class="settings-input" rows="2" placeholder="A brief summary of the scene.">${meta.description || ''}</textarea>
+                        <textarea id="scene-description-input" class="settings-input" rows="2" placeholder="A brief summary of the scene.">${escapeHtml(meta.description || '')}</textarea>
                     </div>
                 </div>
                 <div class="mt-3">
                     <label class="settings-label" for="scene-notes-input"><i class="fas fa-sticky-note fa-fw"></i> Notes:</label>
-                    <textarea id="scene-notes-input" class="settings-input" rows="4" placeholder="Production notes, continuity details, etc.">${meta.notes || ''}</textarea>
+                    <textarea id="scene-notes-input" class="settings-input" rows="4" placeholder="Production notes, continuity details, etc.">${escapeHtml(meta.notes || '')}</textarea>
                 </div>
                 <div class="mt-3">
                      <label class="settings-label"><i class="fas fa-images fa-fw"></i> Images:</label>
@@ -487,7 +488,7 @@ export class SidebarManager {
         if (meta.track && meta.trackTitle) {
             trackArea.innerHTML = `
                 <div class="track-display">
-                    <span><strong>${meta.trackArtist}</strong> - ${meta.trackTitle}</span>
+                    <span><strong>${escapeHtml(meta.trackArtist)}</strong> - ${escapeHtml(meta.trackTitle)}</span>
                     <button class="btn-icon" id="remove-track-btn" title="Remove track"><i class="fas fa-times"></i></button>
                 </div>
             `;
@@ -585,28 +586,25 @@ export class SidebarManager {
         const prevNumber = this.app.sceneMeta[sceneId].number ?? null;
         const descriptionInput = document.getElementById('scene-description-input');
         const notesInput = document.getElementById('scene-notes-input');
-        const trackInput = document.getElementById('scene-track-input');
         // numberInput is gone, handled by contentEditable span logic directly updating this.app.sceneMeta before calling save
 
         const description = descriptionInput ? descriptionInput.value : this.app.sceneMeta[sceneId].description;
         const notes = notesInput ? notesInput.value : this.app.sceneMeta[sceneId].notes;
-        const track = trackInput ? trackInput.value : this.app.sceneMeta[sceneId].track;
-        
+
         // Use existing number if not being set by this call context (which is fine, span logic sets it directly)
         const number = this.app.sceneMeta[sceneId].number;
 
-        // Note: this.app.sceneMeta[sceneId].images is managed separately now
-        this.app.sceneMeta[sceneId] = { 
-            ...this.app.sceneMeta[sceneId], 
-            description, 
-            notes, 
-            track,
+        // Note: images and track are managed by their own flows (renderSceneImages,
+        // renderTrackArea) and already live in the ...spread.
+        this.app.sceneMeta[sceneId] = {
+            ...this.app.sceneMeta[sceneId],
+            description,
+            notes,
             number
         };
         const newNumber = this.app.sceneMeta[sceneId].number ?? null;
         const numberChanged = prevNumber !== newNumber;
 
-        localStorage.setItem('sfss_scene_meta', JSON.stringify(this.app.sceneMeta));
         this.app.isDirty = true;
         
         // Targeted refresh instead of full refresh
@@ -670,7 +668,6 @@ export class SidebarManager {
         await this.app.save();
 
         this.app.applySettings();
-        localStorage.setItem('sfss_meta', JSON.stringify(this.app.meta));
         this.app.saveState(true);
         await this.app.populateOpenMenu();
         this.closeScriptMetaPopup();
@@ -698,7 +695,7 @@ export class SidebarManager {
                 lineId = slug.id;
                 text = slug.text;
             } else {
-                lineId = slug.dataset.lineId || `line-${Math.random().toString(36).substring(2, 11)}`;
+                lineId = slug.dataset.lineId || generateLineId();
                 if (!slug.dataset.lineId) slug.dataset.lineId = lineId;
                 text = slug.textContent;
             }
@@ -751,18 +748,18 @@ export class SidebarManager {
                 }
             }
             
-            const iconHtml = meta.icon ? `<i class="${meta.icon} fa-fw"></i>` : '';
+            const iconHtml = meta.icon ? `<i class="${escapeHtml(meta.icon)} fa-fw"></i>` : '';
             const hasTrack = meta.track && this.app.mediaPlayer.extractYouTubeVideoId(meta.track);
             const italicStyle = hasTrack ? 'font-style: italic;' : '';
             const colorClass = meta.color || '';
-            
+
             if (colorClass) item.classList.add(colorClass);
 
             item.innerHTML = `
                 <div class="scene-grid-layout">
-                    <span class="scene-grid-number">${displaySceneNumber}.</span>
+                    <span class="scene-grid-number">${escapeHtml(String(displaySceneNumber))}.</span>
                     <span class="scene-grid-icon">${iconHtml}</span>
-                    <span class="scene-grid-title truncate" title="${text}" style="${italicStyle}">${text}</span>
+                    <span class="scene-grid-title truncate" title="${escapeHtml(text)}" style="${italicStyle}">${escapeHtml(text)}</span>
                     <div class="scene-grid-meta">
                         ${pageCountHtml}
                         <button class="scene-config-btn" title="Scene Settings">
@@ -887,7 +884,6 @@ export class SidebarManager {
              this.app.sceneMeta[sceneId].color = colorClass;
         }
 
-        localStorage.setItem('sfss_scene_meta', JSON.stringify(this.app.sceneMeta));
         this.app.isDirty = true;
         this.updateSceneList();
         if (this.app.treatmentModeActive) {
@@ -899,7 +895,6 @@ export class SidebarManager {
     saveSceneIcon(sceneId, iconClass) {
         if (!this.app.sceneMeta[sceneId]) this.app.sceneMeta[sceneId] = {};
         this.app.sceneMeta[sceneId].icon = iconClass;
-        localStorage.setItem('sfss_scene_meta', JSON.stringify(this.app.sceneMeta));
         this.app.isDirty = true;
         this.updateSceneList();
         if (this.app.treatmentModeActive) {
