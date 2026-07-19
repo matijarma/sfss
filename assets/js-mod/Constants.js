@@ -76,13 +76,18 @@ export const PAPER_CONFIGS = {
     }
 };
 
+// AUTHORITATIVE element geometry (inches from the left text margin / column
+// widths). GeometryManager.applyGeometryCssVariables() writes these as
+// --sc-indent-*/--sc-width-* custom properties on :root at boot; print.css
+// (.page scope) and editor.css (desktop scope) consume them via
+// var(--sc-*, <fallback>) with fallbacks equal to these values (R17).
 export const ELEMENT_INDENTS = {
-    [ELEMENT_TYPES.SLUG]: { left: 0, width: '100%' },
-    [ELEMENT_TYPES.ACTION]: { left: 0, width: '100%' },
+    [ELEMENT_TYPES.SLUG]: { left: 0, width: 6.0 },
+    [ELEMENT_TYPES.ACTION]: { left: 0, width: 6.0 },
     [ELEMENT_TYPES.CHARACTER]: { left: 2.2, width: 'auto' }, // Inches from margin
     [ELEMENT_TYPES.DIALOGUE]: { left: 1.0, width: 3.5 },
     [ELEMENT_TYPES.PARENTHETICAL]: { left: 1.6, width: 2.4 },
-    [ELEMENT_TYPES.TRANSITION]: { left: 0, width: 'auto', align: 'right' } // Special handling
+    [ELEMENT_TYPES.TRANSITION]: { left: 0, width: 'auto', align: 'right' } // Right-aligned: margin-left stays auto
 };
 
 export const CHARACTER_SUFFIXES = [

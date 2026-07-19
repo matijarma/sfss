@@ -22,7 +22,7 @@ import { EditorHandler } from './EditorHandler.js';
 import { ScrollbarManager } from './ScrollbarManager.js';
 import { StorageManager } from './StorageManager.js';
 import { ReportsManager } from './ReportsManager.js';
-import { PageRenderer } from './PageRenderer.js';
+import { GeometryManager } from './GeometryManager.js';
 import { TreatmentRenderer } from './TreatmentRenderer.js';
 import { FountainParser } from './FountainParser.js';
 // New Modules
@@ -41,13 +41,6 @@ export class SFSS {
         this.menuOverlay = document.getElementById('menu-overlay');
         this.pageViewContainer = document.getElementById('page-view-container');
         this.mainArea = document.getElementById('main-area');
-
-        // Page rendering constants
-        this.PAGE_HEIGHT_PX = 11 * 96;
-        this.PAGE_MARGIN_TOP_PX = 1 * 96;
-        this.PAGE_MARGIN_BOTTOM_PX = 1 * 96;
-        this.CONTENT_HEIGHT_PX = this.PAGE_HEIGHT_PX - this.PAGE_MARGIN_TOP_PX - this.PAGE_MARGIN_BOTTOM_PX;
-        this.lineHeight = 14; 
 
         // Responsive State
         this.sidebarMediaQuery = window.matchMedia('(max-width: 1024px)');
@@ -193,8 +186,11 @@ export class SFSS {
     }
 
     async init() {
-        this.measureLineHeight();
-        this.pageRenderer = new PageRenderer(this.lineHeight);
+        // Geometry unification: ONE shared PageRenderer, owned by the
+        // GeometryManager. this.pageRenderer stays as an alias — many call
+        // sites use it.
+        this.geometry = new GeometryManager(this);
+        this.pageRenderer = this.geometry.renderer;
 
         // One-time cleanup: these caches were written but never read anywhere.
         localStorage.removeItem('sfss_meta');
@@ -376,6 +372,13 @@ export class SFSS {
     }
 
     bindEventListeners() {
+        // Toolbar page counter: fed exclusively by the shared geometry engine
+        // (replaces the old text.length/60 heuristic — R1).
+        document.addEventListener('sfss-geometry', (e) => {
+            const el = document.getElementById('stats-pages');
+            if (el && e.detail) el.textContent = `Pages: ${e.detail.pageCount}`;
+        });
+
         this.pageViewContainer.addEventListener('mouseup', this.editorHandler.updateContext.bind(this.editorHandler));
         this.pageViewContainer.addEventListener('keyup', this.editorHandler.updateContext.bind(this.editorHandler));
         
@@ -859,16 +862,6 @@ export class SFSS {
         this.modalManager.close('reports-modal');
     }
 
-    measureLineHeight() {
-        const div = document.createElement('div');
-        div.className = 'script-line sc-action';
-        div.textContent = 'X';
-        Object.assign(div.style, { position: 'absolute', visibility: 'hidden', top: '-1000px', left: '-1000px' });
-        this.editor.appendChild(div);
-        this.lineHeight = div.offsetHeight > 0 ? div.offsetHeight : 14; 
-        this.editor.removeChild(div);
-    }
-
     initMenu(containerId, dropdownId) {
         const container = document.getElementById(containerId);
         const dropdown = document.getElementById(dropdownId);
@@ -1115,6 +1108,11 @@ export class SFSS {
         };
         if (force) saveFn();
         else this.historyTimeout = setTimeout(saveFn, 500);
+
+        // Every edit path funnels through saveState — kick the (debounced)
+        // geometry recompute so page/eighths consumers repaint via the
+        // 'sfss-geometry' event.
+        if (this.geometry) this.geometry.requestUpdate();
     }
 
     async undo() {
@@ -1248,23 +1246,6 @@ export class SFSS {
             tp.classList.remove('visible');
         }
         this.updateSceneNumbersInEditor(); 
-    }
-
-    updatePageCount() {
-        const linesPerPage = 55;
-        let totalLines = 0;
-        this.editor.querySelectorAll('.script-line').forEach(block => {
-            const text = block.textContent;
-            const type = this.editorHandler.getBlockType(block);
-            totalLines++; 
-            switch (type) {
-                case constants.ELEMENT_TYPES.SLUG: totalLines++; break;
-                case constants.ELEMENT_TYPES.ACTION: totalLines += Math.floor(text.length / 60); break;
-                case constants.ELEMENT_TYPES.DIALOGUE: totalLines += Math.floor(text.length / 35); break;
-                case constants.ELEMENT_TYPES.TRANSITION: totalLines++; break;
-            }
-        });
-        return Math.ceil(totalLines / linesPerPage) || 1;
     }
 
     findParentSlug(block) {
@@ -1577,6 +1558,7 @@ export class SFSS {
             await this.save();
             this.saveState(true);
         }
+        if (this.geometry) this.geometry.requestUpdate();
     }
 
     async populateOpenMenu(container) {

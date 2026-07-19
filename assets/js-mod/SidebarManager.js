@@ -1,6 +1,6 @@
 import * as constants from './Constants.js';
 import { IDBHelper } from './IDBHelper.js';
-import { escapeHtml, generateLineId } from './Utils.js';
+import { escapeHtml, formatEighths, generateLineId } from './Utils.js';
 import { toast } from './Toast.js';
 
 export class SidebarManager {
@@ -178,7 +178,7 @@ export class SidebarManager {
         if (!slug) return;
     
         const { eighths, speakingCharacters, detailedStats } = this._getSceneStats(slug);
-        const lenstring = (eighths/8 >= 1) ? (eighths - (eighths%8))/8 + "pg " + (eighths%8==0 ? "" : eighths%8 + "/8") : eighths%8 + "/8";
+        const lenstring = formatEighths(eighths);
 
         const condensedGrid = popup.querySelector('.stats-grid-condensed');
         if (condensedGrid) {
@@ -196,11 +196,20 @@ export class SidebarManager {
         });
     }
 
+    // Scene eighths from the shared geometry engine (R1). Returns a Map of
+    // slug lineId -> scene geometry (empty map if geometry is unavailable).
+    _getGeometryById() {
+        try {
+            return this.app.geometry.getScenePagination().byId;
+        } catch (e) {
+            console.error('Sidebar geometry unavailable:', e);
+            return new Map();
+        }
+    }
+
     _getSceneStats(slug) {
         const sceneElements = this.app.getSceneElements(slug);
-        const totalHeight = this.app.pageRenderer.measureNodeHeight(sceneElements, this.app.editor);
-        const scenePages = totalHeight / this.app.CONTENT_HEIGHT_PX;
-        const eighths = Math.round(scenePages * 8);
+        const eighths = this._getGeometryById().get(slug.dataset.lineId)?.eighths || 0;
 
         const speakingCharacters = new Set();
         const stats = {
@@ -276,10 +285,10 @@ export class SidebarManager {
             speakingCharacters = stats.speakingCharacters;
             detailedStats = stats.detailedStats;
         } else {
-            // Try to load cached eighths
-            eighths = this.app.sceneMeta[sceneId]?.cachedEighths || 0;
-            // For characters, we could parse the treatment "Characters: " block if we wanted, 
-            // but `this.app.scriptData` might be available to scan. 
+            // Treatment mode: same geometry engine, keyed by slug lineId.
+            eighths = this._getGeometryById().get(sceneId)?.eighths || 0;
+            // For characters, we could parse the treatment "Characters: " block if we wanted,
+            // but `this.app.scriptData` might be available to scan.
             // For now, empty stats in Treatment Mode is acceptable or simpler to just show "N/A"
         }
 
@@ -697,6 +706,9 @@ export class SidebarManager {
             slugs = Array.from(this.app.editor.querySelectorAll(`.${constants.ELEMENT_TYPES.SLUG}`));
         }
 
+        // One geometry lookup for the whole list — same engine in both modes.
+        const geoById = this._getGeometryById();
+
         let index = 1;
         slugs.forEach(slug => {
             let lineId, text;
@@ -719,45 +731,18 @@ export class SidebarManager {
             
             item.dataset.sceneId = lineId;
             
-            // Stats logic needs to adapt or be skipped in data mode
-            let pageCountHtml = '';
-            
-            if (!isDataMode) {
-                const { eighths } = this._getSceneStats(slug);
-                const pages = Math.floor(eighths / 8);
-                const remainingEights = eighths % 8;
-                if (eighths > 0) {
-                    pageCountHtml = `
-                        <div class="scene-page-count">
-                            ${pages > 0 ? `<span class="pages">${pages}</span>` : ''}
-                            <span class="eights"><b>${remainingEights}</b>/8</span>
-                        </div>
-                    `;
-                    // Cache this for Treatment Mode usage
-                    if (!this.app.sceneMeta[lineId]) this.app.sceneMeta[lineId] = {};
-                    this.app.sceneMeta[lineId].cachedEighths = eighths;
-                } else {
-                     pageCountHtml = `
-                        <div class="scene-page-count">
-                            <span class="eights"><b>0</b>/8</span>
-                        </div>
-                    `;
-                }
-            } else {
-                // In Treatment Mode, try to use cached stats
-                const cached = this.app.sceneMeta[lineId]?.cachedEighths;
-                if (cached) {
-                    const pages = Math.floor(cached / 8);
-                    const remainingEights = cached % 8;
-                    pageCountHtml = `
-                        <div class="scene-page-count">
-                            ${pages > 0 ? `<span class="pages">${pages}</span>` : ''}
-                            <span class="eights"><b>${remainingEights}</b>/8</span>
-                        </div>
-                    `;
-                }
-            }
-            
+            // Eighths badge from the shared geometry engine (identical in
+            // Write and Treatment mode — no more cachedEighths snapshots).
+            const eighths = geoById.get(lineId)?.eighths || 0;
+            const pages = Math.floor(eighths / 8);
+            const remainingEights = eighths % 8;
+            const pageCountHtml = `
+                <div class="scene-page-count">
+                    ${pages > 0 ? `<span class="pages">${pages}</span>` : ''}
+                    <span class="eights"><b>${remainingEights}</b>/8</span>
+                </div>
+            `;
+
             const iconHtml = meta.icon ? `<i class="${escapeHtml(meta.icon)} fa-fw"></i>` : '';
             const hasTrack = meta.track && this.app.mediaPlayer.extractYouTubeVideoId(meta.track);
             const italicStyle = hasTrack ? 'font-style: italic;' : '';

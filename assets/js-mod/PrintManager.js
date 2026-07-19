@@ -1,5 +1,4 @@
 import * as constants from './Constants.js';
-import { PageRenderer } from './PageRenderer.js';
 import { escapeHtml, formatEighths } from './Utils.js';
 
 export class PrintManager {
@@ -329,41 +328,27 @@ export class PrintManager {
         this.previewContainer.style.transform = `scale(${scale})`;
     }
 
-    // --- SCREENPLAY GENERATION (Restored Robust Logic) ---
+    // --- SCREENPLAY GENERATION ---
+    // Print purity (R19): the renderer is fed canonical blocks straight from
+    // the model — the live editor is never touched (the old treatment branch
+    // appended the whole script to the editor via editorHandler.createBlock).
     async generateScreenplayPages() {
-        const tempContainer = document.createElement('div');
-        tempContainer.style.position = 'absolute';
-        tempContainer.style.left = '-9999px';
-        tempContainer.style.top = '0';
-        tempContainer.style.width = '8.5in'; 
-        document.getElementById('app-container').appendChild(tempContainer);
-        
-        let nodes = [];
-        if (this.app.treatmentModeActive) {
-            const data = this.app.scriptData;
-            if (data && data.blocks) {
-                nodes = data.blocks.map(b => {
-                    const el = this.app.editorHandler.createBlock(b.type, b.text);
-                    el.dataset.lineId = b.id;
-                    return el;
-                });
-            }
-        } else {
-            nodes = Array.from(this.app.editor.querySelectorAll('.script-line')).map(n => n.cloneNode(true));
-        }
+        const data = this.app.exportToJSONStructure();
+        const blocks = (data && data.blocks) ? data.blocks : [];
 
         const options = {
             showSceneNumbers: this.config.script.showSceneNumbers,
             showPageNumbers: this.config.script.showPageNumbers,
             showDate: this.config.script.showDate,
-            headerText: this.getHeaderText(), 
+            headerText: this.getHeaderText(),
             sceneNumberMap: this.getSceneNumberMap(),
             hideFirstPageMeta: true
         };
 
-        this.app.pageRenderer.render(nodes, tempContainer, options);
-        let pages = Array.from(tempContainer.querySelectorAll('.page'));
-        
+        let pages = blocks.length
+            ? this.app.pageRenderer.paginate(blocks, options).pages
+            : [];
+
         const isFacing = this.config.script.layout === 'facing';
         if (this.config.script.watermark) {
             pages.forEach(page => this.addWatermark(page, this.config.script.watermark));
@@ -387,7 +372,6 @@ export class PrintManager {
             }
             return clone;
         });
-        document.getElementById('app-container').removeChild(tempContainer);
         return finalPages;
     }
 
@@ -656,12 +640,20 @@ export class PrintManager {
         const scenes = [];
         let current = null;
 
+        // Single geometry source (R1): eighths come from the shared engine.
+        let geoById = new Map();
+        try {
+            geoById = this.app.geometry.getScenePagination().byId;
+        } catch (e) {
+            console.error('Treatment scene geometry unavailable:', e);
+        }
+
         const flush = () => {
             if (!current) return;
             const meta = this.app.sceneMeta[current.slug.id] || {};
             const slugParts = this.parseSlugParts(current.slug.text);
             const pageRange = this.getScenePageRange(current.slug.id, scenePageMap);
-            const eighths = meta.cachedEighths ?? this.estimateSceneEighths(current.blocks);
+            const eighths = geoById.get(current.slug.id)?.eighths ?? 1;
             const characters = this.getSceneCharactersFromBlocks(current.blocks);
             const excerpt = ''; // script excerpts removed for print cards
 
@@ -674,7 +666,7 @@ export class PrintManager {
                 pageRange,
                 eighths,
                 durationLabel: '',
-                lengthLabel: this.formatEighthsLabel(eighths),
+                lengthLabel: formatEighths(eighths),
                 characters,
                 description: meta.description || '',
                 notes: meta.notes || '',
@@ -1560,78 +1552,54 @@ export class PrintManager {
         return placeholder;
     }
 
-    createScriptPageShell() {
-        const page = document.createElement('div');
-        page.className = 'page dialogue-page';
-        const cw = document.createElement('div');
-        cw.className = 'content-wrapper';
-        page.appendChild(cw);
-        return { page, body: cw };
-    }
-
+    // Report dialogue appendix pages (R25): synthesized canonical blocks run
+    // through the shared paginate() engine, so they get the exact screenplay
+    // grid plus (MORE)/(CONT'D) handling for free. Presentation-only classes
+    // (counterpart dimming, separators) are re-applied after pagination —
+    // they never change geometry (transform/letter-spacing only).
     createDialoguePages(dialogueData = []) {
         if (!dialogueData.length) return [];
-        const pages = [];
-        let { page, body } = this.createScriptPageShell();
-        this.measureSandbox.appendChild(page);
-        const getMaxHeight = () => {
-            const styles = getComputedStyle(page);
-            const pt = parseFloat(styles.paddingTop) || 0;
-            const pb = parseFloat(styles.paddingBottom) || 0;
-            return page.clientHeight - pt - pb;
-        };
-        let maxHeight = getMaxHeight();
 
-        const flushPage = () => {
-            this.measureSandbox.removeChild(page);
-            pages.push(page);
-            ({ page, body } = this.createScriptPageShell());
-            this.measureSandbox.appendChild(page);
-            maxHeight = getMaxHeight();
-        };
-
-        const appendBlock = (node) => {
-            body.appendChild(node);
-            if (body.scrollHeight > maxHeight) {
-                body.removeChild(node);
-                flushPage();
-                body.appendChild(node);
-            }
-        };
-
-        const makeLine = (cls, text) => {
-            const el = document.createElement('div');
-            el.className = `script-line ${cls}`.trim();
-            el.textContent = text || '';
-            return el;
+        const blocks = [];
+        const extraClasses = new Map();
+        let seq = 0;
+        const push = (type, text, cls = null) => {
+            const id = `dlg-${++seq}`;
+            blocks.push({ id, type, text });
+            if (cls) extraClasses.set(id, cls);
         };
 
         dialogueData.forEach(scene => {
-            const slugText = (scene.slug || 'UNTITLED').toUpperCase();
-            appendBlock(makeLine('sc-slug', slugText));
+            push(constants.ELEMENT_TYPES.SLUG, (scene.slug || 'UNTITLED').toUpperCase());
             scene.clusters.forEach((cluster, idx) => {
                 if (idx > 0) {
-                    const sep = makeLine('sc-action dialogue-separator-line', '* * *');
-                    sep.style.textAlign = 'center';
-                    appendBlock(sep);
+                    push(constants.ELEMENT_TYPES.ACTION, '* * *', 'dialogue-separator-line');
                 }
                 cluster.forEach(block => {
-                    let node;
+                    let type, text;
                     if (block.type === 'sc-character' || block.type === 'CHARACTER') {
-                        node = makeLine('sc-character', (block.speaker || block.text || '').toUpperCase());
+                        type = constants.ELEMENT_TYPES.CHARACTER;
+                        text = (block.speaker || block.text || '').toUpperCase();
                     } else if (block.type === 'PARENTHETICAL' || block.type === 'sc-parenthetical') {
-                        node = makeLine('sc-parenthetical', block.text || '');
+                        type = constants.ELEMENT_TYPES.PARENTHETICAL;
+                        text = block.text || '';
                     } else {
-                        node = makeLine('sc-dialogue', block.text || '');
+                        type = constants.ELEMENT_TYPES.DIALOGUE;
+                        text = block.text || '';
                     }
-                    if (!block.isTarget) node.classList.add('counterpart-line');
-                    appendBlock(node);
+                    push(type, text, block.isTarget ? null : 'counterpart-line');
                 });
             });
         });
 
-        this.measureSandbox.removeChild(page);
-        pages.push(page);
+        const pages = this.app.pageRenderer.paginate(blocks, { showPageNumbers: false }).pages;
+        pages.forEach(page => {
+            page.classList.add('dialogue-page');
+            page.querySelectorAll('.script-line').forEach(el => {
+                const cls = extraClasses.get(el.dataset.lineId);
+                if (cls) el.classList.add(cls);
+            });
+        });
         return pages;
     }
 
@@ -2185,28 +2153,6 @@ export class PrintManager {
         const minutes = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `~${minutes}m ${secs.toString().padStart(2, '0')}s`;
-    }
-
-    formatEighthsLabel(eighths) {
-        if (!Number.isFinite(eighths) || eighths <= 0) return '';
-        const pages = Math.floor(eighths / 8);
-        const rem = eighths % 8;
-        const parts = [];
-        if (pages > 0) parts.push(`${pages}pg`);
-        if (rem > 0) parts.push(`${rem}/8`);
-        return parts.join(' ') || `${rem}/8`;
-    }
-
-    estimateSceneEighths(blocks = []) {
-        let lines = 1; 
-        blocks.forEach(block => {
-            const text = (block.text || '').trim();
-            let add = 1;
-            if (block.type === constants.ELEMENT_TYPES.ACTION) add += Math.floor(text.length / 60);
-            else if (block.type === constants.ELEMENT_TYPES.DIALOGUE) add += Math.floor(text.length / 35);
-            lines += add;
-        });
-        return Math.ceil((lines * 8) / 55);
     }
 
     parseSlugParts(slugText = '') {

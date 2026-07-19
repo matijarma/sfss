@@ -1,5 +1,4 @@
 import * as constants from './Constants.js';
-import { PageRenderer } from './PageRenderer.js';
 import { escapeHtml, formatEighths } from './Utils.js';
 
 export class ReportsManager {
@@ -167,64 +166,24 @@ export class ReportsManager {
 
     _getSourceBlocks() {
         if (this.app.treatmentManager.isActive && this.app.scriptData?.blocks) {
-            // If in treatment mode, create DOM nodes in memory from scriptData
-            const fragment = document.createDocumentFragment();
-            this.app.scriptData.blocks.forEach(blockData => {
-                const div = document.createElement('div');
-                div.className = `script-line ${blockData.type}`;
-                div.dataset.lineId = blockData.id;
-                div.textContent = blockData.text;
-                fragment.appendChild(div);
-            });
-            return Array.from(fragment.children);
+            // Treatment mode: materialize detached nodes through the canonical
+            // renderer path (markers hidden, notes dropped, paren convention).
+            return this.app.scriptData.blocks.map(blockData =>
+                this.app.pageRenderer.renderBlockElement(blockData));
         } else {
             // Otherwise, use the live editor DOM
             return Array.from(this.app.editor.querySelectorAll('.script-line'));
         }
     }
 
-    getScenesWithGeometrics() {
-        const renderer = new PageRenderer();
-        const dummyContainer = document.createElement('div');
-        Object.assign(dummyContainer.style, { position: 'absolute', left: '-9999px', width: '8.5in' });
-        document.body.appendChild(dummyContainer);
-        
-        const sourceBlocks = this._getSourceBlocks();
-        renderer.render(sourceBlocks, dummyContainer, { showSceneNumbers: true });
-        
-        const totalPages = dummyContainer.querySelectorAll('.page').length;
-        const renderedPages = Array.from(dummyContainer.querySelectorAll('.page'));
-        const sceneGeometries = [];
-        let currentGeo = null;
-        
-        renderedPages.forEach((page, pageIdx) => {
-            const wrapper = page.querySelector('.content-wrapper');
-            Array.from(wrapper.children).forEach(node => {
-                if (node.classList.contains(constants.ELEMENT_TYPES.SLUG)) {
-                    if (currentGeo) sceneGeometries.push(currentGeo);
-                    currentGeo = { heightPx: 0, pageStart: pageIdx + 1 };
-                }
-                if (currentGeo) currentGeo.heightPx += node.offsetHeight || 16;
-            });
-        });
-        if (currentGeo) sceneGeometries.push(currentGeo);
-        document.body.removeChild(dummyContainer);
-
-        const PAGE_CONTENT_H = renderer.CONTENT_HEIGHT_PX || (9 * 96);
-        return {
-            totalPages,
-            geometries: sceneGeometries.map(geo => ({
-                ...geo,
-                eighths: Math.max(1, Math.round((geo.heightPx / PAGE_CONTENT_H) * 8))
-            }))
-        };
-    }
-
     calculateScriptStats() {
-        const geoData = this.getScenesWithGeometrics();
-        
+        // Single geometry source (R1): pages/eighths/start pages all come from
+        // the shared engine (kills the CONTENT_HEIGHT_PX-typo fallback, R2,
+        // and this module's private PageRenderer, R3).
+        const geoData = this.app.geometry.getScenePagination();
+
         const stats = {
-            totalPages: geoData.totalPages,
+            totalPages: geoData.pageCount,
             totalScenes: 0,
             totalWords: 0,
             totalEighths: 0,
@@ -311,8 +270,8 @@ export class ReportsManager {
 
             if (type === constants.ELEMENT_TYPES.SLUG) {
                 finalizeScene();
-                
-                const geo = geoData.geometries[globalSceneIndex] || { eighths: 1, pageStart: '-' };
+
+                const geo = geoData.byId.get(block.dataset.lineId) || { eighths: 1, startPage: '-' };
                 const upperText = text.toUpperCase();
                 
                 if (upperText.includes('INT.')) stats.intExt.INT++;
@@ -327,7 +286,7 @@ export class ReportsManager {
                     number: globalSceneIndex + 1,
                     title: text,
                     eighths: geo.eighths,
-                    pageStart: geo.pageStart,
+                    pageStart: geo.startPage,
                     speakingCharacters: new Set(),
                     mentionedCharacters: new Set()
                 };

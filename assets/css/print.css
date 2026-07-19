@@ -12,7 +12,14 @@ div#printingdiv { display: none }
 
 /* =========================================
    1. PAGE VIEW GEOMETRY (Standard Screenplay)
-   ========================================= */
+   =========================================
+   SINGLE SOURCE OF TRUTH (R13-R17): element geometry (indents, column widths,
+   line height) comes from Constants.ELEMENT_INDENTS via the --sc-* custom
+   properties that GeometryManager.applyGeometryCssVariables() writes on :root
+   at boot. The var() fallbacks below equal those values (no FOUC).
+   The contextual dialogue-run margin rules MUST stay VERBATIM-identical to
+   the ones in editor.css — pagination correctness depends on the editor and
+   the page grid agreeing (R14). */
 
 /* Base Page Container */
 .page {
@@ -20,17 +27,21 @@ div#printingdiv { display: none }
     overflow: hidden;
     background-color: var(--bg-paper);
     color: var(--text-main);
-    
+
+    font-family: 'Courier Prime', 'Courier New', monospace;
+    font-size: 12pt;
+    line-height: 1.0;
+
     /* Default US Letter Dimensions */
     width: 8.5in;
     height: 11in;
-    
+
     /* Strict Screenplay Margins */
     padding-top: 1.0in;
     padding-bottom: 1.0in;
     padding-left: 1.5in;
     padding-right: 1.0in;
-    
+
     box-sizing: border-box;
     margin: 0 auto 2rem auto;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
@@ -70,15 +81,16 @@ div#printingdiv { display: none }
 .page .content-wrapper {
     font-family: 'Courier Prime', 'Courier', monospace;
     font-size: 12pt;
-    line-height: 16px; /* Exact 6 lines per inch */
+    line-height: var(--sc-line, 16px); /* Exact 6 lines per inch */
     width: 100%;
+    position: relative; /* PageRenderer offset walk + absolute children anchor */
 }
 
 /* Script Elements */
 .page .script-line {
     margin: 0;
     padding: 0;
-    min-height: 16px;
+    min-height: var(--sc-line, 16px);
     white-space: pre-wrap;
     position: relative;
     width: 100%;
@@ -88,50 +100,83 @@ div#printingdiv { display: none }
 .page .sc-slug {
     font-weight: bold;
     text-transform: uppercase;
-    margin-top: 32px; /* 2 blank lines before */
-    margin-bottom: 16px; /* 1 blank line after */
+    margin-top: calc(2 * var(--sc-line, 16px)); /* 2 blank lines before */
+    margin-bottom: var(--sc-line, 16px); /* 1 blank line after */
     width: 100%;
 }
-.page .content-wrapper > .sc-slug:first-child { margin-top: 0; }
+/* Nothing carries a top margin at the very top of the live area. */
+.page .content-wrapper > .script-line:first-child { margin-top: 0; }
 
-.page .sc-action { margin-bottom: 16px; width: 100%; }
+.page .sc-action { margin-bottom: var(--sc-line, 16px); width: 100%; }
 
-.page .sc-character { 
-    text-transform: uppercase; 
-    margin-left: 2.2in; 
-    width: auto; 
-    margin-top: 0; margin-bottom: 0; 
+.page .sc-character {
+    text-transform: uppercase;
+    margin-left: var(--sc-indent-character, 2.2in);
+    width: var(--sc-width-character, auto);
+    /* One blank line before a cue; collapses with the preceding element's
+       bottom margin, so mid-page spacing is unchanged (R13/R14 — identical
+       rule set in editor.css). */
+    margin-top: var(--sc-line, 16px);
+    margin-bottom: 0;
 }
 
-.page .sc-dialogue { 
-    margin-left: 1.0in; 
-    width: 3.5in; 
-    margin-bottom: 16px; 
+.page .sc-dialogue {
+    margin-left: var(--sc-indent-dialogue, 1.0in);
+    width: var(--sc-width-dialogue, 3.5in);
+    margin-bottom: var(--sc-line, 16px);
 }
-/* Remove bottom margin if followed by Parenthetical or more Dialogue */
-.page .sc-dialogue:has(+ :is(.sc-parenthetical, .sc-dialogue)) { margin-bottom: 0; }
 
-.page .sc-parenthetical { 
-    margin-left: 1.6in; 
-    width: 2.4in; 
-    margin-bottom: 0; 
+/* CONTEXTUAL SPACING FOR SCRIPT ELEMENTS
+   (R14: these two rules must stay VERBATIM-identical to editor.css) */
+
+/* Remove top margin for parentheticals/dialogue immediately following a character or another parenthetical */
+.page .sc-character + .sc-parenthetical,
+.page .sc-character + .sc-dialogue,
+.page .sc-parenthetical + .sc-dialogue {
+    margin-top: 0;
+}
+
+/* A "dialogue block" is a run of characters, parentheticals, and dialogues.
+   These elements should only have a bottom margin if they are followed by
+   a different type of element (e.g., an action or slug). */
+.page :is(.sc-character, .sc-parenthetical, .sc-dialogue):has(+ :is(.sc-character, .sc-parenthetical, .sc-dialogue)) {
+    margin-bottom: 0;
+}
+
+.page .sc-parenthetical {
+    margin-left: var(--sc-indent-parenthetical, 1.6in);
+    width: var(--sc-width-parenthetical, 2.4in);
+    margin-bottom: 0;
 }
 .page .sc-parenthetical::before { content: '('; }
 .page .sc-parenthetical::after { content: ')'; }
 
-.page .sc-transition { 
-    text-align: right; 
-    margin-left: auto; 
-    margin-top: 16px; 
-    margin-bottom: 16px; 
-    width: auto; 
+.page .sc-transition {
+    text-align: right;
+    text-transform: uppercase;
+    margin-left: auto;
+    margin-top: var(--sc-line, 16px);
+    margin-bottom: var(--sc-line, 16px);
+    width: auto;
+}
+
+/* Fountain centered text (canonical `centered` flag -> .sc-centered). */
+.page .script-line.sc-centered {
+    margin-left: 0;
+    width: 100%;
+    text-align: center;
+}
+
+/* Fountain `tight` flag: action line glued to its predecessor. */
+.page .sc-tight {
+    margin-top: 0;
 }
 
 /* (MORE) marker generated by pagination when a dialogue block splits (R8).
-   Centered within the 3.5in dialogue column at the 1.0in dialogue indent. */
+   Centered within the dialogue column at the dialogue indent. */
 .page .sc-more {
-    margin-left: 1.0in;
-    width: 3.5in;
+    margin-left: var(--sc-indent-dialogue, 1.0in);
+    width: var(--sc-width-dialogue, 3.5in);
     text-align: center;
     margin-top: 0;
     margin-bottom: 0;
@@ -160,6 +205,7 @@ div#printingdiv { display: none }
     color: var(--text-meta);
     font-size: 12pt;
     font-family: 'Courier Prime', monospace;
+    white-space: pre-wrap;
 }
 
 /* Dialogue excerpt helpers for report appendices */

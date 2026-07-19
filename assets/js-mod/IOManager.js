@@ -1,5 +1,5 @@
 import * as constants from './Constants.js';
-import { escapeXML } from './Utils.js';
+import { escapeXML, formatEighths } from './Utils.js';
 
 export class IOManager {
     constructor(sfss) {
@@ -116,58 +116,21 @@ export class IOManager {
         await this.sfss.storageManager.updateBackupTimestamp(this.sfss.activeScriptId);
         await this.sfss.checkBackupStatus();
 
-        // 1. Calculate Scene Stats (Headless Pagination)
-        const hiddenContainer = document.createElement('div');
-        hiddenContainer.style.position = 'absolute';
-        hiddenContainer.style.visibility = 'hidden';
-        hiddenContainer.style.width = '8.5in'; // US Letter standard
-        document.body.appendChild(hiddenContainer);
-        
+        // 1. Scene stats from the shared geometry engine (R1). Length is
+        // normalized ("1 3/8", never "16/8" — R28), Page is the start page.
         const sceneNumberMap = {};
         Object.keys(this.sfss.sceneMeta).forEach(id => {
             if (this.sfss.sceneMeta[id].number) sceneNumberMap[id] = this.sfss.sceneMeta[id].number;
         });
-        
-        this.sfss.pageRenderer.render(Array.from(this.sfss.editor.querySelectorAll('.script-line')), hiddenContainer, {
-            showSceneNumbers: true,
-            sceneNumberMap: sceneNumberMap
+
+        const sceneStats = {};
+        this.sfss.geometry.getScenePagination().scenes.forEach(scene => {
+            sceneStats[scene.id] = {
+                page: scene.startPage,
+                length: formatEighths(scene.eighths, 'fdx')
+            };
         });
-        
-        const sceneStats = {}; 
-        const pages = hiddenContainer.querySelectorAll('.page');
-        let currentSceneId = null;
-        let currentSceneHeight = 0;
-        let currentSceneStartPage = 1;
-        
-        pages.forEach((page, pageIndex) => {
-            const pageNum = pageIndex + 1;
-            const content = page.querySelector('.content-wrapper');
-            if (!content) return;
-            
-            Array.from(content.children).forEach(node => {
-                if (node.classList.contains(constants.ELEMENT_TYPES.SLUG)) {
-                    if (currentSceneId) {
-                         const eighths = Math.max(1, Math.round((currentSceneHeight / this.sfss.CONTENT_HEIGHT_PX) * 8));
-                         if (!sceneStats[currentSceneId]) sceneStats[currentSceneId] = { page: currentSceneStartPage, length: `${eighths}/8` };
-                    }
-                    currentSceneId = node.dataset.lineId;
-                    currentSceneHeight = 0;
-                    currentSceneStartPage = pageNum;
-                    currentSceneHeight += node.offsetHeight;
-                } else {
-                    if (currentSceneId) {
-                        currentSceneHeight += node.offsetHeight;
-                    }
-                }
-            });
-        });
-        
-        if (currentSceneId) {
-             const eighths = Math.max(1, Math.round((currentSceneHeight / this.sfss.CONTENT_HEIGHT_PX) * 8));
-             sceneStats[currentSceneId] = { page: currentSceneStartPage, length: `${eighths}/8` };
-        }
-        document.body.removeChild(hiddenContainer);
-        
+
         // 2. Build SmartType Lists
         const characters = new Set();
         const locations = new Set();

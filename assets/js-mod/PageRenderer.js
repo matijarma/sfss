@@ -1,8 +1,13 @@
 import * as constants from './Constants.js';
+import { generateLineId, normalizeParenText } from './Utils.js';
+import { markupToNodes, serializeBlockElement } from './InlineMarkup.js';
 
 // Matches a trailing "(CONT'D)" on a character cue. Single source of truth for
 // both stripping and testing the marker (R6).
 const CONTD_RE = /\s*\(CONT'D\)\s*$/i;
+
+// Internal deque marker for forced page breaks (canonical `pageBreak` blocks).
+const PAGE_BREAK = '__page-break__';
 
 export class PageRenderer {
     // Legacy callers pass a measured line height; it is tolerated and ignored —
@@ -12,7 +17,7 @@ export class PageRenderer {
         this.paperConfig = constants.PAPER_CONFIGS.US_LETTER; // Default
         this.updateDimensions();
 
-        this.measureContainer = null;
+        this._layoutRoot = null;
     }
 
     setPaperSize(sizeName) {
@@ -42,22 +47,164 @@ export class PageRenderer {
         return constants.ELEMENT_TYPES.ACTION;
     }
 
-    render(sourceNodes, container, options = {}) {
-        container.innerHTML = '';
-        if (!sourceNodes || sourceNodes.length === 0) return;
+    // Canonical block -> detached rendered element. THE single materialization
+    // path: page view, print, reports and FDX geometry all render through here,
+    // so their output is pixel-identical and marker-aware.
+    //   { id, type, text, centered?, tight?, pageBreak? }
+    // Markers (**b** *i* _u_) become styled nodes, [[notes]] are dropped, and
+    // parenthetical text loses its outer parens (CSS ::before/::after supplies
+    // them — the DOM never carries them).
+    renderBlockElement(block, opts = {}) {
+        const type = block.type || constants.ELEMENT_TYPES.ACTION;
+        const el = document.createElement('div');
+        el.className = `script-line ${type}`;
+        el.dataset.lineId = block.id || generateLineId();
+        let text = block.text || '';
+        if (type === constants.ELEMENT_TYPES.PARENTHETICAL) {
+            text = normalizeParenText(text);
+        }
+        el.appendChild(markupToNodes(text, { showNotes: !!opts.showNotes }));
+        if (block.centered) el.classList.add('sc-centered');
+        if (block.tight) el.classList.add('sc-tight');
+        if (block.pageBreak) el.dataset.pageBreak = 'true';
+        return el;
+    }
 
-        // Ensure container is visible for measurement
-        if (container.offsetParent === null) {
-            container.classList.remove('hidden');
-            container.style.display = 'block';
+    // Accepts either canonical blocks or live DOM elements; elements are
+    // serialized through InlineMarkup.serializeBlockElement so EVERY input
+    // funnels into the same canonical shape before materialization.
+    _normalizeBlocks(source) {
+        return Array.from(source || []).map(item =>
+            (item && item.nodeType === 1) ? serializeBlockElement(item) : item
+        );
+    }
+
+    // One persistent offscreen layout root, owned by the renderer. All
+    // pagination measurement happens inside it (replaces the ad-hoc hidden
+    // containers PrintManager/IOManager/ReportsManager used to create).
+    _getLayoutRoot() {
+        if (!this._layoutRoot || !this._layoutRoot.isConnected) {
+            const root = document.createElement('div');
+            root.id = 'sfss-renderer-layout-root';
+            Object.assign(root.style, {
+                position: 'absolute',
+                left: '-9999px',
+                top: '0',
+                visibility: 'hidden',
+                pointerEvents: 'none'
+            });
+            document.body.appendChild(root);
+            this._layoutRoot = root;
+        }
+        this._layoutRoot.style.width = `${this.paperConfig.dimensions.width}in`;
+        return this._layoutRoot;
+    }
+
+    // Paginates canonical blocks (or DOM elements) and returns
+    //   { pageCount, scenes, totalEighths, pages }
+    // where pages are DETACHED .page elements ready to append/clone and
+    // scenes is [{ id, number, startPage, endPage, heightPx, eighths }]
+    // keyed by slug lineId. Scene height follows the spec ("scene header
+    // start to next scene header start", margins included, synthetic
+    // pagination furniture included), summed across page splits.
+    paginate(source, options = {}) {
+        const blocks = this._normalizeBlocks(source);
+        const root = this._getLayoutRoot();
+        root.innerHTML = '';
+        root.classList.toggle('show-scene-numbers', !!options.showSceneNumbers);
+
+        if (blocks.length > 0) {
+            this._layout(blocks, root, options);
         }
 
-        container.classList.toggle('show-scene-numbers', !!options.showSceneNumbers);
+        const pages = Array.from(root.children);
+        const { scenes, totalEighths } = this._collectSceneGeometry(pages, options);
+        pages.forEach(p => p.remove());
 
+        return { pageCount: pages.length, scenes, totalEighths, pages };
+    }
+
+    render(sourceNodes, container, options = {}) {
+        container.innerHTML = '';
+        container.classList.toggle('show-scene-numbers', !!options.showSceneNumbers);
+        const result = this.paginate(sourceNodes, options);
+        result.pages.forEach(page => container.appendChild(page));
+        return result;
+    }
+
+    // Per-scene geometry, measured while the pages are still attached to the
+    // layout root. A scene's height on a page runs from its slug's top (or the
+    // page top for continuations) to the next slug's top (or the last node's
+    // bottom), so inter-block margins and synthetic (MORE)/(CONT'D) nodes all
+    // count — split scenes sum across pages (kills the R2 estimator class).
+    _collectSceneGeometry(pages, options) {
+        const liveHeightPx = this.paperConfig.liveArea.height * this.dpi;
+        const scenes = [];
+        const byId = new Map();
+        let current = null;
+
+        pages.forEach((page, pageIdx) => {
+            const wrapper = page.querySelector('.content-wrapper');
+            if (!wrapper || wrapper.childElementCount === 0) return;
+            const wrapperTop = wrapper.getBoundingClientRect().top;
+            const kids = Array.from(wrapper.children);
+            let segStart = null; // top offset where the current scene's segment began
+
+            const closeSegment = (toOffset) => {
+                if (current && segStart !== null) {
+                    current.heightPx += Math.max(0, toOffset - segStart);
+                    current.endPage = pageIdx + 1;
+                }
+            };
+
+            kids.forEach(node => {
+                const rect = node.getBoundingClientRect();
+                const top = rect.top - wrapperTop;
+                const isSlug = node.classList.contains(constants.ELEMENT_TYPES.SLUG) &&
+                    node.dataset.synthetic !== 'true';
+                if (isSlug) {
+                    closeSegment(top);
+                    const id = node.dataset.lineId;
+                    current = byId.get(id);
+                    if (!current) {
+                        const ordinal = scenes.length + 1;
+                        current = {
+                            id,
+                            number: options.sceneNumberMap?.[id] || ordinal,
+                            startPage: pageIdx + 1,
+                            endPage: pageIdx + 1,
+                            heightPx: 0,
+                            eighths: 0
+                        };
+                        byId.set(id, current);
+                        scenes.push(current);
+                    }
+                    segStart = top;
+                } else if (current && segStart === null) {
+                    // Continuation of a scene split onto this page.
+                    segStart = top;
+                }
+            });
+
+            if (kids.length > 0) {
+                const last = kids[kids.length - 1];
+                closeSegment(last.getBoundingClientRect().bottom - wrapperTop);
+            }
+        });
+
+        let totalEighths = 0;
+        scenes.forEach(scene => {
+            scene.eighths = Math.max(1, Math.round((scene.heightPx / liveHeightPx) * 8));
+            totalEighths += scene.eighths;
+        });
+        return { scenes, totalEighths };
+    }
+
+    _layout(blocks, container, options) {
         // Pre-scan the source into logical blocks. Split remainders are pushed
         // back onto the FRONT of this deque, so a remainder longer than a page
         // simply splits again on the next iteration — nothing can overflow (R7).
-        const deque = this._buildBlockQueue(sourceNodes, options);
+        const deque = this._buildBlockQueue(blocks, options);
 
         let pageIndex = 1;
         let currentPage = this.createPage(container, options, pageIndex);
@@ -72,6 +219,13 @@ export class PageRenderer {
 
         while (deque.length > 0) {
             const block = deque.shift();
+
+            // Forced page break (`===`): the block renders nothing visible —
+            // just break, unless the page is already empty.
+            if (block.type === PAGE_BREAK) {
+                if (contentWrapper.childElementCount > 0) newPage();
+                continue;
+            }
 
             // Materialize continuation remainders: a dialogue split pushed this
             // block back with a {contd} marker — it receives a synthetic
@@ -164,53 +318,52 @@ export class PageRenderer {
         }
     }
 
-    // Pre-scan sourceNodes into logical blocks. Nodes are cloned once here so
-    // nothing downstream ever touches the caller's (editor's) live nodes.
-    _buildBlockQueue(sourceNodes, options) {
+    // Pre-scan canonical blocks into logical blocks, materializing each one
+    // through renderBlockElement (the single materialization path). Nothing
+    // downstream ever touches the caller's live nodes — every element here is
+    // freshly built.
+    _buildBlockQueue(blocks, options) {
         const queue = [];
         let i = 0;
         let sceneChronologicalIndex = 0;
-        while (i < sourceNodes.length) {
-            const { blockNodes, type, nextIndex } = this.getNextLogicalBlock(sourceNodes, i);
-            const nodes = blockNodes.map(n => n.cloneNode(true));
+        while (i < blocks.length) {
+            const block = blocks[i];
+
+            // `===` page-break blocks force a break and render nothing.
+            if (block.pageBreak) {
+                queue.push({ type: PAGE_BREAK, nodes: [] });
+                i++;
+                continue;
+            }
+
+            const type = block.type || constants.ELEMENT_TYPES.ACTION;
+            const nodes = [this.renderBlockElement(block)];
+            i++;
+
             if (type === constants.ELEMENT_TYPES.SLUG) {
                 sceneChronologicalIndex++;
                 if (options.showSceneNumbers) {
-                    const id = blockNodes[0].dataset.lineId;
-                    // Use custom number from map if it exists, otherwise fall back to chronological index
-                    const num = options.sceneNumberMap?.[id] || sceneChronologicalIndex;
-                    // Numbering is rendered by CSS ::before/::after content: attr(data-scene-number-display)
+                    // Custom number from map wins, else the chronological index.
+                    // Numbering is rendered by CSS ::before/::after
+                    // content: attr(data-scene-number-display).
+                    const num = options.sceneNumberMap?.[block.id] || sceneChronologicalIndex;
                     nodes[0].setAttribute('data-scene-number-display', num);
                 }
-            }
-            queue.push({ type, nodes });
-            i = nextIndex;
-        }
-        return queue;
-    }
-
-    getNextLogicalBlock(nodes, startIndex) {
-        const firstNode = nodes[startIndex];
-        const type = this.getType(firstNode);
-        const blockNodes = [firstNode];
-        let nextIndex = startIndex + 1;
-
-        if (type === constants.ELEMENT_TYPES.CHARACTER) {
-            // Include Parentheticals and Dialogue: Char -> (Paren) -> Dialog -> (Paren) -> Dialog...
-            while (nextIndex < nodes.length) {
-                const nextNode = nodes[nextIndex];
-                const nextType = this.getType(nextNode);
-                if (nextType === constants.ELEMENT_TYPES.PARENTHETICAL || nextType === constants.ELEMENT_TYPES.DIALOGUE) {
-                    blockNodes.push(nextNode);
-                    nextIndex++;
-                } else {
-                    break;
+            } else if (type === constants.ELEMENT_TYPES.CHARACTER) {
+                // Include Parentheticals and Dialogue:
+                // Char -> (Paren) -> Dialog -> (Paren) -> Dialog...
+                while (i < blocks.length && !blocks[i].pageBreak &&
+                    (blocks[i].type === constants.ELEMENT_TYPES.PARENTHETICAL ||
+                     blocks[i].type === constants.ELEMENT_TYPES.DIALOGUE)) {
+                    nodes.push(this.renderBlockElement(blocks[i]));
+                    i++;
                 }
             }
-        }
-        // Slugs are their own block; the "carry" rule is handled at placement time.
+            // Slugs are their own block; the "carry" rule is handled at placement time.
 
-        return { blockNodes, type, nextIndex };
+            queue.push({ type, nodes });
+        }
+        return queue;
     }
 
     // --- Place-then-check measurement (R12) ---
@@ -237,7 +390,7 @@ export class PageRenderer {
 
     // Bottom edge of `node` relative to the top of the page's live area.
     // Walks the offset chain up to the .page (position: relative), so it is
-    // correct whether or not .content-wrapper is itself positioned (layout.css
+    // correct whether or not .content-wrapper is itself positioned (print.css
     // makes it position: relative), and it measures against the page origin —
     // catching top margins that collapse through the (padding-less) wrapper.
     _contentBottom(contentWrapper, node) {
@@ -422,29 +575,6 @@ export class PageRenderer {
 
         if (firstLines < 2 || secondLines < 2) return { success: false };
         return { success: true, firstPart: firstNode, secondPart: secondNode };
-    }
-
-    measureBlockHeight(nodes, container) {
-        if (!this.measureContainer) {
-            this.measureContainer = document.createElement('div');
-            this.measureContainer.style.position = 'absolute';
-            this.measureContainer.style.visibility = 'hidden';
-            this.measureContainer.style.height = 'auto';
-            this.measureContainer.style.width = '100%'; // Will inherit from parent
-        }
-
-        container.appendChild(this.measureContainer);
-        this.measureContainer.innerHTML = '';
-        nodes.forEach(node => this.measureContainer.appendChild(node.cloneNode(true)));
-
-        const height = this.measureContainer.offsetHeight;
-        container.removeChild(this.measureContainer);
-        return height;
-    }
-
-    // Alias for backward compatibility
-    measureNodeHeight(nodes, container) {
-        return this.measureBlockHeight(Array.isArray(nodes) ? nodes : [nodes], container);
     }
 
     createPage(container, options, pageNum) {

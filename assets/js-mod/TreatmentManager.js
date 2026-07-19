@@ -124,6 +124,7 @@ export class TreatmentManager {
         if (!this.sfss.sceneMeta[slugId]) this.sfss.sceneMeta[slugId] = {};
         this.sfss.sceneMeta[slugId].description = newTexts.join('\n\n');
         this.sfss.isDirty = true;
+        this.sfss.geometry?.requestUpdate();
     }
 
     addTransition(slugId) {
@@ -143,6 +144,7 @@ export class TreatmentManager {
             id: generateLineId()
         });
         this.sfss.isDirty = true;
+        this.sfss.geometry?.requestUpdate();
         this.sfss.treatmentRenderer.refreshScene(slugId);
     }
 
@@ -163,6 +165,7 @@ export class TreatmentManager {
             id: generateLineId()
         });
         this.sfss.isDirty = true;
+        this.sfss.geometry?.requestUpdate();
         this.refreshView();
     }
 
@@ -192,6 +195,7 @@ export class TreatmentManager {
         }
         this.sfss.editorHandler.commitCharacter(charName);
         this.sfss.isDirty = true;
+        this.sfss.geometry?.requestUpdate();
         this.sfss.treatmentRenderer.refreshScene(slugId);
     }
 
@@ -244,6 +248,7 @@ export class TreatmentManager {
         
         this.sfss.scriptData.blocks.splice(insertIndex, 0, ...sourceBlocks);
         this.sfss.isDirty = true;
+        this.sfss.geometry?.requestUpdate();
         this.sfss.treatmentRenderer.renderFromData(this.sfss.scriptData.blocks, this.sfss.editor);
         
         setTimeout(() => {

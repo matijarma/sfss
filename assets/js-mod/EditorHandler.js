@@ -152,7 +152,8 @@ export class EditorHandler {
         }
         const text = this.app.editor.innerText;
         document.getElementById('stats-words').textContent = `Words: ${text.trim().split(/\s+/).length}`;
-        document.getElementById('stats-pages').textContent = `Pages: ${this.app.updatePageCount()}`;
+        // stats-pages is updated by the 'sfss-geometry' event listener in
+        // SFSS.bindEventListeners (single pagination engine — R1).
     }
 
     handleKeydown(e) {

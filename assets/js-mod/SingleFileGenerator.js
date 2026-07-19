@@ -215,6 +215,7 @@ ${jsBundle}
             'assets/js-mod/Toast.js',
             'assets/js-mod/ModalManager.js',
             'assets/js-mod/Shortcuts.js',
+            'assets/js-mod/GeometryManager.js',
             'assets/js-mod/StorageLogic.js',
             'assets/js-mod/TabGuard.js',
             'assets/js-mod/IDBHelper.js',

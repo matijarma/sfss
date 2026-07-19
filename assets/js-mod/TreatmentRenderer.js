@@ -1,9 +1,25 @@
 import * as constants from './Constants.js';
+import { formatEighths } from './Utils.js';
 
 export class TreatmentRenderer {
     constructor(app) {
         this.app = app;
         this.container = null;
+    }
+
+    // Scene geometry from the shared engine (R1): slug lineId -> scene entry.
+    _getGeometryById() {
+        try {
+            return this.app.geometry.getScenePagination().byId;
+        } catch (e) {
+            console.error('Treatment geometry unavailable:', e);
+            return new Map();
+        }
+    }
+
+    _durationStr(sceneId, geoById) {
+        const eighths = geoById.get(sceneId)?.eighths ?? 1;
+        return formatEighths(eighths);
     }
 
     refreshScene(sceneId) {
@@ -36,21 +52,13 @@ export class TreatmentRenderer {
             slug: slug,
             startIndex: slugIndex,
             content: [],
-            charsBlock: null,
-            linesCount: 1
+            charsBlock: null
         };
 
         // Scan forward until next slug
         for (let i = slugIndex + 1; i < blocks.length; i++) {
             const block = blocks[i];
             if (block.type === constants.ELEMENT_TYPES.SLUG) break;
-            
-            // Re-use logic for line counts
-            let lines = 1;
-            if (block.type === constants.ELEMENT_TYPES.ACTION) lines += Math.floor(block.text.length / 60);
-            else if (block.type === constants.ELEMENT_TYPES.DIALOGUE) lines += Math.floor(block.text.length / 35);
-            
-            scene.linesCount += lines;
 
             const isFirstContent = scene.content.length === 0;
             if (isFirstContent && block.type === constants.ELEMENT_TYPES.ACTION && block.text.trim().startsWith('Characters:')) {
@@ -59,18 +67,9 @@ export class TreatmentRenderer {
                 scene.content.push(block);
             }
         }
-        
-        // Recalculate duration string
-        const eighths = Math.ceil((scene.linesCount * 8) / 55);
-        let durationStr = '';
-        if (eighths < 8) {
-            durationStr = `${eighths}/8`;
-        } else {
-            const pgs = Math.floor(eighths / 8);
-            const rem = eighths % 8;
-            durationStr = rem > 0 ? `${pgs} ${rem}/8` : `${pgs}`;
-        }
-        scene.durationStr = durationStr;
+
+        // Duration from the shared geometry engine (R1).
+        scene.durationStr = this._durationStr(sceneId, this._getGeometryById());
 
         return scene;
     }
@@ -81,21 +80,9 @@ export class TreatmentRenderer {
         this.currentBlocks = blocks; 
         
         this.renderScriptMetainTreatment(container);
-        
+
         let currentSceneBlock = null;
         const scenes = [];
-        
-        // simple line height estimate for duration
-        const getLineCount = (block) => {
-            const text = block.text || '';
-            const type = block.type;
-            let lines = 1;
-            if (type === constants.ELEMENT_TYPES.ACTION) lines += Math.floor(text.length / 60);
-            else if (type === constants.ELEMENT_TYPES.DIALOGUE) lines += Math.floor(text.length / 35);
-            else if (type === constants.ELEMENT_TYPES.PARENTHETICAL) lines = 1;
-            else if (type === constants.ELEMENT_TYPES.CHARACTER) lines = 1; // + spacing?
-            return lines;
-        };
 
         blocks.forEach((block, index) => {
             if (block.type === constants.ELEMENT_TYPES.SLUG) {
@@ -105,13 +92,10 @@ export class TreatmentRenderer {
                 currentSceneBlock = {
                     slug: block,
                     startIndex: index,
-                    content: [], 
-                    charsBlock: null,
-                    linesCount: 1 // Header itself
+                    content: [],
+                    charsBlock: null
                 };
             } else if (currentSceneBlock) {
-                currentSceneBlock.linesCount += getLineCount(block);
-                
                 const isFirstContent = currentSceneBlock.content.length === 0;
                 // Identify "Characters: ..." block if it's the first action block
                 if (isFirstContent && block.type === constants.ELEMENT_TYPES.ACTION && block.text.trim().startsWith('Characters:')) {
@@ -122,20 +106,13 @@ export class TreatmentRenderer {
             }
         });
         if (currentSceneBlock) scenes.push(currentSceneBlock);
-        
+
+        // Durations from the shared geometry engine (R1) — one lookup for the
+        // whole pass, formatted via Utils.formatEighths.
+        const geoById = this._getGeometryById();
         scenes.forEach((scene, index) => {
             const meta = this.app.sceneMeta[scene.slug.id] || {};
-            // Calculate duration string (e.g. "1 2/8 pgs")
-            const eighths = Math.ceil((scene.linesCount * 8) / 55); // 55 lines per page approx
-            let durationStr = '';
-            if (eighths < 8) {
-                durationStr = `${eighths}/8`;
-            } else {
-                const pgs = Math.floor(eighths / 8);
-                const rem = eighths % 8;
-                durationStr = rem > 0 ? `${pgs} ${rem}/8` : `${pgs}`;
-            }
-            scene.durationStr = durationStr;
+            scene.durationStr = this._durationStr(scene.slug.id, geoById);
 
             const blockEl = this.createSceneBlock(scene, meta, index, scenes.length);
             this.container.appendChild(blockEl);

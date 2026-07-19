@@ -326,6 +326,191 @@ test('pagination: 10000-word action paginates under 1500ms', async () => {
     } finally { stage.remove(); }
 });
 
+// ---------- Phase 4: canonical rendering + geometry unification ----------
+
+// Canonical-block fixture: 17 scenes incl. one multi-page dialogue (scene 2),
+// followed by a long run of short scenes so the final page is guaranteed to
+// contain a scene start (FDX-style max startPage === pageCount).
+function fixtureBlocks() {
+    const blocks = [];
+    let n = 0;
+    const add = (type, text, extra = {}) => blocks.push({ id: `fx${++n}`, type, text, ...extra });
+    add('sc-slug', 'INT. KITCHEN - DAY');
+    add('sc-action', loremWords(60, 1));
+    add('sc-character', 'ANA');
+    add('sc-dialogue', loremWords(40, 2));
+    add('sc-slug', 'EXT. STREET - NIGHT');
+    add('sc-action', loremWords(120, 3));
+    add('sc-character', 'JOHN');
+    add('sc-dialogue', loremWords(700, 4)); // multi-page dialogue
+    for (let s = 3; s <= 17; s++) {
+        add('sc-slug', `INT. SCENE ${s} - DAY`);
+        add('sc-action', `Short beat number ${s}.`);
+    }
+    return blocks;
+}
+
+test('HEADLINE: one engine — paginate() ≡ rendered .page count ≡ FDX max startPage; eighths sane', async () => {
+    await document.fonts.ready;
+    const { PageRenderer } = await import('../../assets/js-mod/PageRenderer.js');
+    const renderer = new PageRenderer();
+    const blocks = fixtureBlocks();
+
+    // Engine result (what GeometryManager serves to toolbar/sidebar/reports/FDX)
+    const geo = renderer.paginate(blocks, {});
+
+    // Fake consumer path: page view / print render the same blocks via render()
+    const stage = document.createElement('div');
+    Object.assign(stage.style, { position: 'absolute', left: '-99999px', top: '0', width: '8.5in' });
+    document.body.appendChild(stage);
+    try {
+        renderer.render(blocks, stage, {});
+        const renderedPages = stage.querySelectorAll('.page').length;
+        assert(geo.pageCount >= 4, `fixture too small: ${geo.pageCount} page(s)`);
+        assertEqual(renderedPages, geo.pageCount, 'rendered .page count vs paginate() pageCount');
+        assertEqual(geo.scenes.length, 17, 'scene count');
+
+        // FDX consumer uses scene.startPage: the max must be the last page.
+        const maxStart = Math.max(...geo.scenes.map(s => s.startPage));
+        const maxEnd = Math.max(...geo.scenes.map(s => s.endPage));
+        assertEqual(maxEnd, geo.pageCount, 'max endPage vs pageCount');
+        assertEqual(maxStart, geo.pageCount, 'FDX-style max startPage vs pageCount');
+
+        geo.scenes.forEach(s => assert(s.eighths >= 1, `scene ${s.id} has eighths ${s.eighths} < 1`));
+        const diff = Math.abs(geo.totalEighths - geo.pageCount * 8);
+        assert(diff <= geo.scenes.length,
+            `totalEighths ${geo.totalEighths} vs pages*8 ${geo.pageCount * 8}: |diff| ${diff} > sceneCount ${geo.scenes.length}`);
+
+        // Determinism across the two paths: identical scene start pages.
+        const geo2 = renderer.paginate(blocks, {});
+        assertEqual(geo2.scenes.map(s => s.startPage), geo.scenes.map(s => s.startPage), 'startPage determinism');
+    } finally { stage.remove(); }
+});
+
+test('purity: pagination never touches a live editor container (R19)', async () => {
+    const probe = document.createElement('div');
+    probe.id = 'purity-probe-editor';
+    probe.appendChild(makeBlock('sc-slug', 'INT. PROBE - DAY'));
+    probe.appendChild(makeBlock('sc-action', 'Nothing must be appended here.'));
+    document.body.appendChild(probe);
+    const before = probe.innerHTML;
+
+    const { PageRenderer } = await import('../../assets/js-mod/PageRenderer.js');
+    const renderer = new PageRenderer();
+    try {
+        // Treatment-print equivalent: canonical blocks straight in, repeatedly
+        // (the old code appended the whole script to the editor every render).
+        const blocks = fixtureBlocks();
+        for (let i = 0; i < 3; i++) {
+            renderer.paginate(blocks, { showSceneNumbers: true, showPageNumbers: true, hideFirstPageMeta: true });
+        }
+        // Write-mode path: the probe's own live nodes as source.
+        renderer.paginate(Array.from(probe.children), {});
+        assertEqual(probe.childElementCount, 2, 'probe editor child count');
+        assert(probe.innerHTML === before, 'probe editor DOM was mutated by pagination');
+    } finally { probe.remove(); }
+});
+
+test('CSS parity: editor vs .page computed marginLeft/width/textTransform per type', async () => {
+    await document.fonts.ready;
+    assert(window.innerWidth >= 769, `viewport ${window.innerWidth}px too narrow for desktop editor rules`);
+
+    // Editor context: content box exactly 6in wide, like #editor-container.
+    const editorSim = document.createElement('div');
+    Object.assign(editorSim.style, {
+        position: 'absolute', left: '-99999px', top: '0', width: '6in',
+        fontFamily: "'Courier Prime', monospace", fontSize: '12pt', lineHeight: '1.0'
+    });
+    // Page context: real .page grid.
+    const pageWrap = document.createElement('div');
+    Object.assign(pageWrap.style, { position: 'absolute', left: '-99999px', top: '0' });
+    const page = document.createElement('div');
+    page.className = 'page';
+    const cw = document.createElement('div');
+    cw.className = 'content-wrapper';
+    page.appendChild(cw);
+    pageWrap.appendChild(page);
+    document.body.appendChild(editorSim);
+    document.body.appendChild(pageWrap);
+
+    try {
+        const types = ['sc-slug', 'sc-action', 'sc-character', 'sc-dialogue', 'sc-parenthetical', 'sc-transition'];
+        for (const t of types) {
+            const a = makeBlock(t, 'Sample line');
+            const b = makeBlock(t, 'Sample line');
+            editorSim.appendChild(a);
+            cw.appendChild(b);
+            const ca = getComputedStyle(a);
+            const cb = getComputedStyle(b);
+            for (const prop of ['marginLeft', 'width', 'textTransform']) {
+                assertEqual(cb[prop], ca[prop], `${t} ${prop} (editor "${ca[prop]}" vs page "${cb[prop]}")`);
+            }
+            a.remove(); b.remove();
+        }
+        // Centered override behaves identically in both contexts.
+        const c1 = makeBlock('sc-dialogue', 'Centered');
+        const c2 = makeBlock('sc-dialogue', 'Centered');
+        c1.classList.add('sc-centered');
+        c2.classList.add('sc-centered');
+        editorSim.appendChild(c1);
+        cw.appendChild(c2);
+        for (const prop of ['marginLeft', 'width', 'textAlign']) {
+            assertEqual(getComputedStyle(c2)[prop], getComputedStyle(c1)[prop], `sc-centered ${prop}`);
+        }
+        assertEqual(getComputedStyle(c1).textAlign, 'center', 'sc-centered text-align');
+    } finally { editorSim.remove(); pageWrap.remove(); }
+});
+
+test('markup: page output renders <strong>, hides markers, drops [[notes]]', async () => {
+    const { PageRenderer } = await import('../../assets/js-mod/PageRenderer.js');
+    const renderer = new PageRenderer();
+    const el = renderer.renderBlockElement({ id: 'm1', type: 'sc-action', text: '**bold** [[note]] plain' });
+    assert(el.querySelector('strong'), 'no <strong> in page output');
+    assertEqual(el.querySelector('strong').textContent, 'bold', 'strong content');
+    assert(!el.textContent.includes('*'), 'emphasis markers leaked into output');
+    assert(!el.textContent.includes('note'), '[[note]] content leaked into output');
+    assert(el.textContent.includes('plain'), 'plain text missing from output');
+    assertEqual(el.dataset.lineId, 'm1', 'lineId carried onto the element');
+
+    // Flags: centered/tight become classes; pageBreak is a dataset marker.
+    const flags = renderer.renderBlockElement({ id: 'm2', type: 'sc-action', text: 'x', centered: true, tight: true });
+    assert(flags.classList.contains('sc-centered'), 'centered flag -> sc-centered class');
+    assert(flags.classList.contains('sc-tight'), 'tight flag -> sc-tight class');
+
+    // Parenthetical convention: DOM text carries no outer parens.
+    const paren = renderer.renderBlockElement({ id: 'm3', type: 'sc-parenthetical', text: '(beat)' });
+    assertEqual(paren.textContent, 'beat', 'outer parens stripped for DOM');
+
+    // In full page output the note is dropped but bold survives pagination.
+    const geoPages = renderer.paginate([
+        { id: 'p1', type: 'sc-slug', text: 'INT. MARKUP - DAY' },
+        { id: 'p2', type: 'sc-action', text: '**bold** [[note]] plain' }
+    ], {}).pages;
+    assertEqual(geoPages.length, 1, 'markup fixture page count');
+    assert(geoPages[0].querySelector('.sc-action strong'), 'strong missing after pagination');
+});
+
+test('pageBreak: `===` block forces a new page and renders nothing', async () => {
+    const { PageRenderer } = await import('../../assets/js-mod/PageRenderer.js');
+    const renderer = new PageRenderer();
+    const res = renderer.paginate([
+        { id: 'b1', type: 'sc-slug', text: 'INT. ONE - DAY' },
+        { id: 'b2', type: 'sc-action', text: 'First page.' },
+        { id: 'b3', type: 'sc-action', text: '===', pageBreak: true },
+        { id: 'b4', type: 'sc-slug', text: 'INT. TWO - DAY' },
+        { id: 'b5', type: 'sc-action', text: 'Second page.' }
+    ], {});
+    assertEqual(res.pageCount, 2, 'page count with forced break');
+    const p2First = res.pages[1].querySelector('.content-wrapper').firstElementChild;
+    assert(p2First.classList.contains('sc-slug'), 'page 2 must open with the slug after ===');
+    assertEqual(res.scenes.length, 2, 'scene count');
+    assertEqual(res.scenes[1].startPage, 2, 'second scene start page');
+    // The `===` block itself must not appear anywhere in the output.
+    res.pages.forEach(p => {
+        assert(!p.textContent.includes('==='), '=== rendered visibly');
+    });
+});
+
 // ---------- runner ----------
 async function run() {
     const ul = document.getElementById('results');
