@@ -59,7 +59,14 @@ export class ReportsManager {
     }
 
     close() {
+        // Cleanup runs via the modal's onClose hook (registered in SFSS), so it
+        // also fires on the Esc / backdrop close paths — not just this button.
         this.app.modalManager.close('reports-modal');
+    }
+
+    // Invoked by ModalManager whenever reports-modal closes, by any path.
+    // Must NOT call close() — that would recurse through ModalManager.
+    onModalClosed() {
         this.outputArea.innerHTML = '';
         this.downloadTxtBtn.classList.add('hidden');
         this.downloadPdfBtn.classList.add('hidden');

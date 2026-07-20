@@ -871,10 +871,15 @@ export class EditorHandler {
     // to know whether the event was consumed).
     closePopups() {
         const iconPicker = document.getElementById('icon-picker-menu');
+        // A menu counts as open only when it has a *visible* inline display.
+        // An unset display ('') must read as closed — otherwise closePopups()
+        // returns true on a fresh load (nothing shown) and handleBackOrEscape
+        // swallows the Escape before it can reach the modal stack.
+        const menuOpen = (el) => !!el && !!el.style.display && el.style.display !== 'none';
         const wasOpen = this.popupState.active ||
-            this.autoMenu.style.display !== 'none' ||
-            this.typeMenu.style.display !== 'none' ||
-            (iconPicker && iconPicker.style.display !== 'none') ||
+            menuOpen(this.autoMenu) ||
+            menuOpen(this.typeMenu) ||
+            menuOpen(iconPicker) ||
             !!this.activePopupCleanup;
         if (this.activePopupCleanup) {
             const cleanup = this.activePopupCleanup;

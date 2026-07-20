@@ -406,10 +406,10 @@ export class SFSS {
         document.getElementById('hide-sidebar-btn').addEventListener('click', () => this.toggleSidebar(true, false));
         document.getElementById('show-sidebar-btn').addEventListener('click', () => this.toggleSidebar(false, true));
         
-        document.getElementById('file-open-btn').addEventListener('click', () => document.getElementById('file-input').click());
-        
+        document.getElementById('file-open-btn').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('file-input').click(); });
+
         const collabBtn = document.getElementById('collab-menu-btn');
-        if (collabBtn) collabBtn.addEventListener('click', () => this.collabUI.openModal());
+        if (collabBtn) collabBtn.addEventListener('click', (e) => { e.preventDefault(); this.collabUI.openModal(); });
         const builderBtn = document.getElementById('feature-builder-btn');
         if (builderBtn) builderBtn.addEventListener('click', (e) => { e.preventDefault(); this.openHelpTab('help-feature-toggles'); });
         const builderApply = document.getElementById('feature-builder-apply-btn');
@@ -425,12 +425,15 @@ export class SFSS {
             }
         });
 
-        // IO Manager Delegations
-        document.getElementById('download-json-btn').addEventListener('click', () => this.ioManager.downloadJSON());
-        document.getElementById('download-fdx-btn').addEventListener('click', () => this.ioManager.downloadFDX());
-        document.getElementById('download-fountain-btn').addEventListener('click', () => this.ioManager.downloadFountain());
-        document.getElementById('download-text-btn').addEventListener('click', () => this.ioManager.downloadText());
-        document.getElementById('print-btn').addEventListener('click', () => this.printManager.open());
+        // IO Manager Delegations. These are <a href="#"> menu items: without
+        // preventDefault the '#' navigation fires popstate -> handleBackOrEscape
+        // -> closeTop(), which would slam shut a modal opened by the same click
+        // (the bug that made Print and Collaboration "do nothing").
+        document.getElementById('download-json-btn').addEventListener('click', (e) => { e.preventDefault(); this.ioManager.downloadJSON(); });
+        document.getElementById('download-fdx-btn').addEventListener('click', (e) => { e.preventDefault(); this.ioManager.downloadFDX(); });
+        document.getElementById('download-fountain-btn').addEventListener('click', (e) => { e.preventDefault(); this.ioManager.downloadFountain(); });
+        document.getElementById('download-text-btn').addEventListener('click', (e) => { e.preventDefault(); this.ioManager.downloadText(); });
+        document.getElementById('print-btn').addEventListener('click', (e) => { e.preventDefault(); this.printManager.open(); });
         document.getElementById('file-input').addEventListener('change', (e) => this.ioManager.uploadFile(e.target));
 
         document.getElementById('reports-menu-btn').addEventListener('click', (e) => {

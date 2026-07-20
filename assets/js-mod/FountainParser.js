@@ -36,10 +36,15 @@ export class FountainParser {
     parse(text) {
         const { SLUG, ACTION, CHARACTER, DIALOGUE, PARENTHETICAL, TRANSITION } = constants.ELEMENT_TYPES;
 
+        // Normalize line endings up front so every downstream consumer (the
+        // boneyard pre-pass, the line loop, extracted boneyard text) sees LF
+        // only — Windows-authored .fountain files arrive with CRLF.
+        const normalized = String(text == null ? '' : text).replace(/\r\n?/g, '\n');
+
         // Boneyard pre-pass: multi-line comment spans are lifted out of the
         // text so the line parser never sees them; inline ones stay put.
-        const boneyardSplit = splitBoneyard(text);
-        const lines = boneyardSplit.text.split(/\r\n|\r|\n/);
+        const boneyardSplit = splitBoneyard(normalized);
+        const lines = boneyardSplit.text.split('\n');
 
         const blocks = [];
         const meta = {};
