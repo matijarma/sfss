@@ -1,6 +1,9 @@
 import * as constants from './Constants.js';
 import { generateLineId } from './Utils.js';
-import { getTextOffset, setTextOffset, decorateBlock, toggleEmphasis, plainText } from './InlineMarkup.js';
+import {
+    getTextOffset, setTextOffset, decorateBlock, toggleEmphasis, plainText,
+    applyCase, nextCaseMode, wordBoundsAt, replaceTextInPlace, setTextSelection
+} from './InlineMarkup.js';
 import { toast } from './Toast.js';
 
 // Emphasis v1 scope: uppercase-rewritten types (SLUG/CHARACTER/TRANSITION)
@@ -10,6 +13,10 @@ const EMPHASIS_TYPES = [
     constants.ELEMENT_TYPES.DIALOGUE,
     constants.ELEMENT_TYPES.PARENTHETICAL
 ];
+
+// Change Case applies to the same types: SLUG/CHARACTER/TRANSITION are
+// always uppercase (the keyup rewrite would undo any other case).
+const CASE_TYPES = EMPHASIS_TYPES;
 
 export class EditorHandler {
     constructor(app) {
@@ -215,6 +222,12 @@ export class EditorHandler {
         if (this.app.checkShortcut(e, 'cycleType')) {
             e.preventDefault();
             this.app.cycleType();
+            return;
+        }
+
+        if (this.app.checkShortcut(e, 'changeCase')) {
+            e.preventDefault();
+            this.changeCaseAtSelection();
             return;
         }
 
@@ -478,6 +491,104 @@ export class EditorHandler {
 
         toggleEmphasis(block, kind, selStart, selEnd);
         this.app.saveState(true);
+    }
+
+    // Change Case seam (default Shift+F3): cycles the selection through
+    // UPPER -> Title -> lower via InlineMarkup.applyCase. Works across
+    // several lines (one mode for the whole selection; Scene Heading /
+    // Character / Transition lines in it are skipped), and with a collapsed
+    // caret on the word under it. Transforms are length-preserving, so the
+    // selection is restored at the same character offsets.
+    changeCaseAtSelection() {
+        if (!this.app.editor.isContentEditable) return;
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const range = sel.getRangeAt(0);
+        if (!this.app.editor.contains(range.commonAncestorContainer)) return;
+
+        let blocks;
+        if (range.collapsed) {
+            const block = this.getCurrentBlock();
+            blocks = block ? [block] : [];
+        } else {
+            blocks = Array.from(this.app.editor.querySelectorAll('.script-line'))
+                .filter(b => range.intersectsNode(b));
+        }
+
+        const targets = [];
+        let skipped = false;
+        for (const block of blocks) {
+            if (!CASE_TYPES.includes(this.getBlockType(block))) { skipped = true; continue; }
+            const text = block.textContent;
+            let start, end;
+            if (range.collapsed) {
+                const word = wordBoundsAt(text, getTextOffset(block) ?? 0);
+                if (!word) continue;
+                ({ start, end } = word);
+            } else {
+                ({ start, end } = this.rangeOffsetsIn(block, range));
+            }
+            if (start < end) targets.push({ block, text, start, end });
+        }
+
+        if (targets.length === 0) {
+            if (skipped) toast('Change case works in Action, Dialogue and Parenthetical');
+            return;
+        }
+        const mode = nextCaseMode(targets);
+        if (!mode) return;
+
+        const anchor = this.selectionPointOffset(sel.anchorNode, sel.anchorOffset);
+        const focus = this.selectionPointOffset(sel.focusNode, sel.focusOffset);
+
+        this.app.saveState(true); // capture pending typing -> one-step undo
+        for (const t of targets) {
+            replaceTextInPlace(t.block, applyCase(t.text, t.start, t.end, mode));
+        }
+        if (anchor && focus) setTextSelection(anchor.block, anchor.offset, focus.block, focus.offset);
+        // Multi-line selections never reach handleKeyup's dirty flag (no
+        // single current block), so mark it here for the autosave tick.
+        this.app.isDirty = true;
+        this.app.saveState(true);
+    }
+
+    // Character offsets of `range` clipped to `block` (span-safe, same
+    // convention as getTextOffset).
+    rangeOffsetsIn(block, range) {
+        const blockRange = document.createRange();
+        blockRange.selectNodeContents(block);
+        const len = block.textContent.length;
+        const offsetOf = (node, offset) => {
+            const pre = blockRange.cloneRange();
+            pre.setEnd(node, offset);
+            return pre.toString().length;
+        };
+        const start = range.compareBoundaryPoints(Range.START_TO_START, blockRange) > 0
+            ? offsetOf(range.startContainer, range.startOffset) : 0;
+        const end = range.compareBoundaryPoints(Range.END_TO_END, blockRange) < 0
+            ? offsetOf(range.endContainer, range.endOffset) : len;
+        return { start: Math.min(start, len), end: Math.min(end, len) };
+    }
+
+    // DOM selection point -> { block, offset } so it survives the rewrite.
+    // Points on the editor itself (between lines) snap to a line edge.
+    selectionPointOffset(node, offset) {
+        const editor = this.app.editor;
+        if (!node) return null;
+        if (node === editor) {
+            const lines = editor.children;
+            if (lines.length === 0) return null;
+            if (offset < lines.length) return { block: lines[offset], offset: 0 };
+            const last = lines[lines.length - 1];
+            return { block: last, offset: last.textContent.length };
+        }
+        const el = node.nodeType === 3 ? node.parentNode : node;
+        const block = el && el.closest ? el.closest('.script-line') : null;
+        if (!block) return null;
+        const pre = document.createRange();
+        pre.selectNodeContents(block);
+        pre.setEnd(node, offset);
+        return { block, offset: pre.toString().length };
     }
 
     // Fountain forces, live variant (plan D5): '@' / '!' / '.' prefixes

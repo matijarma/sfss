@@ -8,8 +8,8 @@
 //      inert, except Ctrl+S / Ctrl+P which still preventDefault to suppress
 //      the browser dialogs (Ctrl+S also saves — saving is always safe).
 //   3. Editor-local (EditorHandler.handleKeydown, editor focused): cycleType,
-//      Ctrl+B/I/U, Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, Enter/Tab/Backspace,
-//      Ctrl+Enter.
+//      changeCase (both user-remappable), Ctrl+B/I/U, Ctrl+Z /
+//      Ctrl+Shift+Z / Ctrl+Y, Enter/Tab/Backspace, Ctrl+Enter.
 //   4. Global window-level (SFSS): Ctrl+S, Ctrl+P — guarded by an empty modal
 //      stack and a non-editable event target.
 // Escape has ONE entry point: SFSS.handleBackOrEscape.
@@ -66,6 +66,13 @@ export function isValidBinding(combo) {
 function normalizeCombo(combo) {
     const p = parseCombo(combo);
     return `${p.ctrl ? 'ctrl+' : ''}${p.alt ? 'alt+' : ''}${p.shift ? 'shift+' : ''}${p.main || ''}`;
+}
+
+// True when two user bindings are the same chord (modifier order, case and
+// the Cmd/Ctrl alias don't matter). Empty bindings never collide.
+export function sameCombo(a, b) {
+    if (!a || !b) return false;
+    return normalizeCombo(a) === normalizeCombo(b);
 }
 
 // Returns the reserved combo a binding collides with, or null.

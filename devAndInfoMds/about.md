@@ -23,7 +23,7 @@ SFSS features a custom pagination and formatting engine (`PageRenderer.js`) tune
 
 ### 📝 Writing Experience
 *   **Context-Aware Shortcuts:**
-    *   `Enter`/`Tab`: Per-element transitions are configurable; `Ctrl+E` cycles the element type in place; `Ctrl+S` saves.
+    *   `Enter`/`Tab`: Per-element transitions are configurable; `Ctrl+E` cycles the element type in place; `Shift+F3` changes the case of the selection (UPPER → Title → lower, remappable); `Ctrl+S` saves.
 *   **Fountain Authoring:** Forces (`.slug`, `@Name`, `!action`, `> transition`, `> centered <`), inline `**bold**` / `*italic*` / `_underline_` (Ctrl+B/I/U) with visible dimmed markers, and `[[notes]]` that never print or skew counts.
 *   **Smart Autocomplete:** Character suggestions, suffix completions, and "next speaker" hints.
 *   **Focus Controls:** Sidebar auto-hide, dropdown/horizontal type selectors, and page-view toggle.

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    comboFromEvent, isValidBinding, conflict, matches, format, RESERVED_COMBOS
+    comboFromEvent, isValidBinding, conflict, matches, format, RESERVED_COMBOS, sameCombo
 } from '../../assets/js-mod/Shortcuts.js';
 
 const ev = (key, mods = {}) => ({
@@ -57,4 +57,21 @@ test('format is pass-through on non-Mac platforms', () => {
     // Node has no navigator → IS_MAC false → labels unchanged.
     assert.equal(format('Ctrl+E'), 'Ctrl+E');
     assert.equal(format('Ctrl+Shift+Z'), 'Ctrl+Shift+Z');
+});
+
+test('Shift+F3 (default Change Case) is a valid, unreserved, matchable binding', () => {
+    assert.equal(isValidBinding('Shift+F3'), true);
+    assert.equal(conflict('Shift+F3'), null);
+    assert.equal(comboFromEvent(ev('F3', { shift: true })), 'Shift+F3');
+    assert.equal(matches(ev('F3', { shift: true }), 'Shift+F3'), true);
+    assert.equal(matches(ev('F3', {}), 'Shift+F3'), false);
+    assert.equal(matches(ev('F3', { shift: true, ctrl: true }), 'Shift+F3'), false);
+});
+
+test('sameCombo compares bindings modifier-order and case insensitively', () => {
+    assert.equal(sameCombo('Ctrl+Shift+K', 'shift+ctrl+k'), true);
+    assert.equal(sameCombo('Cmd+E', 'Ctrl+E'), true);
+    assert.equal(sameCombo('Ctrl+E', 'Ctrl+Shift+E'), false);
+    assert.equal(sameCombo('', ''), false);
+    assert.equal(sameCombo(null, 'Ctrl+E'), false);
 });

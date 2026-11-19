@@ -41,7 +41,7 @@
             } catch (e) { console.warn('Theme detection failed', e); }
 
             // Your Version Logic
-            const staticversion = "" + "07-20-26_" + "public-" + "2002";
+            const staticversion = "" + "11-19-26_" + "public-" + "2003";
             //const staticversion = Math.round(Math.random()*1000000);
 
             const queryString = self.location.search;
@@ -413,10 +413,11 @@
                         <li><strong>Ctrl+S:</strong> Save &nbsp;·&nbsp; <strong>Ctrl+P:</strong> Print</li>
                         <li><strong>Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y:</strong> Undo / Redo</li>
                         <li><strong>Ctrl+B / I / U:</strong> Bold / Italic / Underline (Action, Dialogue, Parenthetical)</li>
+                        <li><strong>Shift+F3</strong> (or the binding recorded above)<strong>:</strong> Change case of the selection — UPPER → Title → lower (the word under the cursor if nothing is selected; Action, Dialogue, Parenthetical)</li>
                         <li><strong>Shift+Enter:</strong> Split the line, keeping the same element type</li>
                         <li><strong>Esc:</strong> Close menus and dialogs; from the editor, jump to the toolbar</li>
                     </ul>
-                    <p class="text-meta text-sm">Ctrl means ⌘ on Mac. Enter/Tab transitions and the cycle shortcut can be remapped above.</p>
+                    <p class="text-meta text-sm">Ctrl means ⌘ on Mac. Enter/Tab transitions, the cycle shortcut and Change Case can be remapped above.</p>
                 </div>
         </div>
         <div class="modal-footer">
@@ -755,6 +756,7 @@
                 <ul>
                     <li><strong>Forces:</strong> start a line with <code>.</code> for a scene heading, <code>@</code> for a character, <code>!</code> for action, or <code>&gt;</code> for a transition; wrap a line in <code>&gt; ... &lt;</code> to center it.</li>
                     <li><strong>Inline emphasis:</strong> <code>**bold**</code>, <code>*italic*</code>, <code>_underline_</code> — toggle with Ctrl+B / I / U in Action, Dialogue, and Parenthetical. Markers stay visible (dimmed) while you write and are hidden in Page View, print, and exports.</li>
+                    <li><strong>Change case:</strong> select text and press Shift+F3 to cycle UPPER → Title → lower (works across several lines; with no selection it changes the word under the cursor). Scene headings, characters and transitions are always uppercase, so they are left alone. Remappable in Keyboard Shortcuts.</li>
                     <li><strong>Notes:</strong> <code>[[like this]]</code> travel with the script but are excluded from output and from page/word counts.</li>
                     <li><strong>Reordering:</strong> in Treatment, drag scene cards by their grip handle (the chevron buttons still work too).</li>
                     <li><strong>Paper size:</strong> pick Letter or A4 per script in Print Prep or Script Details — page counts are identical on both.</li>

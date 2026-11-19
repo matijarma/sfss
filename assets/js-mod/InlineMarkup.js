@@ -310,6 +310,76 @@ export function toggleEmphasis(blockEl, kind, selStart, selEnd) {
     return res;
 }
 
+// ---------- Case changing (pure core) ----------
+
+// Change Case cycles UPPER -> Title -> lower -> UPPER (Word's Shift+F3
+// order); mixed-case text goes to UPPER first. Every transform is
+// LENGTH-PRESERVING: a character whose case mapping would change its length
+// (ß -> SS) is kept as is, so offsets, selections and styled spans stay valid.
+export const CASE_MODES = ['upper', 'title', 'lower'];
+
+const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+const COMBINING_MARK = /\p{M}/u;
+const APOSTROPHE = /['’]/;
+
+function mapCase(ch, upper) {
+    const m = upper ? ch.toUpperCase() : ch.toLowerCase();
+    return m.length === ch.length ? m : ch;
+}
+
+// Transforms text[start, end) to `mode`. Title case reads the whole string
+// for word starts, so a selection beginning mid-word stays lowercase there
+// and apostrophes inside words (don't) never start a new word.
+export function applyCase(text, start, end, mode) {
+    let out = '';
+    let inWord = false;
+    let pos = 0;
+    for (const ch of text) {
+        let wordStart = false;
+        if (LETTER_OR_DIGIT.test(ch)) {
+            wordStart = !inWord;
+            inWord = true;
+        } else if (!(inWord && (COMBINING_MARK.test(ch) || APOSTROPHE.test(ch)))) {
+            inWord = false;
+        }
+        if (pos >= start && pos < end) {
+            const upper = mode === 'upper' || (mode === 'title' && wordStart);
+            out += mapCase(ch, upper);
+        } else {
+            out += ch;
+        }
+        pos += ch.length;
+    }
+    return out;
+}
+
+// Picks the next mode for a set of { text, start, end } segments, decided
+// ONCE for the whole selection (multi-line selections cycle together).
+// Modes that would not change anything are skipped ("A" is already both
+// UPPER and Title, so it goes to lower). Returns null when nothing can
+// change (no cased letters).
+export function nextCaseMode(segments) {
+    if (!segments || !segments.length) return null;
+    const unchanged = (mode) => segments.every(s => applyCase(s.text, s.start, s.end, mode) === s.text);
+    const current = CASE_MODES.findIndex(unchanged);
+    const order = current === -1
+        ? CASE_MODES
+        : [...CASE_MODES.slice(current + 1), ...CASE_MODES.slice(0, current + 1)];
+    return order.find(mode => !unchanged(mode)) || null;
+}
+
+const isWordChar = (ch) => !!ch && (LETTER_OR_DIGIT.test(ch) || COMBINING_MARK.test(ch) || APOSTROPHE.test(ch));
+
+// Word around a collapsed caret (inside it or touching either edge), or
+// null when the caret sits between non-word characters.
+export function wordBoundsAt(text, offset) {
+    let start = Math.max(0, Math.min(offset, text.length));
+    let end = start;
+    while (start > 0 && isWordChar(text[start - 1])) start--;
+    while (end < text.length && isWordChar(text[end])) end++;
+    return start === end ? null : { start, end };
+}
+
 // ---------- Serialization seam ----------
 
 // Element -> canonical block. Inverse of PageRenderer.renderBlockElement and
@@ -396,4 +466,34 @@ export function setTextRange(el, start, end) {
 
 export function setTextOffset(el, offset) {
     setTextRange(el, offset, offset);
+}
+
+// Selection that may span blocks; anchor/focus order is kept, so a
+// backwards (Shift+Arrow-left) selection stays backwards.
+export function setTextSelection(anchorEl, anchorOffset, focusEl, focusOffset) {
+    const sel = window.getSelection();
+    if (!sel) return;
+    const a = findTextPosition(anchorEl, anchorOffset);
+    const f = findTextPosition(focusEl, focusOffset);
+    sel.setBaseAndExtent(a.node, a.offset, f.node, f.offset);
+}
+
+// Swaps in same-length text node by node, leaving the styled-span
+// structure intact (case changes never add or remove markers). Falls back
+// to a full rewrite + redecorate if the length ever differs.
+export function replaceTextInPlace(el, newText) {
+    if (newText.length !== el.textContent.length) {
+        el.textContent = newText;
+        decorateBlock(el);
+        return;
+    }
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let pos = 0;
+    let node;
+    while ((node = walker.nextNode())) {
+        const len = node.data.length;
+        const next = newText.slice(pos, pos + len);
+        if (next !== node.data) node.data = next;
+        pos += len;
+    }
 }

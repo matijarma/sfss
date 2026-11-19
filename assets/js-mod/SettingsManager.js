@@ -1,12 +1,18 @@
 import * as constants from './Constants.js';
 import * as Shortcuts from './Shortcuts.js';
 
+// Remappable editor actions, in Settings display order.
+const SHORTCUT_ACTIONS = [
+    { id: 'cycleType', label: 'Toggle Element Type', fallback: 'Ctrl+E' },
+    { id: 'changeCase', label: 'Change Case (UPPER → Title → lower)', fallback: 'Shift+F3' }
+];
+
 export class SettingsManager {
     constructor(sfss) {
         this.sfss = sfss;
 
         // Shortcuts
-        this.shortcuts = { cycleType: 'Ctrl+E' };
+        this.shortcuts = Object.fromEntries(SHORTCUT_ACTIONS.map(a => [a.id, a.fallback]));
         const storedShortcuts = localStorage.getItem('sfss_shortcuts');
         if (storedShortcuts) {
             try {
@@ -17,8 +23,7 @@ export class SettingsManager {
         }
         // Migrate legacy bare-modifier bindings (e.g. 'Ctrl+Shift') that used
         // to hijack every Ctrl+Shift+<key> chord.
-        if (!Shortcuts.isValidBinding(this.shortcuts.cycleType)) {
-            this.shortcuts.cycleType = 'Ctrl+E';
+        if (this.normalizeShortcuts()) {
             localStorage.setItem('sfss_shortcuts', JSON.stringify(this.shortcuts));
         }
 
@@ -57,10 +62,28 @@ export class SettingsManager {
         this.sfss.modalManager.close('settings-modal');
     }
 
+    // Resets every invalid (or cleared) binding to its default. An action
+    // whose binding collides with an earlier action's falls back to its
+    // default, or stays unbound ('') if the default is taken too. Returns
+    // true if anything changed.
+    normalizeShortcuts() {
+        let changed = false;
+        SHORTCUT_ACTIONS.forEach((action, i) => {
+            const before = this.shortcuts[action.id];
+            const takenBy = (combo) => SHORTCUT_ACTIONS.slice(0, i).some(a => Shortcuts.sameCombo(this.shortcuts[a.id], combo));
+            let combo = before;
+            if (!Shortcuts.isValidBinding(combo) || takenBy(combo)) combo = action.fallback;
+            if (takenBy(combo)) combo = '';
+            if (combo !== before) {
+                this.shortcuts[action.id] = combo;
+                changed = true;
+            }
+        });
+        return changed;
+    }
+
     async save() {
-        if (!Shortcuts.isValidBinding(this.shortcuts.cycleType)) {
-            this.shortcuts.cycleType = 'Ctrl+E';
-        }
+        this.normalizeShortcuts();
         localStorage.setItem('sfss_keymap', JSON.stringify(this.keymap));
         localStorage.setItem('sfss_shortcuts', JSON.stringify(this.shortcuts));
         await this.sfss.persistSettings();
@@ -75,29 +98,17 @@ export class SettingsManager {
         localStorage.setItem('sfss_theme', document.documentElement.classList.contains('dark-mode') ? 'dark' : 'light');
     }
 
-    generateUI() {
-        const container = document.getElementById('keymap-settings');
-        container.innerHTML = '';
-        
-        // --- Global Shortcuts Section ---
-        const globalHeader = document.createElement('h3');
-        globalHeader.textContent = 'Global Shortcuts';
-        globalHeader.style.marginBottom = '0.5rem';
-        container.appendChild(globalHeader);
-        
-        const globalTable = document.createElement('table');
-        globalTable.className = 'keymap-table';
-        globalTable.style.marginBottom = '1.5rem';
-        
+    // One recorder row per remappable action (click, then press the chord).
+    createShortcutRow(action) {
         const row = document.createElement('tr');
         const labelCell = document.createElement('td');
-        labelCell.textContent = 'Toggle Element Type';
+        labelCell.textContent = action.label;
         
         const inputCell = document.createElement('td');
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'settings-input';
-        input.value = this.shortcuts.cycleType ? Shortcuts.format(this.shortcuts.cycleType) : '';
+        input.value = this.shortcuts[action.id] ? Shortcuts.format(this.shortcuts[action.id]) : '';
         input.readOnly = true;
         input.placeholder = 'Click to record...';
         input.style.cursor = 'pointer';
@@ -109,7 +120,7 @@ export class SettingsManager {
         errorEl.style.display = 'none';
 
         const showStored = () => {
-            input.value = this.shortcuts.cycleType ? Shortcuts.format(this.shortcuts.cycleType) : '';
+            input.value = this.shortcuts[action.id] ? Shortcuts.format(this.shortcuts[action.id]) : '';
         };
         const showError = (msg) => {
             errorEl.textContent = msg || '';
@@ -129,7 +140,7 @@ export class SettingsManager {
                 return;
             }
             if (e.key === 'Backspace') {
-                this.shortcuts.cycleType = '';
+                this.shortcuts[action.id] = '';
                 showError('');
                 input.value = '';
                 return;
@@ -156,7 +167,13 @@ export class SettingsManager {
                 showStored();
                 return;
             }
-            this.shortcuts.cycleType = combo;
+            const other = SHORTCUT_ACTIONS.find(a => a.id !== action.id && Shortcuts.sameCombo(this.shortcuts[a.id], combo));
+            if (other) {
+                showError(`${Shortcuts.format(combo)} is already used for ${other.label}.`);
+                showStored();
+                return;
+            }
+            this.shortcuts[action.id] = combo;
             showError('');
             showStored();
         });
@@ -169,7 +186,24 @@ export class SettingsManager {
         inputCell.appendChild(errorEl);
         row.appendChild(labelCell);
         row.appendChild(inputCell);
-        globalTable.appendChild(row);
+        return row;
+    }
+
+    generateUI() {
+        const container = document.getElementById('keymap-settings');
+        container.innerHTML = '';
+        
+        // --- Global Shortcuts Section ---
+        const globalHeader = document.createElement('h3');
+        globalHeader.textContent = 'Global Shortcuts';
+        globalHeader.style.marginBottom = '0.5rem';
+        container.appendChild(globalHeader);
+        
+        const globalTable = document.createElement('table');
+        globalTable.className = 'keymap-table';
+        globalTable.style.marginBottom = '1.5rem';
+        
+        SHORTCUT_ACTIONS.forEach(action => globalTable.appendChild(this.createShortcutRow(action)));
         container.appendChild(globalTable);
         
         // --- Element Transitions Section ---
