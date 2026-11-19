@@ -29,7 +29,7 @@ SFSS features a custom pagination and formatting engine (`PageRenderer.js`) tune
 *   **Smart Autocomplete:** Character suggestions, suffix completions, and "next speaker" hints.
 *   **Focus Controls:** Sidebar auto-hide, dropdown/horizontal type selectors, and page-view toggle.
 *   **Dark Mode:** Built-in high-contrast dark theme for late-night writing sessions.
-*   **Print Prep Modal:** One-stop modal for printing scripts, treatments, or reports with facing/booklet layouts, watermarks, Letter/A4 paper, and scene-aware pagination.
+*   **Print Prep Modal:** One-stop modal for printing scripts, treatments, or reports with facing/booklet layouts, watermarks, Letter/A4 paper, and scene-aware pagination. Scripts can optionally print each scene's music track as a floating tag above the scene heading (no effect on page breaks).
 
 ### 📋 Treatment & Planning Mode
 A dedicated **Treatment Mode** allows you to outline and structure your story before writing the script:

@@ -244,6 +244,49 @@ div#printingdiv { display: none }
     text-transform: uppercase;
 }
 
+/* Music-track pill (Print Prep > Script > Music Tracks). An absolutely
+   positioned child of the scene heading, right-aligned to the text column
+   and centred in the two blank lines above it (or in the top margin when the
+   heading opens a page). Out of flow: it must never affect pagination. Every
+   inherited heading style (bold, uppercase, pre-wrap, Courier) is reset. */
+.page .print-track-pill {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 0.09in);
+    z-index: 6;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.05in;
+    max-width: 3.5in;
+    height: 0.15in;
+    padding: 0 0.09in;
+    border: 0.75pt solid #6b7280;
+    border-radius: 999px;
+    background: #fff;
+    color: #111827 !important;
+    font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+    font-size: 7pt;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    text-transform: none;
+    text-decoration: none;
+    white-space: nowrap;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+.page .print-track-pill .fa-music {
+    flex: none;
+    font-size: 6pt;
+    color: #4b5563;
+}
+.page .print-track-pill .print-track-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* =========================================
    2. PREVIEW CONTAINER (Modal Specifics)
    ========================================= */

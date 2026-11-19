@@ -1,5 +1,5 @@
 import * as constants from './Constants.js';
-import { escapeHtml, formatEighths } from './Utils.js';
+import { escapeHtml, formatEighths, trackLabel } from './Utils.js';
 
 export class PrintManager {
     constructor(app) {
@@ -19,6 +19,7 @@ export class PrintManager {
                 showSceneNumbers: false,
                 showPageNumbers: true,
                 showDate: false,
+                showMusic: false,
                 watermark: ''
             },
             treatment: {
@@ -355,7 +356,11 @@ export class PrintManager {
     // Print purity (R19): the renderer is fed canonical blocks straight from
     // the model — the live editor is never touched (the old treatment branch
     // appended the whole script to the editor via editorHandler.createBlock).
-    async generateScreenplayPages() {
+    //
+    // trackPills: decorate scene headings with their music track (script
+    // mode's "Music Tracks" option). Opt-in per caller — the treatment
+    // thumbnails and report pages that reuse this method never pass it.
+    async generateScreenplayPages({ trackPills = false } = {}) {
         const data = this.app.exportToJSONStructure();
         const blocks = (data && data.blocks) ? data.blocks : [];
 
@@ -376,6 +381,7 @@ export class PrintManager {
         if (this.config.script.watermark) {
             pages.forEach(page => this.addWatermark(page, this.config.script.watermark));
         }
+        if (trackPills) pages.forEach(page => this.addTrackPills(page));
 
         if (this.config.script.showTitlePage) {
             const tp = this.createTitlePage();
@@ -438,6 +444,38 @@ export class PrintManager {
         wm.className = 'print-watermark';
         wm.textContent = text;
         page.appendChild(wm);
+    }
+
+    // Music-track pills: one per scene heading whose scene has a track. The
+    // pill is an absolutely positioned CHILD of the heading (print.css
+    // .print-track-pill), floating in the blank gap above it — it takes no
+    // space, so pagination and line positions are exactly as without it. Runs
+    // after pagination, on the finished pages. A link when the track URL is
+    // http(s), so it stays clickable in a PDF.
+    addTrackPills(page) {
+        page.querySelectorAll('.content-wrapper > .sc-slug[data-line-id]').forEach(slug => {
+            const meta = this.app.sceneMeta[slug.dataset.lineId];
+            const label = trackLabel(meta);
+            if (!label) return;
+            const url = String(meta.track || '').trim();
+            const isLink = /^https?:\/\//i.test(url);
+            const pill = document.createElement(isLink ? 'a' : 'span');
+            pill.className = 'print-track-pill';
+            pill.title = label;
+            if (isLink) {
+                pill.href = url;
+                pill.target = '_blank';
+                pill.rel = 'noopener noreferrer';
+            }
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-music';
+            icon.setAttribute('aria-hidden', 'true');
+            const text = document.createElement('span');
+            text.className = 'print-track-text';
+            text.textContent = label;
+            pill.append(icon, text);
+            slug.appendChild(pill);
+        });
     }
 
     // --- TREATMENT GENERATION (Strict Fit) ---
@@ -1671,7 +1709,7 @@ export class PrintManager {
     async buildSheetsForMode(mode) {
         let logicalPages = [];
         if (mode === 'script') {
-            logicalPages = await this.generateScreenplayPages();
+            logicalPages = await this.generateScreenplayPages({ trackPills: !!this.config.script.showMusic });
         } else if (mode === 'treatment') {
             logicalPages = await this.generateTreatmentPages();
         } else {

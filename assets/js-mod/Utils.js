@@ -33,6 +33,22 @@ export function extractYouTubeVideoId(url) {
     return m ? m[1] : null;
 }
 
+// One-line printable label for a scene's music track (sceneMeta entry):
+// "Title — Artist". With no real title stored (the oEmbed lookup failed, or a
+// portable build saved the URL as the title) it falls back to a short
+// youtu.be link, then to a generic label. '' when the scene has no track —
+// removed tracks have their fields blanked to '', not deleted.
+export function trackLabel(meta) {
+    if (!meta) return '';
+    const clean = (s) => String(s || '').trim();
+    const names = [clean(meta.trackTitle), clean(meta.trackArtist)]
+        .filter(s => s && !/^https?:\/\//i.test(s));
+    if (names.length) return names.join(' — ');
+    const id = extractYouTubeVideoId(meta.track);
+    if (id) return `youtu.be/${id}`;
+    return clean(meta.track) ? 'Track attached' : '';
+}
+
 // Convention: DOM block text carries no outer parens for parentheticals (CSS
 // ::before/::after supplies them); canonical JSON text carries them. This
 // strips exactly one outer (...) pair for the DOM/render side of that seam.

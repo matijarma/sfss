@@ -41,7 +41,7 @@
             } catch (e) { console.warn('Theme detection failed', e); }
 
             // Your Version Logic
-            const staticversion = "" + "11-19-26_" + "public-" + "2005";
+            const staticversion = "" + "11-19-26_" + "public-" + "2006";
             //const staticversion = Math.round(Math.random()*1000000);
 
             const queryString = self.location.search;
@@ -647,6 +647,10 @@
                             <input type="checkbox" class="print-config-input" data-section="script" data-key="showDate">
                             Date in Header
                         </label>
+                        <label class="settings-checkbox-row" title="Prints each scene's music track as a small tag above its scene heading. Page breaks and formatting stay exactly the same.">
+                            <input type="checkbox" class="print-config-input" data-section="script" data-key="showMusic">
+                            Music Tracks
+                        </label>
                     </div>
                     
                     <div class="settings-section border-top-light pt-1 mt-1">
@@ -815,6 +819,7 @@
                     <li><strong>Notes:</strong> <code>[[like this]]</code> travel with the script but are excluded from output and from page/word counts.</li>
                     <li><strong>Reordering:</strong> in Treatment, drag scene cards by their grip handle (the chevron buttons still work too).</li>
                     <li><strong>Paper size:</strong> pick Letter or A4 per script in Print Prep or Script Details — page counts are identical on both.</li>
+                    <li><strong>Music in the printed script:</strong> tick <em>Music Tracks</em> in Print Prep to print each scene's track as a small tag floating above its scene heading (clickable in a PDF). It takes no space, so page breaks and formatting stay exactly the same.</li>
                 </ul>
 
                 <h4>Data, Privacy, and Storage</h4>

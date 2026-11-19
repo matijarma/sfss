@@ -16,7 +16,7 @@ The application is a writing studio built around three primary modes: **Write** 
     -   **Page View:** Switchable paginated view mirrors printed pages; print uses the same geometry.
     -   **Smart Autocomplete:** Character-name autocomplete + suffix suggestions; predictive “suggested character” hints.
     -   **Customizable Keymap:** Per-element `Enter`/`Tab` mappings persisted to LocalStorage; theme toggle.
-    -   **Print Prep:** Unified print modal outputs script, treatment, or report layouts (facing/booklet/single) with watermarks, title pages, and page ranges mapped back to scenes.
+    -   **Print Prep:** Unified print modal outputs script, treatment, or report layouts (facing/booklet/single) with watermarks, title pages, and page ranges mapped back to scenes. Optional **Music Tracks** tags print each scene's track above its heading without touching pagination.
     -   **File Handling:** Import/export `.json`, `.fdx`, `.fountain`, `.txt`; OS File Handling API supported when available.
 
 -   ### 📋 **Planning & Outlining (Treatment Mode)**
