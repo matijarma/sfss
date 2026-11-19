@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    comboFromEvent, isValidBinding, conflict, matches, format, RESERVED_COMBOS, sameCombo
+    comboFromEvent, isValidBinding, conflict, matches, format, RESERVED_COMBOS, sameCombo, browserOwned
 } from '../../assets/js-mod/Shortcuts.js';
 
 const ev = (key, mods = {}) => ({
@@ -74,4 +74,33 @@ test('sameCombo compares bindings modifier-order and case insensitively', () => 
     assert.equal(sameCombo('Ctrl+E', 'Ctrl+Shift+E'), false);
     assert.equal(sameCombo('', ''), false);
     assert.equal(sameCombo(null, 'Ctrl+E'), false);
+});
+
+test('browserOwned flags tab/window/quit chords on every platform', () => {
+    for (const isMac of [false, true]) {
+        assert.equal(browserOwned('Ctrl+W', isMac)?.combo, 'Ctrl+W');
+        assert.equal(browserOwned('Cmd+W', isMac)?.combo, 'Ctrl+W');           // Cmd ≙ Ctrl
+        assert.equal(browserOwned('shift+ctrl+t', isMac)?.combo, 'Ctrl+Shift+T'); // order/case-insensitive
+        assert.equal(browserOwned('Ctrl+Tab', isMac)?.combo, 'Ctrl+Tab');
+        assert.equal(browserOwned('Ctrl+N', isMac)?.combo, 'Ctrl+N');
+        assert.equal(browserOwned('Ctrl+Q', isMac)?.combo, 'Ctrl+Q');
+        assert.match(browserOwned('Ctrl+W', isMac).what, /closes the tab/);
+    }
+});
+
+test('browserOwned is platform-aware', () => {
+    assert.ok(browserOwned('Ctrl+H', true));      // ⌘H hides the browser on Mac
+    assert.equal(browserOwned('Ctrl+H', false), null);
+    assert.ok(browserOwned('Alt+F4', false));     // closes the window on Windows/Linux
+    assert.equal(browserOwned('Alt+F4', true), null);
+});
+
+test('browserOwned leaves app bindings alone', () => {
+    for (const isMac of [false, true]) {
+        assert.equal(browserOwned('Ctrl+E', isMac), null);
+        assert.equal(browserOwned('Shift+F3', isMac), null);
+        assert.equal(browserOwned('Ctrl+Shift+W+X', isMac), null);
+        assert.equal(browserOwned('', isMac), null);
+        assert.equal(browserOwned(null, isMac), null);
+    }
 });

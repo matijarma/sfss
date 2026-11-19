@@ -4,8 +4,12 @@ import * as Shortcuts from './Shortcuts.js';
 // Remappable editor actions, in Settings display order.
 const SHORTCUT_ACTIONS = [
     { id: 'cycleType', label: 'Toggle Element Type', fallback: 'Ctrl+E' },
-    { id: 'changeCase', label: 'Change Case (UPPER → Title → lower)', fallback: 'Shift+F3' }
+    { id: 'changeCase', label: 'Change Case (UPPER → Sentence → Title → lower)', fallback: 'Shift+F3' }
 ];
+
+const BROWSER_HINT = () =>
+    `That shortcut belongs to your browser (${Shortcuts.format('Ctrl+W')} closes the tab; ` +
+    `${Shortcuts.format('Ctrl+T')} / ${Shortcuts.format('Ctrl+N')} open new ones) — choose another.`;
 
 export class SettingsManager {
     constructor(sfss) {
@@ -26,6 +30,19 @@ export class SettingsManager {
         if (this.normalizeShortcuts()) {
             localStorage.setItem('sfss_shortcuts', JSON.stringify(this.shortcuts));
         }
+
+        // Recording guard: some browser chords never reach the page (Chrome
+        // closes the tab on Ctrl+W before any keydown), so while a recorder
+        // is armed the browser's own "Leave site?" prompt stands between the
+        // user and a closed tab. The recorder explains what happened.
+        this.activeRecorder = null;
+        window.addEventListener('beforeunload', (e) => {
+            const rec = this.activeRecorder;
+            if (!rec || !rec.input.isConnected || rec.input.getClientRects().length === 0) return;
+            e.preventDefault();
+            e.returnValue = '';
+            rec.onBrowserShortcut();
+        });
 
         // Keymap
         this.keymap = {
@@ -72,7 +89,7 @@ export class SettingsManager {
             const before = this.shortcuts[action.id];
             const takenBy = (combo) => SHORTCUT_ACTIONS.slice(0, i).some(a => Shortcuts.sameCombo(this.shortcuts[a.id], combo));
             let combo = before;
-            if (!Shortcuts.isValidBinding(combo) || takenBy(combo)) combo = action.fallback;
+            if (!Shortcuts.isValidBinding(combo) || Shortcuts.browserOwned(combo) || takenBy(combo)) combo = action.fallback;
             if (takenBy(combo)) combo = '';
             if (combo !== before) {
                 this.shortcuts[action.id] = combo;
@@ -127,12 +144,36 @@ export class SettingsManager {
             errorEl.style.display = msg ? '' : 'none';
         };
 
+        // chordPending: a modifier is down with no main key yet. If the page
+        // then unloads or loses focus, the browser took the chord.
+        let chordPending = false;
+        let awayWithChord = false;
+        const showBrowserHint = () => { showError(BROWSER_HINT()); showStored(); };
+        const recorder = {
+            input,
+            onBrowserShortcut: () => { if (chordPending) showBrowserHint(); }
+        };
+
+        input.addEventListener('focus', () => {
+            this.activeRecorder = recorder;
+            // Back from a tab/window a browser chord opened (Ctrl+T, Ctrl+Tab).
+            if (awayWithChord) showBrowserHint();
+            awayWithChord = false;
+            chordPending = false;
+        });
+
+        input.addEventListener('keyup', (e) => {
+            if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) chordPending = false;
+        });
+
         input.addEventListener('keydown', (e) => {
             // The recorder owns every key while focused: nothing may bubble to
             // the editor, the modal stack or the browser (Esc must not close
             // Settings, Ctrl+S must not open Save As).
             e.preventDefault();
             e.stopPropagation();
+            const combo = Shortcuts.comboFromEvent(e);
+            chordPending = combo === null;
             if (e.key === 'Escape') {
                 showError('');
                 showStored();
@@ -145,7 +186,6 @@ export class SettingsManager {
                 input.value = '';
                 return;
             }
-            const combo = Shortcuts.comboFromEvent(e);
             if (combo === null) {
                 // Modifier-only chord: show pending text, commit nothing.
                 const mods = [];
@@ -158,6 +198,12 @@ export class SettingsManager {
             }
             if (!Shortcuts.isValidBinding(combo)) {
                 showError('Shortcut needs a modifier (e.g. Ctrl) plus a key.');
+                showStored();
+                return;
+            }
+            const owned = Shortcuts.browserOwned(combo);
+            if (owned) {
+                showError(`${Shortcuts.format(combo)} belongs to your browser (it ${owned.what}) — choose another.`);
                 showStored();
                 return;
             }
@@ -178,6 +224,16 @@ export class SettingsManager {
             showStored();
         });
         input.addEventListener('blur', () => {
+            if (!document.hasFocus()) {
+                // The whole window lost focus (browser chord, a dialog, an app
+                // switch): stay armed — focus comes back to this input.
+                awayWithChord = chordPending;
+                if (chordPending) showBrowserHint();
+                return;
+            }
+            if (this.activeRecorder === recorder) this.activeRecorder = null;
+            chordPending = false;
+            awayWithChord = false;
             showError('');
             showStored();
         });
@@ -190,6 +246,7 @@ export class SettingsManager {
     }
 
     generateUI() {
+        this.activeRecorder = null; // old recorder inputs are about to go
         const container = document.getElementById('keymap-settings');
         container.innerHTML = '';
         

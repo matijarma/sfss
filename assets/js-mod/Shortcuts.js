@@ -68,6 +68,37 @@ function normalizeCombo(combo) {
     return `${p.ctrl ? 'ctrl+' : ''}${p.alt ? 'alt+' : ''}${p.shift ? 'shift+' : ''}${p.main || ''}`;
 }
 
+// Chords the browser or OS acts on before (or instead of) the page: Chrome
+// never even delivers Ctrl+W/T/N/Tab keydowns, Firefox delivers them but
+// ignores preventDefault — so binding one can close the tab. `mac: true`
+// entries apply only on Mac, `mac: false` only elsewhere ('Ctrl' ≙ ⌘).
+const BROWSER_COMBOS = [
+    { combo: 'Ctrl+W', what: 'closes the tab' },
+    { combo: 'Ctrl+Shift+W', what: 'closes the window' },
+    { combo: 'Ctrl+T', what: 'opens a new tab' },
+    { combo: 'Ctrl+Shift+T', what: 'reopens a closed tab' },
+    { combo: 'Ctrl+N', what: 'opens a new window' },
+    { combo: 'Ctrl+Shift+N', what: 'opens a private window' },
+    { combo: 'Ctrl+Q', what: 'quits the browser' },
+    { combo: 'Ctrl+Tab', what: 'switches tabs' },
+    { combo: 'Ctrl+Shift+Tab', what: 'switches tabs' },
+    { combo: 'Ctrl+PageUp', what: 'switches tabs' },
+    { combo: 'Ctrl+PageDown', what: 'switches tabs' },
+    { combo: 'Ctrl+H', what: 'hides the browser', mac: true },
+    { combo: 'Ctrl+M', what: 'minimizes the window', mac: true },
+    { combo: 'Ctrl+`', what: 'switches windows', mac: true },
+    { combo: 'Alt+F4', what: 'closes the window', mac: false }
+];
+
+// The browser-owned entry a binding matches ({ combo, what }), or null.
+export function browserOwned(combo, isMac = IS_MAC) {
+    if (!isValidBinding(combo)) return null;
+    const norm = normalizeCombo(combo);
+    const hit = BROWSER_COMBOS.find(b =>
+        (b.mac === undefined || b.mac === isMac) && normalizeCombo(b.combo) === norm);
+    return hit ? { combo: hit.combo, what: hit.what } : null;
+}
+
 // True when two user bindings are the same chord (modifier order, case and
 // the Cmd/Ctrl alias don't matter). Empty bindings never collide.
 export function sameCombo(a, b) {

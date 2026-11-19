@@ -312,38 +312,64 @@ export function toggleEmphasis(blockEl, kind, selStart, selEnd) {
 
 // ---------- Case changing (pure core) ----------
 
-// Change Case cycles UPPER -> Title -> lower -> UPPER (Word's Shift+F3
-// order); mixed-case text goes to UPPER first. Every transform is
+// Change Case cycles UPPER -> Sentence -> Title -> lower -> UPPER;
+// mixed-case text goes to UPPER first. Sentence follows UPPER because the
+// common fix is all-caps prose back to normal. Every transform is
 // LENGTH-PRESERVING: a character whose case mapping would change its length
 // (ß -> SS) is kept as is, so offsets, selections and styled spans stay valid.
-export const CASE_MODES = ['upper', 'title', 'lower'];
+export const CASE_MODES = ['upper', 'sentence', 'title', 'lower'];
 
 const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+const LETTER = /\p{L}/u;
 const COMBINING_MARK = /\p{M}/u;
 const APOSTROPHE = /['’]/;
+const SENTENCE_END = /[.!?]/;
+// Closers that may sit between a sentence end and the following space:
+// quotes, brackets and emphasis markers ("Stop!" / (Quietly.) / **Run.**).
+const SENTENCE_CLOSER = /["'”’»)\]*_]/;
+const WHITESPACE = /\s/;
 
 function mapCase(ch, upper) {
     const m = upper ? ch.toUpperCase() : ch.toLowerCase();
     return m.length === ch.length ? m : ch;
 }
 
-// Transforms text[start, end) to `mode`. Title case reads the whole string
-// for word starts, so a selection beginning mid-word stays lowercase there
-// and apostrophes inside words (don't) never start a new word.
+// Transforms text[start, end) to `mode`. Title and Sentence case read the
+// whole string for word/sentence starts, so a selection beginning mid-word
+// or mid-sentence stays lowercase there. Apostrophes inside words (don't)
+// never start a new word. A sentence starts at the beginning of the line
+// and after . ! ? (plus any closers) followed by whitespace — Word's rule,
+// so a standalone "i" is NOT capitalised (Croatian "i" means "and").
 export function applyCase(text, start, end, mode) {
     let out = '';
     let inWord = false;
+    let sentenceStart = true;
+    let pendingEnd = false;
     let pos = 0;
     for (const ch of text) {
         let wordStart = false;
+        let startsSentence = false;
         if (LETTER_OR_DIGIT.test(ch)) {
             wordStart = !inWord;
             inWord = true;
-        } else if (!(inWord && (COMBINING_MARK.test(ch) || APOSTROPHE.test(ch)))) {
-            inWord = false;
+            startsSentence = sentenceStart && LETTER.test(ch);
+            sentenceStart = false;
+            pendingEnd = false;
+        } else {
+            if (!(inWord && (COMBINING_MARK.test(ch) || APOSTROPHE.test(ch)))) inWord = false;
+            if (SENTENCE_END.test(ch)) {
+                pendingEnd = true;
+            } else if (WHITESPACE.test(ch)) {
+                if (pendingEnd) sentenceStart = true;
+                pendingEnd = false;
+            } else if (!SENTENCE_CLOSER.test(ch)) {
+                pendingEnd = false;
+            }
         }
         if (pos >= start && pos < end) {
-            const upper = mode === 'upper' || (mode === 'title' && wordStart);
+            const upper = mode === 'upper' ||
+                (mode === 'title' && wordStart) ||
+                (mode === 'sentence' && startsSentence);
             out += mapCase(ch, upper);
         } else {
             out += ch;
@@ -355,17 +381,21 @@ export function applyCase(text, start, end, mode) {
 
 // Picks the next mode for a set of { text, start, end } segments, decided
 // ONCE for the whole selection (multi-line selections cycle together).
-// Modes that would not change anything are skipped ("A" is already both
-// UPPER and Title, so it goes to lower). Returns null when nothing can
-// change (no cased letters).
+// Modes whose results are identical collapse onto the LAST of them in cycle
+// order, so the cycle only visits distinct texts: mid-sentence (Sentence ==
+// lower) it is UPPER -> Title -> lower; a lone "Hello" (Sentence == Title)
+// goes straight to lower. Mixed case goes to UPPER. Returns null when
+// nothing can change (no cased letters).
 export function nextCaseMode(segments) {
     if (!segments || !segments.length) return null;
-    const unchanged = (mode) => segments.every(s => applyCase(s.text, s.start, s.end, mode) === s.text);
-    const current = CASE_MODES.findIndex(unchanged);
-    const order = current === -1
-        ? CASE_MODES
-        : [...CASE_MODES.slice(current + 1), ...CASE_MODES.slice(0, current + 1)];
-    return order.find(mode => !unchanged(mode)) || null;
+    const keyOf = (mode) => segments.map(s => applyCase(s.text, s.start, s.end, mode)).join('\u0000');
+    const results = CASE_MODES.map(mode => ({ mode, key: keyOf(mode) }));
+    const cycle = results.filter((r, i) => !results.slice(i + 1).some(o => o.key === r.key));
+    if (cycle.length < 2) return null;
+    const current = segments.map(s => s.text).join('\u0000');
+    const idx = cycle.findIndex(r => r.key === current);
+    if (idx === -1) return results[0].key !== current ? 'upper' : cycle[0].mode;
+    return cycle[(idx + 1) % cycle.length].mode;
 }
 
 const isWordChar = (ch) => !!ch && (LETTER_OR_DIGIT.test(ch) || COMBINING_MARK.test(ch) || APOSTROPHE.test(ch));

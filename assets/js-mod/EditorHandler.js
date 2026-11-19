@@ -494,7 +494,7 @@ export class EditorHandler {
     }
 
     // Change Case seam (default Shift+F3): cycles the selection through
-    // UPPER -> Title -> lower via InlineMarkup.applyCase. Works across
+    // UPPER -> Sentence -> Title -> lower via InlineMarkup.applyCase. Works across
     // several lines (one mode for the whole selection; Scene Heading /
     // Character / Transition lines in it are skipped), and with a collapsed
     // caret on the word under it. Transforms are length-preserving, so the
