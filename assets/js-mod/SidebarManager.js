@@ -430,8 +430,13 @@ export class SidebarManager {
 
         this.renderTrackArea(sceneId);
         
-        document.getElementById('scene-description-input').addEventListener('blur', () => this.saveSceneMeta(sceneId));
-        document.getElementById('scene-notes-input').addEventListener('blur', () => this.saveSceneMeta(sceneId));
+        // data-dirty marks an edit the user typed but saveSceneMeta has not
+        // taken yet — the only state in which these fields are read back.
+        ['scene-description-input', 'scene-notes-input'].forEach(id => {
+            const input = document.getElementById(id);
+            input.addEventListener('input', () => { input.dataset.dirty = '1'; });
+            input.addEventListener('blur', () => this.saveSceneMeta(sceneId));
+        });
         // Removed scene-number-input listener as it's gone
 
         this.renderSceneImages(sceneId);
@@ -605,12 +610,24 @@ export class SidebarManager {
             this.app.sceneMeta[sceneId] = {};
         }
         const prevNumber = this.app.sceneMeta[sceneId].number ?? null;
-        const descriptionInput = document.getElementById('scene-description-input');
-        const notesInput = document.getElementById('scene-notes-input');
         // numberInput is gone, handled by contentEditable span logic directly updating this.app.sceneMeta before calling save
 
-        const description = descriptionInput ? descriptionInput.value : this.app.sceneMeta[sceneId].description;
-        const notes = notesInput ? notesInput.value : this.app.sceneMeta[sceneId].notes;
+        // The popup is only hidden on close, so its textareas stay in the
+        // page holding the LAST-VIEWED scene's text. They are read back only
+        // for the scene the popup belongs to, and only while they hold an
+        // edit that has not been saved yet (data-dirty). Anything else would
+        // copy one scene's description/notes into another, or revert text
+        // that was changed elsewhere (Treatment, Find & Replace).
+        const popup = document.getElementById('scene-settings-popup');
+        const ownsInputs = !!popup && popup.dataset.sceneId === sceneId;
+        const takeInput = (id, current) => {
+            const input = document.getElementById(id);
+            if (!ownsInputs || !input || !input.dataset.dirty) return current;
+            delete input.dataset.dirty;
+            return input.value;
+        };
+        const description = takeInput('scene-description-input', this.app.sceneMeta[sceneId].description);
+        const notes = takeInput('scene-notes-input', this.app.sceneMeta[sceneId].notes);
 
         // Use existing number if not being set by this call context (which is fine, span logic sets it directly)
         const number = this.app.sceneMeta[sceneId].number;
@@ -647,6 +664,12 @@ export class SidebarManager {
     }
 
     closeSceneSettings() {
+        // Closing with Esc may not blur the field being typed in: take any
+        // unsaved description/notes edit before the popup is hidden.
+        const settingsPopup = document.getElementById('scene-settings-popup');
+        if (settingsPopup.dataset.sceneId && settingsPopup.querySelector('[data-dirty]')) {
+            this.saveSceneMeta(settingsPopup.dataset.sceneId);
+        }
         const grid = document.getElementById('scene-image-grid');
         if (grid) {
              grid.querySelectorAll('img[src^="blob:"]').forEach(img => URL.revokeObjectURL(img.src));

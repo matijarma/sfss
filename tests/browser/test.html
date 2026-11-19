@@ -734,6 +734,56 @@ test('A4 meta round-trip: paperSize survives export -> import; legacy import res
     }
 });
 
+// ---------- Scene meta (SidebarManager.saveSceneMeta) ----------
+
+test('scene meta: saving one scene never takes description/notes from another scene\'s popup', async () => {
+    const { SidebarManager } = await import('../../assets/js-mod/SidebarManager.js');
+    // The Scene Settings popup is only hidden on close: its textareas stay
+    // in the page holding the LAST-VIEWED scene's text.
+    const popup = document.createElement('div');
+    popup.id = 'scene-settings-popup';
+    popup.className = 'hidden';
+    popup.dataset.sceneId = 'sceneA';
+    popup.innerHTML = '<textarea id="scene-description-input">DESC-A</textarea>' +
+        '<textarea id="scene-notes-input">NOTES-A</textarea>';
+    document.body.appendChild(popup);
+    try {
+        const stub = Object.create(SidebarManager.prototype);
+        stub.updateSceneList = () => {};
+        stub.app = {
+            sceneMeta: {
+                sceneA: { description: 'DESC-A', notes: 'NOTES-A' },
+                sceneB: { description: 'DESC-B', notes: 'NOTES-B' }
+            },
+            isDirty: false,
+            treatmentModeActive: false,
+            pageViewActive: false,
+            updateSceneNumbersInEditor() {},
+            mediaPlayer: { updatePlaylist() {} }
+        };
+
+        // Treatment edits scene B's number and saves it.
+        stub.app.sceneMeta.sceneB.number = '42';
+        stub.saveSceneMeta('sceneB');
+        assertEqual(stub.app.sceneMeta.sceneB, { description: 'DESC-B', notes: 'NOTES-B', number: '42' },
+            'scene B must keep its own description and notes');
+
+        // An unsaved edit typed into the popup still lands on its own scene.
+        const desc = document.getElementById('scene-description-input');
+        desc.value = 'EDITED-A';
+        desc.dataset.dirty = '1';
+        stub.saveSceneMeta('sceneA');
+        assertEqual(stub.app.sceneMeta.sceneA.description, 'EDITED-A', 'typed edit is saved to its own scene');
+
+        // Stale popup text never reverts a newer value written elsewhere.
+        stub.app.sceneMeta.sceneA.description = 'NEWER-A';
+        stub.saveSceneMeta('sceneA');
+        assertEqual(stub.app.sceneMeta.sceneA.description, 'NEWER-A', 'stale popup text must not revert newer data');
+    } finally {
+        popup.remove();
+    }
+});
+
 // ---------- runner ----------
 async function run() {
     const ul = document.getElementById('results');
