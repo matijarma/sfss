@@ -226,11 +226,19 @@ ${jsBundle}
             .filter(file => file.endsWith('.js'));
     }
 
+    // Names a module exports, read from its own export statements — the
+    // namespace objects below are rebuilt from this so they can never drift
+    // (a hand-kept list once dropped TYPE_ORDER and broke Ctrl+E here).
+    exportedNames(code) {
+        return [...code.matchAll(/export\s+(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/g)].map(m => m[1]);
+    }
+
     prepareModule(code, file) {
         if (file.endsWith('Constants.js')) {
+            const names = this.exportedNames(code);
             const transformed = this.transformExports(code);
             return `${transformed}
-window.SFSS_CONSTANTS = { ELEMENT_TYPES, TYPE_LABELS, TYPE_SHORTCUTS, FDX_MAP, FDX_REVERSE_MAP, FORMATTING, PAPER_CONFIGS, ELEMENT_INDENTS, CHARACTER_SUFFIXES };
+window.SFSS_CONSTANTS = { ${names.join(', ')} };
 window.constants = window.SFSS_CONSTANTS;`;
         }
 
@@ -244,7 +252,7 @@ window.joinRoom = typeof joinRoom !== 'undefined' ? joinRoom : (typeof Y !== 'un
             // Shortcuts.js is consumed via a namespace import (import * as
             // Shortcuts). Rebuild that namespace object from the module's own
             // export statements so the list can never drift out of date.
-            const names = [...code.matchAll(/export\s+(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/g)].map(m => m[1]);
+            const names = this.exportedNames(code);
             const transformed = this.transformExports(code);
             return `${transformed}
 window.SFSS_SHORTCUTS = { ${names.join(', ')} };`;
