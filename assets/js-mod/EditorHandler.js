@@ -295,7 +295,13 @@ export class EditorHandler {
                     this.app.saveState(true);
                 }
             }
-            else if (e.key === 'Escape') this.closePopups();
+            else if (e.key === 'Escape') {
+                // An open popup OWNS Esc (dispatch contract, tier 1). Without
+                // this the window-level handler ran too: it found nothing
+                // left to close and moved focus out of the script.
+                e.stopPropagation();
+                this.closePopups();
+            }
             return;
         }
 

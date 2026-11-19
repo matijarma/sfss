@@ -1423,3 +1423,254 @@ aside#sidebar.open #hide-sidebar-btn {
     opacity: 0.6;
     cursor: default;
 }
+
+/* FIND & REPLACE PANEL
+   A non-modal <dialog> (FindReplaceManager.js): fixed, below the app's
+   modals (z-index 50) and above the toolbar. `display` is only ever set on
+   [open] — an unconditional one would defeat the closed state. */
+.find-panel {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    padding: 0;
+    width: 380px;
+    max-width: calc(100vw - 16px);
+    background-color: var(--popup-bg);
+    color: var(--text-main);
+    border: 1px solid var(--popup-border);
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+    z-index: 45;
+    font-size: 0.875rem;
+}
+.find-panel[open] {
+    display: flex;
+    flex-direction: column;
+}
+/* Author display rules below would otherwise beat the UA [hidden] rule. */
+.find-panel [hidden] {
+    display: none !important;
+}
+.find-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.25rem 0.35rem 0.25rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 700;
+    cursor: move;
+    user-select: none;
+}
+.find-panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.6rem 0.75rem 0.75rem;
+}
+.find-field {
+    display: grid;
+    grid-template-columns: 4.4rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.4rem;
+}
+.find-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-meta);
+}
+.find-field .settings-input {
+    padding: 0.35rem 0.5rem;
+    min-width: 0;
+}
+.find-field select.settings-input {
+    grid-column: 2 / -1;
+}
+.find-toggles,
+.find-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+}
+.find-chips-lead {
+    font-size: 0.75rem;
+    color: var(--text-meta);
+    margin-right: 0.15rem;
+}
+.find-toggle,
+.find-chip {
+    background: transparent;
+    border: 1px solid var(--popup-border);
+    border-radius: 0.25rem;
+    color: var(--text-meta);
+    font-size: 0.75rem;
+    line-height: 1.2;
+    padding: 0.2rem 0.4rem;
+    cursor: pointer;
+}
+/* Pressed = filled AND bold, so the state never rests on colour alone. */
+.find-toggle[aria-pressed="true"],
+.find-chip[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 700;
+}
+.find-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+.find-count {
+    flex: 1;
+    font-size: 0.8rem;
+    color: var(--text-meta);
+    font-variant-numeric: tabular-nums;
+}
+.find-btn {
+    background: transparent;
+    border: 1px solid var(--popup-border);
+    border-radius: 0.25rem;
+    color: var(--text-main);
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 0.3rem 0.6rem;
+    cursor: pointer;
+}
+.find-btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+/* The dark theme's accent is light: white text on it would fail contrast. */
+.dark-mode .find-btn-primary,
+.dark-mode .find-toggle[aria-pressed="true"],
+.dark-mode .find-chip[aria-pressed="true"] {
+    color: hsl(220 18% 10%);
+}
+.find-btn:disabled,
+.find-panel .btn-text:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+.find-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-meta);
+}
+.find-status:empty,
+.find-results:empty {
+    display: none;
+}
+.find-status-warn {
+    color: hsl(25 90% 36%);
+}
+.dark-mode .find-status-warn {
+    color: hsl(35 90% 65%);
+}
+.find-link {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 700;
+    text-decoration: underline;
+    cursor: pointer;
+}
+.find-results {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    /* Kept short so there is always room to show a match below the panel. */
+    max-height: min(30vh, 16rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.35rem;
+}
+.find-result {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    padding: 0.15rem 0.25rem;
+    border-radius: 0.25rem;
+}
+.find-result.current {
+    background: var(--scene-hover);
+    box-shadow: inset 2px 0 0 var(--accent);
+}
+.find-result input[type="checkbox"] {
+    margin-top: 0.2rem;
+}
+.find-result-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--text-main);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.find-result-where {
+    font-size: 0.68rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--text-meta);
+}
+.find-result-snippet {
+    font-family: 'Courier Prime', 'Courier New', monospace;
+    font-size: 0.8rem;
+    overflow-wrap: anywhere;
+}
+.find-result-snippet mark {
+    background: #ffe27a;
+    color: #14171c;
+    border-radius: 2px;
+    padding: 0 1px;
+}
+.find-result-snippet mark.find-old {
+    text-decoration: line-through;
+}
+.find-result-snippet ins {
+    background: hsl(140 55% 82%);
+    color: #0f2a17;
+    text-decoration: none;
+    border-radius: 2px;
+    padding: 0 1px;
+    margin-left: 2px;
+}
+.find-picker-head {
+    font-size: 0.75rem;
+    color: var(--text-meta);
+    padding: 0.1rem 0.25rem 0.25rem;
+}
+.find-value {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    background: none;
+    border: none;
+    border-radius: 0.25rem;
+    padding: 0.25rem 0.4rem;
+    color: var(--text-main);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.find-value:hover,
+.find-result-main:hover {
+    background: var(--scene-hover);
+}
+.find-value-count {
+    color: var(--text-meta);
+    font-variant-numeric: tabular-nums;
+}

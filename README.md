@@ -11,6 +11,7 @@ The application is a writing studio built around three primary modes: **Write** 
 -   ### 📝 **Writing & Editing**
     -   **Industry Formatting:** Custom `PageRenderer.js` virtual pagination targets 12pt Courier, standard margins, scene numbers, and print-oriented spacing.
     -   **Contextual Shortcuts:** `Enter`/`Tab` transitions are configurable per element; `Ctrl+E` cycles element types in place; `Shift+F3` cycles the selection through UPPER → Sentence → Title → lower (remappable); `Ctrl+S` saves.
+    -   **Find & Replace:** `Ctrl+F` opens a non-blocking panel that is structure-aware: search all text (filtered by element type), or only one part of scene headings (INT/EXT, location, time of day). *Character name* renames a character across cue lines — extensions like `(V.O.)` / `(CONT'D)` are never touched — plus mentions in action, dialogue and scene notes, keeping each mention's case. Every match is listed with a checkbox for review; Replace all is a single undo step.
     -   **Fountain Authoring:** forces (`.slug`, `@Name`, `!action`, `> transition`, `> centered <`), inline `**bold**`/`*italic*`/`_underline_` via Ctrl+B/I/U (markers visible in the editor, hidden in output), `[[notes]]` excluded from print and counts.
     -   **Page View:** Switchable paginated view mirrors printed pages; print uses the same geometry.
     -   **Smart Autocomplete:** Character-name autocomplete + suffix suggestions; predictive “suggested character” hints.

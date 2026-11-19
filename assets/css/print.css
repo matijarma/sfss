@@ -1088,7 +1088,7 @@ div#printingdiv { display: none }
     }
 
     /* Hide UI */
-    #sidebar, #toolbar, #mobile-menu-btn, #show-sidebar-btn, .loader-overlay, .modal-overlay {
+    #sidebar, #toolbar, #mobile-menu-btn, #show-sidebar-btn, .loader-overlay, .modal-overlay, #find-panel {
         display: none !important;
     }
 

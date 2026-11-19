@@ -206,3 +206,27 @@
 .page-view-active .editor-music-icon {
     display: none;
 }
+
+/* FIND & REPLACE MATCHES
+   CSS Custom Highlight API: the ranges are registered from
+   FindReplaceManager.js, nothing is added to the editor's DOM. Dark text on
+   a light fill reads on both themes; the underline marks a match even where
+   the fill is close to the page colour. */
+::highlight(sfss-find) {
+    background-color: #ffe27a;
+    color: #14171c;
+    text-decoration: underline;
+    text-decoration-color: #8a5a00;
+}
+::highlight(sfss-find-current) {
+    background-color: #ff8f1f;
+    color: #14171c;
+    text-decoration: underline;
+    text-decoration-color: #14171c;
+    text-decoration-thickness: 2px;
+}
+/* Browsers without the Highlight API: outline the current match's line. */
+.script-line.find-current-line {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}

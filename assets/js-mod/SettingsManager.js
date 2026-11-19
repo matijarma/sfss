@@ -89,7 +89,10 @@ export class SettingsManager {
             const before = this.shortcuts[action.id];
             const takenBy = (combo) => SHORTCUT_ACTIONS.slice(0, i).some(a => Shortcuts.sameCombo(this.shortcuts[a.id], combo));
             let combo = before;
-            if (!Shortcuts.isValidBinding(combo) || Shortcuts.browserOwned(combo) || takenBy(combo)) combo = action.fallback;
+            // conflict(): a binding stored before a combo became built-in
+            // (Ctrl+F for Find) must not keep shadowing it.
+            if (!Shortcuts.isValidBinding(combo) || Shortcuts.browserOwned(combo) ||
+                Shortcuts.conflict(combo) || takenBy(combo)) combo = action.fallback;
             if (takenBy(combo)) combo = '';
             if (combo !== before) {
                 this.shortcuts[action.id] = combo;

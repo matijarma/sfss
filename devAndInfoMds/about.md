@@ -24,6 +24,7 @@ SFSS features a custom pagination and formatting engine (`PageRenderer.js`) tune
 ### 📝 Writing Experience
 *   **Context-Aware Shortcuts:**
     *   `Enter`/`Tab`: Per-element transitions are configurable; `Ctrl+E` cycles the element type in place; `Shift+F3` changes the case of the selection (UPPER → Sentence → Title → lower, remappable); `Ctrl+S` saves.
+*   **Find & Replace:** `Ctrl+F` (Write view) opens a floating panel. *Look in* chooses the target: all text filtered by element type, one part of scene headings (INT/EXT, location, time of day), or a character name. Renaming a character keeps cue extensions such as `(V.O.)` and `(CONT'D)`, mirrors the case of mentions in action/dialogue/scene notes, and lists related cues (`YOUNG ANNA`) unticked. Matches are highlighted in the script and listed with checkboxes; Replace all is one undo step.
 *   **Fountain Authoring:** Forces (`.slug`, `@Name`, `!action`, `> transition`, `> centered <`), inline `**bold**` / `*italic*` / `_underline_` (Ctrl+B/I/U) with visible dimmed markers, and `[[notes]]` that never print or skew counts.
 *   **Smart Autocomplete:** Character suggestions, suffix completions, and "next speaker" hints.
 *   **Focus Controls:** Sidebar auto-hide, dropdown/horizontal type selectors, and page-view toggle.

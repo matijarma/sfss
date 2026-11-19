@@ -29,6 +29,38 @@ with a staged second build, live two-peer collab (reducer + Phase 10 probes only
 
 ---
 
+## Find & Replace 2026-11-19 (version `11-19-26_public-2005`)
+
+| Suite | Result |
+| --- | --- |
+| `node --test "tests/node/*.test.mjs"` | **201 passed, 0 failed** (new: `script-parts`, `find-replace-core`, `portable-build`) |
+| `tests/browser/test.html` | **29 passed, 0 failed** (new: scene-meta overwrite guard, 3 Find & Replace apply-path tests) |
+| `tests/browser/storage-tests.html` / `fdx-tests.html` | **9 / 7 passed, 0 failed** |
+| Headless Chrome probe against `/index.html` (59 checks) | **59 passed** — see the list below |
+| Portable build (`file://`) | **0 exceptions**; Find & Replace rename, Change Case and Ctrl+E all work |
+
+Covered by the headless probe **[AUTOMATED ✓ 2026-11-19]**:
+
+- [x] Ctrl+F opens the panel prefilled from the selection; first match is the one at the caret; Enter / Shift+Enter navigate and wrap; Esc closes and selects the match in the script; highlights (`CSS.highlights`) appear and are cleared.
+- [x] Ctrl+Alt+F (how AltGr+F arrives on Windows — it types `[` on Croatian layouts) does **not** open the panel.
+- [x] Element chips restrict the search (Dialogue only); `(beat)` finds a parenthetical.
+- [x] Scene heading — Location: value picker with counts, rename in every heading, sidebar scene list updates; Time of day: replace, and emptying it removes the ` - `.
+- [x] Character rename: `(V.O.)` / `(O.S.) (CONT'D)` kept, `ANNABELLE` untouched, `YOUNG ANNA` listed unticked, mentions keep case and possessive, scene description and notes updated, autocomplete list updated, panel **Undo** restores everything in one step.
+- [x] An unticked match stays unticked after another match in the same line is replaced; Replace never re-matches its own replacement (`dog` → `dogs`).
+- [x] Collaboration guest without the baton: find works, Replace disabled with the reason.
+- [x] Not intercepted (browser keeps Ctrl+F): a modal open, Script Settings open, Page View, Treatment. Entering Page View closes the panel.
+- [x] Esc with the element-type menu open closes only the menu; Esc from the script closes the panel and leaves the caret in the script; Ctrl+P still opens Print.
+- [x] A match hidden under the panel is scrolled clear of it, including on the first lines of the script.
+- [x] Toolbar button, Documents menu item and Ctrl+H (Replace focused) all open it; Enter in Replace replaces one, Ctrl+Enter replaces all.
+
+Manual, not automated:
+
+- [ ] **Mac keys** — ⌘F opens Find, ⌘⌥F opens with Replace focused; Control+F / Control+H still move the caret in the script. **[manual-only]** (no Mac in the automated run)
+- [ ] **Second Ctrl+F** with the Find field focused shows the browser's own find bar. **[manual-only]** (the probe only verifies the key is not intercepted)
+- [ ] **Firefox / Safari** — matches are highlighted (Custom Highlight API: Firefox 149+, Safari 17.2+); older versions outline the current match's line instead. **[manual-only]**
+
+---
+
 ## Phase 1 — PWA shell / service worker
 
 - [x] **Offline cold-start** — load app online once, go offline (DevTools/`emulate` network: offline), close tab, open new tab to app URL: app boots fully from SW cache, no console errors, editor usable. **[MCP: yes]** **[AUTOMATED ✓ 2026-07-20]** (CDP release probe: two online loads, HTTP server killed, reload boots with `window.app` and zero exceptions; note that versioned `?v=` subresources are runtime-cached on the first SW-controlled load, so a single online visit is not enough by design)

@@ -11,8 +11,12 @@
 //      changeCase (both user-remappable), Ctrl+B/I/U, Ctrl+Z /
 //      Ctrl+Shift+Z / Ctrl+Y, Enter/Tab/Backspace, Ctrl+Enter.
 //   4. Global window-level (SFSS): Ctrl+S, Ctrl+P — guarded by an empty modal
-//      stack and a non-editable event target.
-// Escape has ONE entry point: SFSS.handleBackOrEscape.
+//      stack and a non-editable event target; Ctrl+F / Ctrl+H (⌘F / ⌘⌥F on
+//      Mac) open Find & Replace — Write view only, never over a modal.
+// The Find & Replace panel is a non-modal dialog that is NOT on the modal
+// stack: it owns Enter / Shift+Enter / Esc while focus is inside it.
+// Escape has ONE entry point: SFSS.handleBackOrEscape (plus that panel,
+// which consumes its own Esc).
 //
 // Import-safe under Node (guards around navigator/Element).
 
@@ -25,6 +29,7 @@ const CTRL_ALIASES = ['ctrl', 'control', 'meta', 'cmd'];
 // Combos user bindings may never shadow (built-in editor/global behavior).
 export const RESERVED_COMBOS = [
     'Ctrl+Z', 'Ctrl+Shift+Z', 'Ctrl+Y', 'Ctrl+S', 'Ctrl+P',
+    'Ctrl+F', 'Ctrl+H',
     'Ctrl+B', 'Ctrl+I', 'Ctrl+U',
     'Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+A', 'Ctrl+Enter',
     'Enter', 'Tab', 'Escape', 'Backspace', 'Delete'

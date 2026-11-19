@@ -104,3 +104,10 @@ test('browserOwned leaves app bindings alone', () => {
         assert.equal(browserOwned(null, isMac), null);
     }
 });
+
+test('Find & Replace keys are built-in and cannot be rebound', () => {
+    assert.equal(conflict('Ctrl+F'), 'Ctrl+F');
+    assert.equal(conflict('Cmd+F'), 'Ctrl+F');
+    assert.equal(conflict('Ctrl+H'), 'Ctrl+H');
+    assert.equal(conflict('Ctrl+Shift+F'), null);
+});

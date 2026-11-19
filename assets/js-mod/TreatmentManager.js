@@ -8,6 +8,8 @@ export class TreatmentManager {
     }
 
     toggle() {
+        // Find & Replace works on the editable lines of the Write view.
+        if (this.sfss.findReplace) this.sfss.findReplace.close({ focusEditor: false });
         document.body.classList.add('mode-switching');
         
         // Use timeout to allow UI to update (show loader/spinner if any)

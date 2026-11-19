@@ -41,7 +41,7 @@
             } catch (e) { console.warn('Theme detection failed', e); }
 
             // Your Version Logic
-            const staticversion = "" + "11-19-26_" + "public-" + "2004";
+            const staticversion = "" + "11-19-26_" + "public-" + "2005";
             //const staticversion = Math.round(Math.random()*1000000);
 
             const queryString = self.location.search;
@@ -172,6 +172,9 @@
             <div id="documents-menu-container" class="dropdown-container">
                 <button id="documents-menu-btn" class="btn-text"><i class="fas fa-copy mr-1"></i></button>
                  <div id="documents-menu-dropdown" class="dropdown-menu hidden">
+                    <a href="#" id="find-menu-btn" class="dropdown-item">
+                        <i class="fas fa-search mr-1 fa-fw"></i> Find & Replace
+                    </a>
                     <a href="#" id="print-btn" class="dropdown-item">
                         <i class="fas fa-print mr-1 fa-fw"></i> Prepare & Print
                     </a>
@@ -208,7 +211,10 @@
             </button>
             <button id="redo-btn" title="Redo" class="btn-text">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966a.25.25 0 0 1 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
-            </button>     
+            </button>
+            <button id="find-btn" title="Find & Replace (Ctrl+F)" aria-label="Find and Replace" class="btn-text">
+                <i class="fas fa-search"></i>
+            </button>
 
             <div class="toolbar-divider"></div>
 
@@ -411,6 +417,7 @@
                         <li><strong>Ctrl+E</strong> (or the binding recorded above)<strong>:</strong> Cycle element type</li>
                         <li><strong>Ctrl+Enter:</strong> Open the element type menu</li>
                         <li><strong>Ctrl+S:</strong> Save &nbsp;·&nbsp; <strong>Ctrl+P:</strong> Print</li>
+                        <li><strong>Ctrl+F:</strong> Find &nbsp;·&nbsp; <strong>Ctrl+H</strong> (⌘⌥F on Mac)<strong>:</strong> Find &amp; Replace. In the panel: Enter / Shift+Enter for next / previous match, Ctrl+Enter to replace all, Esc to close</li>
                         <li><strong>Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y:</strong> Undo / Redo</li>
                         <li><strong>Ctrl+B / I / U:</strong> Bold / Italic / Underline (Action, Dialogue, Parenthetical)</li>
                         <li><strong>Shift+F3</strong> (or the binding recorded above)<strong>:</strong> Change case of the selection — UPPER → Sentence → Title → lower (the word under the cursor if nothing is selected; Action, Dialogue, Parenthetical)</li>
@@ -463,6 +470,53 @@
         <!-- Content will be generated here -->
     </div>
 </div>
+
+<!-- Find & Replace: a NON-modal dialog (opened with dialog.show()), so the
+     script stays editable while it is open. Kept a direct child of <body>. -->
+<dialog id="find-panel" class="find-panel" aria-labelledby="find-panel-title">
+    <div id="find-panel-header" class="find-panel-header">
+        <span id="find-panel-title">Find &amp; Replace</span>
+        <button type="button" id="find-close-btn" class="btn-text" title="Close (Esc)" aria-label="Close Find and Replace">✕</button>
+    </div>
+    <div class="find-panel-body">
+        <div class="find-field">
+            <label class="find-label" for="find-mode">Look in</label>
+            <select id="find-mode" class="settings-input">
+                <option value="text">Text</option>
+                <option value="prefix">Scene heading: INT/EXT</option>
+                <option value="location">Scene heading: Location</option>
+                <option value="time">Scene heading: Time of day</option>
+                <option value="character">Character name (rename)</option>
+            </select>
+        </div>
+        <div id="find-chips" class="find-chips" role="group" aria-label="Where to look"></div>
+        <div class="find-field">
+            <label id="find-input-label" class="find-label" for="find-input">Find</label>
+            <input id="find-input" class="settings-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" autofocus>
+            <div class="find-toggles">
+                <button type="button" id="find-opt-case" class="find-toggle" aria-pressed="false" title="Match case">Aa</button>
+                <button type="button" id="find-opt-word" class="find-toggle" aria-pressed="false" title="Whole word">W</button>
+                <button type="button" id="find-opt-entire" class="find-toggle" aria-pressed="true" title="Match the entire value, not part of it">Entire</button>
+            </div>
+        </div>
+        <div class="find-field">
+            <label id="find-replace-label" class="find-label" for="find-replace-input">Replace</label>
+            <input id="find-replace-input" class="settings-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false">
+            <div class="find-toggles">
+                <button type="button" id="find-opt-keepcase" class="find-toggle" aria-pressed="false" title="Keep the case of each match (ANNA → MARIA, Anna → Maria)">Keep case</button>
+            </div>
+        </div>
+        <div class="find-actions">
+            <span id="find-count" class="find-count" role="status" aria-live="polite"></span>
+            <button type="button" id="find-prev-btn" class="btn-text" title="Previous match (Shift+Enter)" aria-label="Previous match"><i class="fas fa-chevron-up"></i></button>
+            <button type="button" id="find-next-btn" class="btn-text" title="Next match (Enter)" aria-label="Next match"><i class="fas fa-chevron-down"></i></button>
+            <button type="button" id="find-replace-btn" class="find-btn">Replace</button>
+            <button type="button" id="find-replace-all-btn" class="find-btn find-btn-primary">Replace all</button>
+        </div>
+        <div id="find-status" class="find-status" role="status" aria-live="polite"></div>
+        <div id="find-results" class="find-results" role="list" aria-label="Matches"></div>
+    </div>
+</dialog>
 
 <div id="icon-picker-menu" class="floating-menu icon-picker-grid" style="display: none"></div>
 
@@ -757,6 +811,7 @@
                     <li><strong>Forces:</strong> start a line with <code>.</code> for a scene heading, <code>@</code> for a character, <code>!</code> for action, or <code>&gt;</code> for a transition; wrap a line in <code>&gt; ... &lt;</code> to center it.</li>
                     <li><strong>Inline emphasis:</strong> <code>**bold**</code>, <code>*italic*</code>, <code>_underline_</code> — toggle with Ctrl+B / I / U in Action, Dialogue, and Parenthetical. Markers stay visible (dimmed) while you write and are hidden in Page View, print, and exports.</li>
                     <li><strong>Change case:</strong> select text and press Shift+F3 to cycle UPPER → Sentence → Title → lower (works across several lines; with no selection it changes the word under the cursor). Scene headings, characters and transitions are always uppercase, so they are left alone. Remappable in Keyboard Shortcuts.</li>
+                    <li><strong>Find &amp; Replace</strong> (Ctrl+F, Write view): choose what to look in — all text (filtered by element type), or just one part of your scene headings: INT/EXT, location or time of day. <em>Character name</em> renames a character everywhere: cue lines keep their <code>(V.O.)</code> / <code>(CONT'D)</code>, and mentions in action, dialogue and scene notes keep their case (ANNA → MARIA, Anna → Maria). Every match is listed with a checkbox, so you can review before replacing; Replace all is one undo step.</li>
                     <li><strong>Notes:</strong> <code>[[like this]]</code> travel with the script but are excluded from output and from page/word counts.</li>
                     <li><strong>Reordering:</strong> in Treatment, drag scene cards by their grip handle (the chevron buttons still work too).</li>
                     <li><strong>Paper size:</strong> pick Letter or A4 per script in Print Prep or Script Details — page counts are identical on both.</li>

@@ -482,6 +482,19 @@ function findTextPosition(el, target) {
     return { node: el, offset: 0 };
 }
 
+// Range over characters [start, end) of an element's text, with both ends
+// on text nodes (what the CSS Custom Highlight API needs). Spans marker
+// decoration freely; null for an element without text.
+export function textRange(el, start, end) {
+    const s = findTextPosition(el, start);
+    const e = findTextPosition(el, end);
+    if (s.node.nodeType !== 3 || e.node.nodeType !== 3) return null;
+    const range = document.createRange();
+    range.setStart(s.node, s.offset);
+    range.setEnd(e.node, e.offset);
+    return range;
+}
+
 export function setTextRange(el, start, end) {
     const sel = window.getSelection();
     if (!sel) return;

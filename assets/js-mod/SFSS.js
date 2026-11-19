@@ -28,6 +28,7 @@ import { TreatmentRenderer } from './TreatmentRenderer.js';
 import { FountainParser } from './FountainParser.js';
 // New Modules
 import { SettingsManager } from './SettingsManager.js';
+import { FindReplaceManager } from './FindReplaceManager.js';
 import { TreatmentManager } from './TreatmentManager.js';
 import { IOManager } from './IOManager.js';
 import { PrintManager } from './PrintManager.js';
@@ -89,6 +90,7 @@ export class SFSS {
         
         // New Sub-modules
         this.settingsManager = new SettingsManager(this);
+        this.findReplace = new FindReplaceManager(this);
         this.treatmentManager = new TreatmentManager(this);
         this.ioManager = new IOManager(this);
         this.printManager = new PrintManager(this);
@@ -441,6 +443,19 @@ export class SFSS {
             this.reportsManager.open();
         });
 
+        // Find & Replace. mousedown preventDefault keeps the editor's
+        // selection so the panel can pre-fill Find from it.
+        const findBtn = document.getElementById('find-btn');
+        if (findBtn) {
+            findBtn.addEventListener('mousedown', (e) => e.preventDefault());
+            findBtn.addEventListener('click', () => this.findReplace.open());
+        }
+        const findMenuBtn = document.getElementById('find-menu-btn');
+        if (findMenuBtn) {
+            findMenuBtn.addEventListener('mousedown', (e) => e.preventDefault());
+            findMenuBtn.addEventListener('click', (e) => { e.preventDefault(); this.findReplace.open(); });
+        }
+
         // Settings Manager Delegations
         document.getElementById('settings-btn').addEventListener('click', (e) => { e.preventDefault(); this.settingsManager.open(); });
         document.getElementById('settings-close-btn').addEventListener('click', () => this.settingsManager.close());
@@ -591,6 +606,9 @@ export class SFSS {
         // Global Keys & Back Navigation — ONE consolidated handler (see the
         // dispatch-order contract in Shortcuts.js).
         window.addEventListener('keydown', async (e) => {
+            // Find & Replace (Ctrl+F / Ctrl+H, ⌘F / ⌘⌥F). Only taken in the
+            // Write view; elsewhere the browser's own find keeps the key.
+            if (this.findReplace.handleGlobalKey(e)) return;
             if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 's') {
                 // Always suppress the browser Save-As dialog; saving is safe
                 // in any state (except passive tabs, which never write).
@@ -705,8 +723,8 @@ export class SFSS {
 
     handleBackOrEscape(isPopState = false) {
         // Single Escape/back entry point. Order (dispatch contract in
-        // Shortcuts.js): editor popups -> modal stack -> mobile sidebar ->
-        // page view -> Esc-from-editor focus hatch.
+        // Shortcuts.js): editor popups -> modal stack -> Find & Replace
+        // panel -> mobile sidebar -> page view -> Esc-from-editor focus hatch.
         let handled = false;
 
         // 1. Transient editor popups (autocomplete / selector / treatment menus)
@@ -728,6 +746,14 @@ export class SFSS {
                 this.sidebarManager.closeScriptMetaPopup();
                 handled = true;
             }
+        }
+
+        // 2c. Find & Replace panel (non-modal, not on the stack). Esc pressed
+        //     INSIDE the panel is consumed by the panel itself; this branch
+        //     is Esc from the script, so the caret is left where it is.
+        if (!handled && !isPopState && this.findReplace.isOpen) {
+            this.findReplace.close();
+            handled = true;
         }
 
         // 3. Mobile sidebar
@@ -1353,6 +1379,8 @@ export class SFSS {
     }
 
     togglePageView() {
+        // Find & Replace works on the editable lines of the Write view.
+        this.findReplace.close({ focusEditor: false });
         const topElementId = this.getCurrentScrollElement();
         if (!this.pageViewActive) {
             // Entering page view: bookmark the caret so it can be restored

@@ -784,6 +784,122 @@ test('scene meta: saving one scene never takes description/notes from another sc
     }
 });
 
+// ---------- Find & Replace (FindReplaceManager apply path) ----------
+
+// A manager wired to a real editor DOM but with a stubbed panel: exercises
+// collectLines -> search -> applyWhere exactly as the app runs them.
+async function makeFindHarness(blocks, { sceneMeta = {}, characters = [] } = {}) {
+    const { FindReplaceManager } = await import('../../assets/js-mod/FindReplaceManager.js');
+    const { EditorHandler } = await import('../../assets/js-mod/EditorHandler.js');
+    const editor = document.createElement('div');
+    editor.id = 'find-test-editor';
+    blocks.forEach(([type, text], i) => {
+        const el = makeBlock(type, text);
+        el.dataset.lineId = `f${i}`;
+        editor.appendChild(el);
+    });
+    document.body.appendChild(editor);
+
+    const calls = { saveState: 0, refreshAllViews: 0 };
+    const app = {
+        editor,
+        sceneMeta,
+        characters: new Set(characters),
+        isDirty: false,
+        saveState() { calls.saveState++; },
+        refreshAllViews() { calls.refreshAllViews++; },
+        sidebarManager: { updateSceneStats() {} },
+        collaborationManager: { room: null },
+        tabGuard: { passive: false },
+        treatmentModeActive: false,
+        pageViewActive: false
+    };
+    const eh = Object.create(EditorHandler.prototype);
+    eh.app = app;
+    eh.isComposing = false;
+    eh.updateContext = () => {};
+    app.editorHandler = eh;
+
+    const fr = Object.create(FindReplaceManager.prototype);
+    Object.assign(fr, {
+        app,
+        dialog: { open: true, contains: () => false },
+        findInput: { value: '' },
+        replaceInput: { value: '', focus() {} },
+        state: {
+            mode: 'text',
+            textTypes: new Set(['sc-slug', 'sc-action', 'sc-character', 'sc-dialogue', 'sc-parenthetical', 'sc-transition']),
+            mentionTypes: new Set(['sc-slug', 'sc-action', 'sc-dialogue', 'sc-parenthetical', 'meta']),
+            matchCase: false, wholeWord: false, entireValue: true, keepCase: false
+        },
+        lines: [], matches: [], ranges: [], current: -1,
+        overrides: new Map(), anchor: null, showAllRows: false,
+        lastAction: null, note: '', lastGeometry: null,
+        render() {}
+    });
+    const texts = () => Array.from(editor.children).map(el => el.textContent);
+    return { fr, app, calls, texts, cleanup: () => editor.remove() };
+}
+
+test('find & replace: text replace rewrites lines, keeps marker decoration, one undo step', async () => {
+    const h = await makeFindHarness([
+        ['sc-slug', 'INT. KITCHEN - DAY'],
+        ['sc-action', 'The **old** door and the old lamp.'],
+        ['sc-dialogue', 'Nothing here.']
+    ]);
+    try {
+        h.fr.findInput.value = 'old';
+        h.fr.replaceInput.value = 'new';
+        h.fr.runSearch();
+        assertEqual(h.fr.matches.length, 2, 'two matches');
+        h.fr.replaceAll();
+        assertEqual(h.texts(), ['INT. KITCHEN - DAY', 'The **new** door and the new lamp.', 'Nothing here.'], 'texts');
+        const action = h.app.editor.children[1];
+        assert(action.querySelector('span') !== null, 'bold markers must be re-decorated after the rewrite');
+        assertEqual(action.textContent, 'The **new** door and the new lamp.', 'decoration never changes the text');
+        assertEqual(h.calls.saveState, 2, 'saveState before and after = one undo step');
+        assert(h.app.isDirty === true, 'the script must be marked dirty');
+        assertEqual(h.fr.matches.length, 0, 'results are refreshed after replacing');
+        assertEqual(h.fr.lastAction.count, 2, 'reported count');
+    } finally { h.cleanup(); }
+});
+
+test('find & replace: rename keeps cue suffixes, updates notes and the autocomplete list', async () => {
+    const h = await makeFindHarness([
+        ['sc-slug', 'INT. KITCHEN - DAY'],
+        ['sc-character', 'ANNA (V.O.)'],
+        ['sc-dialogue', 'I am Anna.'],
+        ['sc-character', 'ANNABELLE'],
+        ['sc-character', 'YOUNG ANNA']
+    ], { sceneMeta: { f0: { description: 'Anna comes home.', number: '7' } }, characters: ['ANNA', 'ANNABELLE', 'YOUNG ANNA'] });
+    try {
+        h.fr.state.mode = 'character';
+        h.fr.findInput.value = 'anna';
+        h.fr.replaceInput.value = 'Maria';
+        h.fr.runSearch();
+        h.fr.replaceAll();
+        assertEqual(h.texts(), ['INT. KITCHEN - DAY', 'MARIA (V.O.)', 'I am Maria.', 'ANNABELLE', 'YOUNG ANNA'], 'texts');
+        assertEqual(h.app.sceneMeta.f0, { description: 'Maria comes home.', number: '7' }, 'scene description renamed, other fields kept');
+        assertEqual([...h.app.characters].sort(), ['ANNABELLE', 'MARIA', 'YOUNG ANNA'], 'autocomplete list');
+        assertEqual(h.calls.refreshAllViews, 1, 'views refresh when scene notes change');
+    } finally { h.cleanup(); }
+});
+
+test('find & replace: read-only states never write', async () => {
+    const h = await makeFindHarness([['sc-action', 'old text']]);
+    try {
+        h.app.collaborationManager = { room: {}, hasBaton: false };
+        h.fr.findInput.value = 'old';
+        h.fr.replaceInput.value = 'new';
+        h.fr.runSearch();
+        assertEqual(h.fr.matches.length, 1, 'finding still works');
+        h.fr.replaceAll();
+        assertEqual(h.texts(), ['old text'], 'nothing replaced without the baton');
+        assertEqual(h.calls.saveState, 0, 'no history entry');
+        assert(/baton/.test(h.fr.note), 'the reason is surfaced');
+    } finally { h.cleanup(); }
+});
+
 // ---------- runner ----------
 async function run() {
     const ul = document.getElementById('results');
