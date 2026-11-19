@@ -304,10 +304,8 @@ export class SidebarManager {
         
         // Scene Number Logic: Check meta first, else calculate
         const meta = this.app.sceneMeta[sceneId] || {};
-        const computeDisplaySceneNumber = () => {
-            const currentMeta = this.app.sceneMeta[sceneId] || {};
-            if (currentMeta.number) return currentMeta.number;
-            
+        // The scene's automatic number: its position in the script.
+        const autoSceneNumber = () => {
             if (!slug.isMock) {
                 const slugs = Array.from(this.app.editor.querySelectorAll('.sc-slug'));
                 const idx = slugs.indexOf(slug);
@@ -318,6 +316,10 @@ export class SidebarManager {
                 if (idx !== -1) return idx + 1;
             }
             return '';
+        };
+        const computeDisplaySceneNumber = () => {
+            const currentMeta = this.app.sceneMeta[sceneId] || {};
+            return currentMeta.number || autoSceneNumber();
         };
         const displaySceneNumber = computeDisplaySceneNumber();
     
@@ -360,15 +362,26 @@ export class SidebarManager {
         const numSpan = header.querySelector('.scene-number-editable');
         const saveNum = () => {
             let val = numSpan.textContent.replace('#', '').trim();
-            if (val === '?' || val === '') val = null; 
-            
+            // Empty, or simply the automatic number (the field was clicked
+            // and left untouched): no custom number. Storing it would freeze
+            // the scene at that number when scenes move (same rule as the
+            // Treatment card's number box).
+            if (val === '?' || val === '' || val === String(autoSceneNumber())) val = null;
+
             if (!this.app.sceneMeta[sceneId]) this.app.sceneMeta[sceneId] = {};
+            const before = this.app.sceneMeta[sceneId].number || null;
             this.app.sceneMeta[sceneId].number = val;
-            
+
             const normalizedDisplay = computeDisplaySceneNumber();
             numSpan.textContent = normalizedDisplay || '';
-            
+
             this.saveSceneMeta(sceneId); // Persist
+            // saveSceneMeta cannot see this change (the number is already
+            // written when it compares), so repaint the script's numbers here.
+            if (before !== val) {
+                this.app.updateSceneNumbersInEditor();
+                if (this.app.pageViewActive) this.app.paginate();
+            }
         };
 
         numSpan.addEventListener('blur', saveNum);

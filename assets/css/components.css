@@ -397,6 +397,66 @@ input:checked + .slider:before {
     cursor: pointer;
 }
 
+/* Renumber Scenes confirmation */
+.renumber-body {
+    gap: 1rem;
+}
+
+.renumber-body p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.renumber-warning {
+    /* Same amber as the header's backup-warning mark. */
+    border-left: 3px solid var(--scene-color-3-light);
+    padding: 0.5rem 0 0.5rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.renumber-warning.hidden {
+    display: none;
+}
+
+.renumber-changes {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    /* 8.5 rows: the half row shows there is more to scroll. */
+    max-height: 12.4rem;
+    overflow-y: auto;
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.renumber-changes li {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.2rem 0;
+    border-top: 1px solid var(--border-color);
+}
+
+.renumber-changes .renumber-change-nums {
+    flex: 0 0 auto;
+    min-width: 5.5rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.renumber-changes .renumber-change-title {
+    color: var(--text-meta);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.renumber-footer {
+    justify-content: flex-end;
+    align-items: center;
+}
+
 .modal-btn-primary:hover {
     opacity: 0.9;
 }

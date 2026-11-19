@@ -38,7 +38,7 @@ A dedicated **Treatment Mode** allows you to outline and structure your story be
 *   **Assets:** Attach reference images and YouTube tracks to scenes (stored locally).
 *   **Seamless Switching:** Toggle between the Script Editor and Treatment view; changes stay in sync.
 *   **Export Scope:** Image binaries and track metadata stay local; use `.json` for the most faithful backup.
-*   **Reorder & Insert:** Drag scenes to reorder, insert transitions/headings inline, and keep manual scene numbers and colors/icons intact.
+*   **Reorder & Insert:** Drag scenes to reorder, insert transitions/headings inline, and keep manual scene numbers and colors/icons intact. A Renumber button (shown next to the scene-number toggle) resets every scene to 1…N in script order after a confirmation that lists the changes.
 
 ### 📊 Advanced Reports & Analytics
 Gain insights into your screenplay with the built-in **Reports Manager**:

@@ -12,7 +12,7 @@
 
 import * as constants from './Constants.js';
 import * as Shortcuts from './Shortcuts.js';
-import { escapeHtml } from './Utils.js';
+import { escapeHtml, planSceneRenumber } from './Utils.js';
 import { serializeBlockElement } from './InlineMarkup.js';
 import { toast, confirmAction } from './Toast.js';
 import { computeBackupWarning, pruneSceneMeta } from './StorageLogic.js';
@@ -294,6 +294,10 @@ export class SFSS {
     registerModals() {
         this.modalManager.register('settings-modal', { closeBtnId: 'settings-close-btn' });
         this.modalManager.register('script-meta-popup', {});
+        this.modalManager.register('renumber-scenes-modal', {
+            closeBtnId: 'renumber-close-btn',
+            initialFocus: '#renumber-cancel-btn'
+        });
         this.modalManager.register('reports-modal', {
             closeBtnId: 'reports-close-btn',
             onClose: () => this.reportsManager.onModalClosed()
@@ -490,8 +494,11 @@ export class SFSS {
 
         document.getElementById('toolbar-scene-numbers').addEventListener('click', () => {
              this.meta.showSceneNumbers = !this.meta.showSceneNumbers;
-             this.persistSettings(); 
+             this.persistSettings();
         });
+        document.getElementById('toolbar-renumber-scenes').addEventListener('click', () => this.openRenumberScenes());
+        document.getElementById('renumber-cancel-btn').addEventListener('click', () => this.modalManager.close('renumber-scenes-modal'));
+        document.getElementById('renumber-confirm-btn').addEventListener('click', () => this.renumberScenes());
         document.getElementById('toolbar-date').addEventListener('click', () => {
              this.meta.showDate = !this.meta.showDate;
              this.persistSettings();
@@ -992,7 +999,111 @@ export class SFSS {
         }
         this.refreshSceneSettingsModal(document.getElementById('scene-settings-popup').dataset.sceneId);
     }
-    
+
+    // ---- Renumber Scenes ----
+    // A scene shows its position in the script unless sceneMeta[id].number
+    // holds a custom value (typed, imported, or left behind after a move).
+    // Renumbering drops every custom value, so all scenes read 1…N again
+    // and keep following the script afterwards.
+
+    // Scene headings in script order: [{ id, text }].
+    getScenesInOrder() {
+        return (this.exportToJSONStructure().blocks || [])
+            .filter(b => b.type === constants.ELEMENT_TYPES.SLUG)
+            .map(b => ({ id: b.id, text: (b.text || '').trim() || 'UNTITLED' }));
+    }
+
+    // '' when the script may be changed here, otherwise the reason.
+    renumberBlockedReason() {
+        const collab = this.collaborationManager;
+        if (this.tabGuard && this.tabGuard.passive) return 'This tab is read-only.';
+        if (collab && collab.room && !collab.hasBaton) return 'Read-only: another writer holds the baton.';
+        return '';
+    }
+
+    // Fills and opens the info / warning / confirmation dialog.
+    openRenumberScenes() {
+        const blocked = this.renumberBlockedReason();
+        if (blocked) { toast(blocked); return; }
+
+        const plan = planSceneRenumber(this.getScenesInOrder(), this.sceneMeta);
+        const n = plan.total;
+        const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+        const infoEl = document.getElementById('renumber-info');
+        const warnEl = document.getElementById('renumber-warning');
+        const warnTextEl = document.getElementById('renumber-warning-text');
+        const listEl = document.getElementById('renumber-changes');
+        const undoEl = document.getElementById('renumber-undo-note');
+        const confirmBtn = document.getElementById('renumber-confirm-btn');
+        const cancelBtn = document.getElementById('renumber-cancel-btn');
+
+        listEl.replaceChildren();
+        const canRenumber = plan.pinned > 0;
+        if (n === 0) {
+            infoEl.textContent = 'This script has no scenes yet.';
+        } else if (!canRenumber) {
+            infoEl.textContent = n === 1
+                ? 'The only scene is already numbered 1. Nothing to change.'
+                : `All ${n} scenes are already numbered 1–${n} in script order. Nothing to change.`;
+        } else {
+            infoEl.textContent = (n === 1
+                ? 'The scene will be numbered 1.'
+                : `All ${n} scenes will be numbered 1–${n} in the order they appear in the script.`) +
+                ' From then on the numbers follow the script as you add, move or delete scenes.';
+        }
+
+        if (canRenumber && plan.changes.length > 0) {
+            warnTextEl.textContent =
+                `${plural(plan.changes.length, 'scene number', 'scene numbers')} will change. ` +
+                'Custom numbers such as 12A are removed.';
+            for (const change of plan.changes) {
+                const li = document.createElement('li');
+                const nums = document.createElement('span');
+                nums.className = 'renumber-change-nums';
+                nums.textContent = `${change.from} → ${change.to}`;
+                const title = document.createElement('span');
+                title.className = 'renumber-change-title';
+                title.textContent = change.text;
+                title.title = change.text;
+                li.append(nums, title);
+                listEl.appendChild(li);
+            }
+        } else if (canRenumber) {
+            warnTextEl.textContent =
+                `No number changes on screen. ${plural(plan.pinned, 'scene had', 'scenes had')} a fixed number ` +
+                'and will follow the script order from now on.';
+        }
+        warnEl.classList.toggle('hidden', !canRenumber);
+        undoEl.classList.toggle('hidden', !canRenumber);
+        confirmBtn.classList.toggle('hidden', !canRenumber);
+        cancelBtn.textContent = canRenumber ? 'Cancel' : 'Close';
+
+        this.modalManager.open('renumber-scenes-modal');
+    }
+
+    async renumberScenes() {
+        const blocked = this.renumberBlockedReason();
+        if (blocked) {
+            this.modalManager.close('renumber-scenes-modal');
+            toast(blocked);
+            return;
+        }
+        const scenes = this.getScenesInOrder();
+        const plan = planSceneRenumber(scenes, this.sceneMeta);
+        this.modalManager.close('renumber-scenes-modal');
+        if (plan.pinned === 0) return;
+
+        this.saveState(true); // capture pending typing -> exactly one undo step
+        for (const scene of scenes) {
+            if (this.sceneMeta[scene.id]) delete this.sceneMeta[scene.id].number;
+        }
+        this.refreshAllViews();
+        this.isDirty = true;
+        this.saveState(true);
+        await this.save();
+        toast(plan.total === 1 ? 'Scene renumbered' : `Scenes renumbered 1–${plan.total}`, { type: 'success' });
+    }
+
     updateSceneNumbersInEditor() {
         if (this.treatmentManager.isActive) return;
 
@@ -1294,7 +1405,9 @@ export class SFSS {
         const dateBtn = document.getElementById('toolbar-date');
         if(sceneNumBtn) sceneNumBtn.classList.toggle('active', this.meta.showSceneNumbers);
         if(dateBtn) dateBtn.classList.toggle('active', this.meta.showDate);
-        
+        // The Renumber button lives next to the toggle and follows it.
+        this.updateToolbarButtons();
+
         const tp = document.getElementById('print-title-page');
         if (this.meta.showTitlePage) {
             tp.classList.add('visible');
@@ -1365,6 +1478,13 @@ export class SFSS {
     updateToolbarButtons() {
         const sceneNumBtn = document.getElementById('toolbar-scene-numbers');
         const dateBtn = document.getElementById('toolbar-date');
+        // Renumber Scenes: only while scene numbers are shown, and never in
+        // Treatment (the toggle itself is hidden there).
+        const renumberBtn = document.getElementById('toolbar-renumber-scenes');
+        if (renumberBtn) {
+            const show = !!this.meta.showSceneNumbers && !this.treatmentManager.isActive;
+            renumberBtn.style.display = show ? '' : 'none';
+        }
         if (this.treatmentManager.isActive) {
             if (sceneNumBtn) sceneNumBtn.style.display = 'none';
             if (dateBtn) dateBtn.style.display = 'none';

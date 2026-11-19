@@ -2,8 +2,54 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     generateLineId, escapeHtml, escapeXML,
-    extractYouTubeVideoId, normalizeParenText, formatEighths, trackLabel
+    extractYouTubeVideoId, normalizeParenText, formatEighths, trackLabel,
+    planSceneRenumber
 } from '../../assets/js-mod/Utils.js';
+
+const scenes = (...texts) => texts.map((text, i) => ({ id: `s${i + 1}`, text }));
+
+test('planSceneRenumber: no custom numbers means nothing to do', () => {
+    const plan = planSceneRenumber(scenes('INT. A', 'EXT. B', 'INT. C'), {});
+    assert.deepEqual(plan, { total: 3, pinned: 0, changes: [] });
+    // Meta without a number (colour, notes) is not a custom number.
+    const withMeta = planSceneRenumber(scenes('INT. A', 'EXT. B'), { s1: { color: 'red' }, s2: { number: null }, });
+    assert.deepEqual(withMeta, { total: 2, pinned: 0, changes: [] });
+});
+
+test('planSceneRenumber: lists every scene whose shown number changes', () => {
+    const plan = planSceneRenumber(
+        scenes('INT. A', 'EXT. B', 'INT. C', 'EXT. D'),
+        { s2: { number: '12A' }, s4: { number: '2' } }
+    );
+    assert.equal(plan.total, 4);
+    assert.equal(plan.pinned, 2);
+    assert.deepEqual(plan.changes, [
+        { id: 's2', text: 'EXT. B', from: '12A', to: '2' },
+        { id: 's4', text: 'EXT. D', from: '2', to: '4' }
+    ]);
+});
+
+test('planSceneRenumber: a pinned number equal to its position is pinned but not a change', () => {
+    const plan = planSceneRenumber(scenes('INT. A', 'EXT. B'), { s1: { number: '1' }, s2: { number: 2 } });
+    assert.equal(plan.pinned, 2);
+    assert.deepEqual(plan.changes, []); // '1' vs 1 and 2 vs 2 compare as equal
+});
+
+test('planSceneRenumber: whitespace-only numbers are not custom; padded ones compare trimmed', () => {
+    const plan = planSceneRenumber(scenes('INT. A', 'EXT. B'), { s1: { number: '   ' }, s2: { number: ' 2 ' } });
+    assert.equal(plan.pinned, 1);
+    assert.deepEqual(plan.changes, []);
+});
+
+test('planSceneRenumber: meta for scenes not in the script is ignored', () => {
+    const plan = planSceneRenumber(scenes('INT. A'), { gone: { number: '99' } });
+    assert.deepEqual(plan, { total: 1, pinned: 0, changes: [] });
+});
+
+test('planSceneRenumber: empty or missing input', () => {
+    assert.deepEqual(planSceneRenumber([], {}), { total: 0, pinned: 0, changes: [] });
+    assert.deepEqual(planSceneRenumber(undefined, undefined), { total: 0, pinned: 0, changes: [] });
+});
 
 test('generateLineId shape and uniqueness', () => {
     const a = generateLineId();

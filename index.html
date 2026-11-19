@@ -41,7 +41,7 @@
             } catch (e) { console.warn('Theme detection failed', e); }
 
             // Your Version Logic
-            const staticversion = "" + "11-19-26_" + "public-" + "2006";
+            const staticversion = "" + "11-19-26_" + "public-" + "2007";
             //const staticversion = Math.round(Math.random()*1000000);
 
             const queryString = self.location.search;
@@ -276,6 +276,9 @@
             <button id="toolbar-scene-numbers" class="btn-icon" title="Toggle Scene Numbers">
                 <i class="fas fa-list-ol"></i>
             </button>
+            <button id="toolbar-renumber-scenes" class="btn-icon" title="Renumber Scenes…" aria-label="Renumber scenes" style="display: none;">
+                <i class="fas fa-sort-numeric-down"></i>
+            </button>
             <button id="toolbar-date" class="btn-icon" title="Toggle Date in Header">
                 <i class="far fa-calendar-alt"></i>
             </button>
@@ -457,6 +460,27 @@
         </div>
         <div class="modal-footer">
             <button id="script-meta-save-btn" class="modal-btn-primary">Save & Close</button>
+        </div>
+    </div>
+</div>
+
+<div id="renumber-scenes-modal" class="modal-overlay hidden">
+    <div class="modal-window popup-max-width-md" role="dialog" aria-modal="true">
+        <div class="modal-header">
+            <span>Renumber Scenes</span>
+            <button id="renumber-close-btn" class="btn-text" aria-label="Close">✕</button>
+        </div>
+        <div class="modal-body renumber-body">
+            <p id="renumber-info"></p>
+            <div id="renumber-warning" class="renumber-warning hidden">
+                <p id="renumber-warning-text"></p>
+                <ul id="renumber-changes" class="renumber-changes"></ul>
+            </div>
+            <p id="renumber-undo-note" class="text-meta text-sm">You can undo this with Ctrl+Z.</p>
+        </div>
+        <div class="modal-footer renumber-footer">
+            <button id="renumber-cancel-btn" class="btn-text mr-1">Cancel</button>
+            <button id="renumber-confirm-btn" class="modal-btn-primary"><i class="fas fa-sort-numeric-down mr-1"></i> Renumber</button>
         </div>
     </div>
 </div>
@@ -818,6 +842,7 @@
                     <li><strong>Find &amp; Replace</strong> (Ctrl+F, Write view): choose what to look in — all text (filtered by element type), or just one part of your scene headings: INT/EXT, location or time of day. <em>Character name</em> renames a character everywhere: cue lines keep their <code>(V.O.)</code> / <code>(CONT'D)</code>, and mentions in action, dialogue and scene notes keep their case (ANNA → MARIA, Anna → Maria). Every match is listed with a checkbox, so you can review before replacing; Replace all is one undo step.</li>
                     <li><strong>Notes:</strong> <code>[[like this]]</code> travel with the script but are excluded from output and from page/word counts.</li>
                     <li><strong>Reordering:</strong> in Treatment, drag scene cards by their grip handle (the chevron buttons still work too).</li>
+                    <li><strong>Scene numbers:</strong> scenes are numbered by their position in the script. Click a number in the scene popup or on a Treatment card to give that scene a custom one (like 12A). With scene numbers switched on, the Renumber button next to the toggle puts every scene back to 1…N in script order — it lists what will change first, and Ctrl+Z undoes it.</li>
                     <li><strong>Paper size:</strong> pick Letter or A4 per script in Print Prep or Script Details — page counts are identical on both.</li>
                     <li><strong>Music in the printed script:</strong> tick <em>Music Tracks</em> in Print Prep to print each scene's track as a small tag floating above its scene heading (clickable in a PDF). It takes no space, so page breaks and formatting stay exactly the same.</li>
                 </ul>

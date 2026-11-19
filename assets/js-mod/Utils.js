@@ -49,6 +49,28 @@ export function trackLabel(meta) {
     return clean(meta.track) ? 'Track attached' : '';
 }
 
+// Preview of "Renumber Scenes". A scene shows its position in the script
+// (1…N) unless sceneMeta[id].number holds a custom value; renumbering drops
+// every custom value. `scenes` is [{ id, text }] in script order. Returns
+// { total, pinned, changes } — `pinned` counts scenes with a custom number,
+// `changes` lists the ones whose SHOWN number will differ ({ id, text,
+// from, to }, numbers as strings).
+export function planSceneRenumber(scenes, sceneMeta) {
+    const list = scenes || [];
+    const meta = sceneMeta || {};
+    let pinned = 0;
+    const changes = [];
+    list.forEach((scene, i) => {
+        const raw = meta[scene.id] ? meta[scene.id].number : null;
+        const from = raw === null || raw === undefined ? '' : String(raw).trim();
+        if (!from) return;
+        pinned++;
+        const to = String(i + 1);
+        if (from !== to) changes.push({ id: scene.id, text: scene.text, from, to });
+    });
+    return { total: list.length, pinned, changes };
+}
+
 // Convention: DOM block text carries no outer parens for parentheticals (CSS
 // ::before/::after supplies them); canonical JSON text carries them. This
 // strips exactly one outer (...) pair for the DOM/render side of that seam.
